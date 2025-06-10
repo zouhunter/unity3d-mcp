@@ -13,8 +13,10 @@ namespace UnityMcpBridge.Editor.Tools
     /// <summary>
     /// Handles asset management operations within the Unity project.
     /// </summary>
-    public static class ManageAsset
+    public class ManageAsset : McpTool
     {
+        public override string ToolName => "manage_asset";
+
         // --- Main Handler ---
 
         // Define the list of valid actions
@@ -33,7 +35,7 @@ namespace UnityMcpBridge.Editor.Tools
             "get_components",
         };
 
-        public static object HandleCommand(JObject @params)
+        public override object HandleCommand(JObject @params)
         {
             string action = @params["action"]?.ToString().ToLower();
             if (string.IsNullOrEmpty(action))
@@ -102,7 +104,7 @@ namespace UnityMcpBridge.Editor.Tools
 
         // --- Action Implementations ---
 
-        private static object ReimportAsset(string path, JObject properties)
+        private object ReimportAsset(string path, JObject properties)
         {
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for reimport.");
@@ -134,7 +136,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object CreateAsset(JObject @params)
+        private object CreateAsset(JObject @params)
         {
             string path = @params["path"]?.ToString();
             string assetType = @params["assetType"]?.ToString();
@@ -248,7 +250,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object CreateFolder(string path)
+        private object CreateFolder(string path)
         {
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for create_folder.");
@@ -303,7 +305,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object ModifyAsset(string path, JObject properties)
+        private object ModifyAsset(string path, JObject properties)
         {
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for modify.");
@@ -452,7 +454,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object DeleteAsset(string path)
+        private object DeleteAsset(string path)
         {
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for delete.");
@@ -482,7 +484,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object DuplicateAsset(string path, string destinationPath)
+        private object DuplicateAsset(string path, string destinationPath)
         {
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for duplicate.");
@@ -530,7 +532,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object MoveOrRenameAsset(string path, string destinationPath)
+        private object MoveOrRenameAsset(string path, string destinationPath)
         {
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for move/rename.");
@@ -584,7 +586,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object SearchAssets(JObject @params)
+        private object SearchAssets(JObject @params)
         {
             string searchPattern = @params["searchPattern"]?.ToString();
             string filterType = @params["filterType"]?.ToString();
@@ -689,7 +691,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object GetAssetInfo(string path, bool generatePreview)
+        private object GetAssetInfo(string path, bool generatePreview)
         {
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for get_info.");
@@ -715,7 +717,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// </summary>
         /// <param name="path">The asset path of the GameObject or Prefab.</param>
         /// <returns>A response object containing a list of component type names or an error.</returns>
-        private static object GetComponentsFromAsset(string path)
+        private object GetComponentsFromAsset(string path)
         {
             // 1. Validate input path
             if (string.IsNullOrEmpty(path))
@@ -790,7 +792,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Ensures the asset path starts with "Assets/".
         /// </summary>
-        private static string SanitizeAssetPath(string path)
+        private string SanitizeAssetPath(string path)
         {
             if (string.IsNullOrEmpty(path))
                 return path;
@@ -805,7 +807,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Checks if an asset exists at the given path (file or folder).
         /// </summary>
-        private static bool AssetExists(string sanitizedPath)
+        private bool AssetExists(string sanitizedPath)
         {
             // AssetDatabase APIs are generally preferred over raw File/Directory checks for assets.
             // Check if it's a known asset GUID.
@@ -833,7 +835,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Ensures the directory for a given asset path exists, creating it if necessary.
         /// </summary>
-        private static void EnsureDirectoryExists(string directoryPath)
+        private void EnsureDirectoryExists(string directoryPath)
         {
             if (string.IsNullOrEmpty(directoryPath))
                 return;
@@ -848,7 +850,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Applies properties from JObject to a Material.
         /// </summary>
-        private static bool ApplyMaterialProperties(Material mat, JObject properties)
+        private bool ApplyMaterialProperties(Material mat, JObject properties)
         {
             if (mat == null || properties == null)
                 return false;
@@ -951,7 +953,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Generic helper to set properties on any UnityEngine.Object using reflection.
         /// </summary>
-        private static bool ApplyObjectProperties(UnityEngine.Object target, JObject properties)
+        private bool ApplyObjectProperties(UnityEngine.Object target, JObject properties)
         {
             if (target == null || properties == null)
                 return false;
@@ -973,7 +975,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Helper to set a property or field via reflection, handling basic types and Unity objects.
         /// </summary>
-        private static bool SetPropertyOrField(
+        private bool SetPropertyOrField(
             object target,
             string memberName,
             JToken value,
@@ -1030,7 +1032,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Simple JToken to Type conversion for common Unity types and primitives.
         /// </summary>
-        private static object ConvertJTokenToType(JToken token, Type targetType)
+        private object ConvertJTokenToType(JToken token, Type targetType)
         {
             try
             {
@@ -1113,7 +1115,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// Helper to find a Type by name, searching relevant assemblies.
         /// Needed for creating ScriptableObjects or finding component types by name.
         /// </summary>
-        private static Type FindType(string typeName)
+        private Type FindType(string typeName)
         {
             if (string.IsNullOrEmpty(typeName))
                 return null;
@@ -1155,7 +1157,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Creates a serializable representation of an asset.
         /// </summary>
-        private static object GetAssetData(string path, bool generatePreview = false)
+        private object GetAssetData(string path, bool generatePreview = false)
         {
             if (string.IsNullOrEmpty(path) || !AssetExists(path))
                 return null;

@@ -14,12 +14,14 @@ namespace UnityMcpBridge.Editor.Tools
     /// <summary>
     /// Handles scene management operations like loading, saving, creating, and querying hierarchy.
     /// </summary>
-    public static class ManageScene
+    public class ManageScene : McpTool
     {
+        public override string ToolName => "manage_scene";
+
         /// <summary>
         /// Main handler for scene management actions.
         /// </summary>
-        public static object HandleCommand(JObject @params)
+        public override object HandleCommand(JObject @params)
         {
             string action = @params["action"]?.ToString().ToLower();
             string name = @params["name"]?.ToString();
@@ -111,7 +113,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object CreateScene(string fullPath, string relativePath)
+        private object CreateScene(string fullPath, string relativePath)
         {
             if (File.Exists(fullPath))
             {
@@ -149,7 +151,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object LoadScene(string relativePath)
+        private object LoadScene(string relativePath)
         {
             if (
                 !File.Exists(
@@ -195,7 +197,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object LoadScene(int buildIndex)
+        private object LoadScene(int buildIndex)
         {
             if (buildIndex < 0 || buildIndex >= SceneManager.sceneCountInBuildSettings)
             {
@@ -234,7 +236,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object SaveScene(string fullPath, string relativePath)
+        private object SaveScene(string fullPath, string relativePath)
         {
             try
             {
@@ -290,7 +292,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object GetActiveSceneInfo()
+        private object GetActiveSceneInfo()
         {
             try
             {
@@ -318,7 +320,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object GetBuildSettingsScenes()
+        private object GetBuildSettingsScenes()
         {
             try
             {
@@ -344,7 +346,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object GetSceneHierarchy()
+        private object GetSceneHierarchy()
         {
             try
             {
@@ -373,7 +375,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Recursively builds a data representation of a GameObject and its children.
         /// </summary>
-        private static object GetGameObjectDataRecursive(GameObject go)
+        private object GetGameObjectDataRecursive(GameObject go)
         {
             if (go == null)
                 return null;

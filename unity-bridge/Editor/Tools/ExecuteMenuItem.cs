@@ -10,8 +10,10 @@ namespace UnityMcpBridge.Editor.Tools
     /// <summary>
     /// Handles executing Unity Editor menu items by path.
     /// </summary>
-    public static class ExecuteMenuItem
+    public class ExecuteMenuItem : McpTool
     {
+        public override string ToolName => "execute_menu_item";
+
         // Basic blacklist to prevent accidental execution of potentially disruptive menu items.
         // This can be expanded based on needs.
         private static readonly HashSet<string> _menuPathBlacklist = new HashSet<string>(
@@ -25,7 +27,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Main handler for executing menu items or getting available ones.
         /// </summary>
-        public static object HandleCommand(JObject @params)
+        public override object HandleCommand(JObject @params)
         {
             string action = @params["action"]?.ToString().ToLower() ?? "execute"; // Default action
 
@@ -64,7 +66,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Executes a specific menu item.
         /// </summary>
-        private static object ExecuteItem(JObject @params)
+        private object ExecuteItem(JObject @params)
         {
             string menuPath = @params["menu_path"]?.ToString();
             // string alias = @params["alias"]?.ToString(); // TODO: Implement alias mapping based on refactor plan requirements.

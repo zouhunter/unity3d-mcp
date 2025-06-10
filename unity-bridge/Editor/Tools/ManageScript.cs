@@ -12,12 +12,13 @@ namespace UnityMcpBridge.Editor.Tools
     /// <summary>
     /// Handles CRUD operations for C# scripts within the Unity project.
     /// </summary>
-    public static class ManageScript
+    public class ManageScript : McpTool
     {
+        public override string ToolName => "manage_script";
         /// <summary>
         /// Main handler for script management actions.
         /// </summary>
-        public static object HandleCommand(JObject @params)
+        public override object HandleCommand(JObject @params)
         {
             // Extract parameters
             string action = @params["action"]?.ToString().ToLower();

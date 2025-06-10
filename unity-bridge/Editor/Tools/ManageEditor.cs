@@ -13,8 +13,10 @@ namespace UnityMcpBridge.Editor.Tools
     /// Handles operations related to controlling and querying the Unity Editor state,
     /// including managing Tags and Layers.
     /// </summary>
-    public static class ManageEditor
+    public class ManageEditor : McpTool
     {
+        public override string ToolName => "manage_editor";
+
         // Constant for starting user layer index
         private const int FirstUserLayerIndex = 8;
 
@@ -24,7 +26,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Main handler for editor management actions.
         /// </summary>
-        public static object HandleCommand(JObject @params)
+        public override object HandleCommand(JObject @params)
         {
             string action = @params["action"]?.ToString().ToLower();
             // Parameters for specific actions
@@ -143,7 +145,7 @@ namespace UnityMcpBridge.Editor.Tools
         }
 
         // --- Editor State/Info Methods ---
-        private static object GetEditorState()
+        private object GetEditorState()
         {
             try
             {
@@ -165,7 +167,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object GetEditorWindows()
+        private object GetEditorWindows()
         {
             try
             {
@@ -222,7 +224,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object GetActiveTool()
+        private object GetActiveTool()
         {
             try
             {
@@ -251,7 +253,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object SetActiveTool(string toolName)
+        private object SetActiveTool(string toolName)
         {
             try
             {
@@ -286,7 +288,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object GetSelection()
+        private object GetSelection()
         {
             try
             {
@@ -325,7 +327,7 @@ namespace UnityMcpBridge.Editor.Tools
 
         // --- Tag Management Methods ---
 
-        private static object AddTag(string tagName)
+        private object AddTag(string tagName)
         {
             if (string.IsNullOrWhiteSpace(tagName))
                 return Response.Error("Tag name cannot be empty or whitespace.");
@@ -350,7 +352,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object RemoveTag(string tagName)
+        private object RemoveTag(string tagName)
         {
             if (string.IsNullOrWhiteSpace(tagName))
                 return Response.Error("Tag name cannot be empty or whitespace.");
@@ -378,7 +380,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object GetTags()
+        private object GetTags()
         {
             try
             {
@@ -393,7 +395,7 @@ namespace UnityMcpBridge.Editor.Tools
 
         // --- Layer Management Methods ---
 
-        private static object AddLayer(string layerName)
+        private object AddLayer(string layerName)
         {
             if (string.IsNullOrWhiteSpace(layerName))
                 return Response.Error("Layer name cannot be empty or whitespace.");
@@ -458,7 +460,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object RemoveLayer(string layerName)
+        private object RemoveLayer(string layerName)
         {
             if (string.IsNullOrWhiteSpace(layerName))
                 return Response.Error("Layer name cannot be empty or whitespace.");
@@ -514,7 +516,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object GetLayers()
+        private object GetLayers()
         {
             try
             {
@@ -540,7 +542,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Gets the SerializedObject for the TagManager asset.
         /// </summary>
-        private static SerializedObject GetTagManager()
+        private SerializedObject GetTagManager()
         {
             try
             {
@@ -565,8 +567,8 @@ namespace UnityMcpBridge.Editor.Tools
 
         // --- Example Implementations for Settings ---
         /*
-        private static object SetGameViewResolution(int width, int height) { ... }
-        private static object SetQualityLevel(JToken qualityLevelToken) { ... }
+        private object SetGameViewResolution(int width, int height) { ... }
+        private object SetQualityLevel(JToken qualityLevelToken) { ... }
         */
     }
 

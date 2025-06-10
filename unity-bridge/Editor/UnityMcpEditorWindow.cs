@@ -8,16 +8,12 @@ namespace UnityMcpBridge.Editor.Windows
     public class UnityMcpEditorWindow : EditorWindow
     {
         private bool isUnityBridgeRunning = false;
-        private Vector2 scrollPosition;
-        private string pythonServerInstallationStatus = "Not Installed";
-        private Color pythonServerInstallationStatusColor = Color.red;
         private const int unityPort = 6400; // Hardcoded Unity port
-        private const int mcpPort = 6500; // Hardcoded MCP port
 
         [MenuItem("Window/Unity MCP")]
         public static void ShowWindow()
         {
-            GetWindow<UnityMcpEditorWindow>("MCP Editor");
+            GetWindow<UnityMcpEditorWindow>("MCP服务管理");
         }
 
         private async Task<bool> IsPortInUseAsync(int port)
@@ -42,17 +38,11 @@ namespace UnityMcpBridge.Editor.Windows
         {
             // 先设置为默认状态
             isUnityBridgeRunning = false;
-            pythonServerInstallationStatus = "检测中...";
-            pythonServerInstallationStatusColor = Color.yellow;
             Repaint();
 
             // 异步检测
             bool unityBridge = await IsPortInUseAsync(unityPort);
-            bool mcpServer = true;//
-
             isUnityBridgeRunning = unityBridge;
-            pythonServerInstallationStatus = mcpServer ? "Running" : "Stopped";
-            pythonServerInstallationStatusColor = mcpServer ? Color.green : Color.red;
             Repaint();
         }
 
@@ -82,47 +72,11 @@ namespace UnityMcpBridge.Editor.Windows
 
         private void OnGUI()
         {
-            scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
-
-            EditorGUILayout.Space(10);
-            // Title with improved styling
-            Rect titleRect = EditorGUILayout.GetControlRect(false, 30);
-            EditorGUI.DrawRect(
-                new Rect(titleRect.x, titleRect.y, titleRect.width, titleRect.height),
-                new Color(0.2f, 0.2f, 0.2f, 0.1f)
-            );
-            GUI.Label(
-                new Rect(titleRect.x + 10, titleRect.y + 6, titleRect.width - 20, titleRect.height),
-                "MCP Editor",
-                EditorStyles.boldLabel
-            );
-            EditorGUILayout.Space(10);
-
-            // Python Server Installation Status Section
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField("Python Server Status", EditorStyles.boldLabel);
-
-            // Status indicator with colored dot
-            Rect installStatusRect = EditorGUILayout.BeginHorizontal(GUILayout.Height(20));
-            DrawStatusDot(installStatusRect, pythonServerInstallationStatusColor);
-            EditorGUILayout.LabelField("       " + pythonServerInstallationStatus);
-            EditorGUILayout.EndHorizontal();
-
-            //EditorGUILayout.LabelField($"Unity Port: {unityPort}");
-            EditorGUILayout.LabelField($"MCP Port: {mcpPort}");
-            EditorGUILayout.HelpBox(
-                "Your MCP client (e.g. Cursor or Claude Desktop) will start the server automatically when you start it.",
-                MessageType.Info
-            );
-            EditorGUILayout.EndVertical();
-
-            EditorGUILayout.Space(10);
-
             // Unity Bridge Section
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUILayout.LabelField("Unity MCP Bridge", EditorStyles.boldLabel);
-            installStatusRect = EditorGUILayout.BeginHorizontal(GUILayout.Height(20));
-            DrawStatusDot(installStatusRect, pythonServerInstallationStatusColor);
+            var installStatusRect = EditorGUILayout.BeginHorizontal(GUILayout.Height(20));
+            DrawStatusDot(installStatusRect, isUnityBridgeRunning ? Color.green : Color.red);
             EditorGUILayout.LabelField($"       Status: {(isUnityBridgeRunning ? "Running" : "Stopped")}");
             EditorGUILayout.LabelField($"Port: {unityPort}");
             EditorGUILayout.EndHorizontal();
@@ -132,16 +86,9 @@ namespace UnityMcpBridge.Editor.Windows
                 ToggleUnityBridge();
             }
             EditorGUILayout.EndVertical();
-            EditorGUILayout.EndScrollView();
         }
         private async void ToggleUnityBridge()
         {
-            if (pythonServerInstallationStatus != "Running")
-            {
-                EditorUtility.DisplayDialog("Python Server Not Running", "Please start the Python server before starting the Unity MCP Bridge.", "OK");
-                return;
-            }
-
             if (isUnityBridgeRunning)
             {
                 UnityMcpBridge.Stop();

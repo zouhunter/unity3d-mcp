@@ -26,8 +26,10 @@ namespace UnityMcpBridge.Editor
             (string commandJson, TaskCompletionSource<string> tcs)
         > commandQueue = new();
         private static readonly int unityPort = 6400; // Hardcoded port
-
         public static bool IsRunning => isRunning;
+
+        // 缓存McpTool类型和实例，静态工具类型
+        private static readonly Dictionary<string, McpTool> mcpToolInstanceCache = new();
 
         public static bool FolderExists(string path)
         {
@@ -359,24 +361,12 @@ namespace UnityMcpBridge.Editor
 
                 // Use JObject for parameters as the new handlers likely expect this
                 JObject paramsObject = command.@params ?? new JObject();
-
-                // Route command based on the new tool structure from the refactor plan
-                object result = command.type switch
+                var tool = GetMcpTool(command.type);
+                if (tool == null)
                 {
-                    // Maps the command type (tool name) to the corresponding handler's static HandleCommand method
-                    // Assumes each handler class has a static method named 'HandleCommand' that takes JObject parameters
-                    "manage_script" => ManageScript.HandleCommand(paramsObject),
-                    "manage_scene" => ManageScene.HandleCommand(paramsObject),
-                    "manage_editor" => ManageEditor.HandleCommand(paramsObject),
-                    "manage_gameobject" => ManageGameObject.HandleCommand(paramsObject),
-                    "manage_asset" => ManageAsset.HandleCommand(paramsObject),
-                    "read_console" => ReadConsole.HandleCommand(paramsObject),
-                    "execute_menu_item" => ExecuteMenuItem.HandleCommand(paramsObject),
-                    _ => throw new ArgumentException(
-                        $"Unknown or unsupported command type: {command.type}"
-                    ),
-                };
-
+                    throw new ArgumentException($"Unknown or unsupported command type: {command.type}");
+                }
+                object result = tool.HandleCommand(paramsObject);
                 // Standard success response format
                 var response = new { status = "success", result };
                 return JsonConvert.SerializeObject(response);
@@ -402,7 +392,31 @@ namespace UnityMcpBridge.Editor
                 return JsonConvert.SerializeObject(response);
             }
         }
-
+        /// <summary>
+        /// 获取McpTool实例
+        /// </summary>
+        /// <param name="toolName"></param>
+        /// <returns></returns>
+        private static McpTool GetMcpTool(string toolName)
+        {
+            if (mcpToolInstanceCache.Count == 0)
+            {
+                // 没有缓存则反射查找并缓存
+                var toolType = typeof(McpTool);
+                var toolInstances = AppDomain.CurrentDomain.GetAssemblies()
+                    .SelectMany(a => a.GetTypes())
+                    .Where(t => !t.IsAbstract && toolType.IsAssignableFrom(t)).Select(t => Activator.CreateInstance(t) as McpTool);
+                foreach (var toolInstance in toolInstances)
+                {
+                    mcpToolInstanceCache[toolInstance.ToolName] = toolInstance;
+                }
+            }
+            if (mcpToolInstanceCache.TryGetValue(toolName, out var tool))
+            {
+                return tool;
+            }
+            return null;
+        }
         // Helper method to get a summary of parameters for error reporting
         private static string GetParamsSummary(JObject @params)
         {

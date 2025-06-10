@@ -15,11 +15,13 @@ namespace UnityMcpBridge.Editor.Tools
     /// <summary>
     /// Handles GameObject manipulation within the current scene (CRUD, find, components).
     /// </summary>
-    public static class ManageGameObject
+    public class ManageGameObject : McpTool
     {
+        public override string ToolName => "manage_gameobject";
+
         // --- Main Handler ---
 
-        public static object HandleCommand(JObject @params)
+        public override object HandleCommand(JObject @params)
         {
             string action = @params["action"]?.ToString().ToLower();
             if (string.IsNullOrEmpty(action))
@@ -88,7 +90,7 @@ namespace UnityMcpBridge.Editor.Tools
                     assetParams["properties"] = properties;
 
                     // Call ManageAsset handler
-                    return ManageAsset.HandleCommand(assetParams);
+                    return new ManageAsset().HandleCommand(assetParams);
                 }
                 else if (
                     action == "delete"
@@ -146,7 +148,7 @@ namespace UnityMcpBridge.Editor.Tools
 
         // --- Action Implementations ---
 
-        private static object CreateGameObject(JObject @params)
+        private object CreateGameObject(JObject @params)
         {
             string name = @params["name"]?.ToString();
             if (string.IsNullOrEmpty(name))
@@ -558,7 +560,7 @@ namespace UnityMcpBridge.Editor.Tools
             return Response.Success(successMessage, GetGameObjectData(finalInstance));
         }
 
-        private static object ModifyGameObject(
+        private object ModifyGameObject(
             JObject @params,
             JToken targetToken,
             string searchMethod
@@ -802,7 +804,7 @@ namespace UnityMcpBridge.Editor.Tools
             );
         }
 
-        private static object DeleteGameObject(JToken targetToken, string searchMethod)
+        private object DeleteGameObject(JToken targetToken, string searchMethod)
         {
             // Find potentially multiple objects if name/tag search is used without find_all=false implicitly
             List<GameObject> targets = FindObjectsInternal(targetToken, searchMethod, true); // find_all=true for delete safety
@@ -842,7 +844,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object FindGameObjects(
+        private object FindGameObjects(
             JObject @params,
             JToken targetToken,
             string searchMethod
@@ -865,7 +867,7 @@ namespace UnityMcpBridge.Editor.Tools
             return Response.Success($"Found {results.Count} GameObject(s).", results);
         }
 
-        private static object GetComponentsFromTarget(string target, string searchMethod)
+        private object GetComponentsFromTarget(string target, string searchMethod)
         {
             GameObject targetGo = FindObjectInternal(target, searchMethod);
             if (targetGo == null)
@@ -892,7 +894,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object AddComponentToTarget(
+        private object AddComponentToTarget(
             JObject @params,
             JToken targetToken,
             string searchMethod
@@ -948,7 +950,7 @@ namespace UnityMcpBridge.Editor.Tools
             ); // Return updated GO data
         }
 
-        private static object RemoveComponentFromTarget(
+        private object RemoveComponentFromTarget(
             JObject @params,
             JToken targetToken,
             string searchMethod
@@ -994,7 +996,7 @@ namespace UnityMcpBridge.Editor.Tools
             );
         }
 
-        private static object SetComponentPropertyOnTarget(
+        private object SetComponentPropertyOnTarget(
             JObject @params,
             JToken targetToken,
             string searchMethod
@@ -1047,7 +1049,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Finds a single GameObject based on token (ID, name, path) and search method.
         /// </summary>
-        private static GameObject FindObjectInternal(
+        private GameObject FindObjectInternal(
             JToken targetToken,
             string searchMethod,
             JObject findParams = null
@@ -1075,7 +1077,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Core logic for finding GameObjects based on various criteria.
         /// </summary>
-        private static List<GameObject> FindObjectsInternal(
+        private List<GameObject> FindObjectsInternal(
             JToken targetToken,
             string searchMethod,
             bool findAll,
@@ -1237,7 +1239,7 @@ namespace UnityMcpBridge.Editor.Tools
         }
 
         // Helper to get all scene objects efficiently
-        private static IEnumerable<GameObject> GetAllSceneObjects(bool includeInactive)
+        private IEnumerable<GameObject> GetAllSceneObjects(bool includeInactive)
         {
             // SceneManager.GetActiveScene().GetRootGameObjects() is faster than FindObjectsOfType<GameObject>()
             var rootObjects = SceneManager.GetActiveScene().GetRootGameObjects();
@@ -1256,7 +1258,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// Adds a component by type name and optionally sets properties.
         /// Returns null on success, or an error response object on failure.
         /// </summary>
-        private static object AddComponentInternal(
+        private object AddComponentInternal(
             GameObject targetGo,
             string typeName,
             JObject properties
@@ -1369,7 +1371,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// Removes a component by type name.
         /// Returns null on success, or an error response object on failure.
         /// </summary>
-        private static object RemoveComponentInternal(GameObject targetGo, string typeName)
+        private object RemoveComponentInternal(GameObject targetGo, string typeName)
         {
             Type componentType = FindType(typeName);
             if (componentType == null)
@@ -1409,7 +1411,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// Sets properties on a component.
         /// Returns null on success, or an error response object on failure.
         /// </summary>
-        private static object SetComponentPropertiesInternal(
+        private object SetComponentPropertiesInternal(
             GameObject targetGo,
             string compName,
             JObject propertiesToSet,
@@ -1459,7 +1461,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Helper to set a property or field via reflection, handling basic types.
         /// </summary>
-        private static bool SetProperty(object target, string memberName, JToken value)
+        private bool SetProperty(object target, string memberName, JToken value)
         {
             Type type = target.GetType();
             BindingFlags flags =
@@ -1510,7 +1512,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Sets a nested property using dot notation (e.g., "material.color") or array access (e.g., "materials[0]")
         /// </summary>
-        private static bool SetNestedProperty(object target, string path, JToken value)
+        private bool SetNestedProperty(object target, string path, JToken value)
         {
             try
             {
@@ -1765,7 +1767,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Split a property path into parts, handling both dot notation and array indexers
         /// </summary>
-        private static string[] SplitPropertyPath(string path)
+        private string[] SplitPropertyPath(string path)
         {
             // Handle complex paths with both dots and array indexers
             List<string> parts = new List<string>();
@@ -1804,7 +1806,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Simple JToken to Type conversion for common Unity types.
         /// </summary>
-        private static object ConvertJTokenToType(JToken token, Type targetType)
+        private object ConvertJTokenToType(JToken token, Type targetType)
         {
             try
             {
@@ -2038,7 +2040,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Helper to find a Type by name, searching relevant assemblies.
         /// </summary>
-        private static Type FindType(string typeName)
+        private Type FindType(string typeName)
         {
             if (string.IsNullOrEmpty(typeName))
                 return null;
@@ -2080,7 +2082,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Parses a JArray like [x, y, z] into a Vector3.
         /// </summary>
-        private static Vector3? ParseVector3(JArray array)
+        private Vector3? ParseVector3(JArray array)
         {
             if (array != null && array.Count == 3)
             {
@@ -2104,7 +2106,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Creates a serializable representation of a GameObject.
         /// </summary>
-        private static object GetGameObjectData(GameObject go)
+        private object GetGameObjectData(GameObject go)
         {
             if (go == null)
                 return null;
@@ -2185,7 +2187,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// Creates a serializable representation of a Component.
         /// TODO: Add property serialization.
         /// </summary>
-        private static object GetComponentData(Component c)
+        private object GetComponentData(Component c)
         {
             if (c == null)
                 return null;

@@ -14,8 +14,10 @@ namespace UnityMcpBridge.Editor.Tools
     /// Handles reading and clearing Unity Editor console log entries.
     /// Uses reflection to access internal LogEntry methods/properties.
     /// </summary>
-    public static class ReadConsole
+    public class ReadConsole : McpTool
     {
+        public override string ToolName => "read_console";
+
         // Reflection members for accessing internal LogEntry data
         // private static MethodInfo _getEntriesMethod; // Removed as it's unused and fails reflection
         private static MethodInfo _startGettingEntriesMethod;
@@ -119,7 +121,7 @@ namespace UnityMcpBridge.Editor.Tools
 
         // --- Main Handler ---
 
-        public static object HandleCommand(JObject @params)
+        public override object HandleCommand(JObject @params)
         {
             // Check if ALL required reflection members were successfully initialized.
             if (
@@ -196,7 +198,7 @@ namespace UnityMcpBridge.Editor.Tools
 
         // --- Action Implementations ---
 
-        private static object ClearConsole()
+        private object ClearConsole()
         {
             try
             {
@@ -210,7 +212,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private static object GetConsoleEntries(
+        private object GetConsoleEntries(
             List<string> types,
             int? count,
             string filterText,
@@ -365,7 +367,7 @@ namespace UnityMcpBridge.Editor.Tools
         private const int ModeBitScriptingException = 1 << 18;
         private const int ModeBitScriptingAssertion = 1 << 22;
 
-        private static LogType GetLogTypeFromMode(int mode)
+        private LogType GetLogTypeFromMode(int mode)
         {
             // First, determine the type based on the original logic (most severe first)
             LogType initialType;
@@ -419,7 +421,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// </summary>
         /// <param name="fullMessage">The complete log message including potential stack trace.</param>
         /// <returns>The extracted stack trace string, or null if none is found.</returns>
-        private static string ExtractStackTrace(string fullMessage)
+        private string ExtractStackTrace(string fullMessage)
         {
             if (string.IsNullOrEmpty(fullMessage))
                 return null;
@@ -450,7 +452,7 @@ namespace UnityMcpBridge.Editor.Tools
                     || trimmedLine.StartsWith("UnityEditor.")
                     || trimmedLine.Contains("(at ")
                     || // Covers "(at Assets/..." pattern
-                    // Heuristic: Check if line starts with likely namespace/class pattern (Uppercase.Something)
+                       // Heuristic: Check if line starts with likely namespace/class pattern (Uppercase.Something)
                     (
                         trimmedLine.Length > 0
                         && char.IsUpper(trimmedLine[0])

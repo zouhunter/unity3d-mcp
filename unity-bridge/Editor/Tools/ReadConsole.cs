@@ -121,7 +121,7 @@ namespace UnityMcpBridge.Editor.Tools
 
         // --- Main Handler ---
 
-        public override object HandleCommand(JObject @params)
+        public override object HandleCommand(JObject cmd)
         {
             // Check if ALL required reflection members were successfully initialized.
             if (
@@ -146,7 +146,7 @@ namespace UnityMcpBridge.Editor.Tools
                 );
             }
 
-            string action = @params["action"]?.ToString().ToLower() ?? "get";
+            string action = cmd["action"]?.ToString().ToLower() ?? "get";
 
             try
             {
@@ -158,14 +158,14 @@ namespace UnityMcpBridge.Editor.Tools
                 {
                     // Extract parameters for 'get'
                     var types =
-                        (@params["types"] as JArray)?.Select(t => t.ToString().ToLower()).ToList()
+                        (cmd["types"] as JArray)?.Select(t => t.ToString().ToLower()).ToList()
                         ?? new List<string> { "error", "warning", "log" };
-                    int? count = @params["count"]?.ToObject<int?>();
-                    string filterText = @params["filterText"]?.ToString();
-                    string sinceTimestampStr = @params["sinceTimestamp"]?.ToString(); // TODO: Implement timestamp filtering
-                    string format = (@params["format"]?.ToString() ?? "detailed").ToLower();
+                    int? count = cmd["count"]?.ToObject<int?>();
+                    string filterText = cmd["filterText"]?.ToString();
+                    string sinceTimestampStr = cmd["sinceTimestamp"]?.ToString(); // TODO: Implement timestamp filtering
+                    string format = (cmd["format"]?.ToString() ?? "detailed").ToLower();
                     bool includeStacktrace =
-                        @params["includeStacktrace"]?.ToObject<bool?>() ?? true;
+                       cmd["includeStacktrace"]?.ToObject<bool?>() ?? true;
 
                     if (types.Contains("all"))
                     {

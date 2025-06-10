@@ -21,23 +21,23 @@ namespace UnityMcpBridge.Editor.Tools
 
         // --- Main Handler ---
 
-        public override object HandleCommand(JObject @params)
+        public override object HandleCommand(JObject cmd)
         {
-            string action = @params["action"]?.ToString().ToLower();
+            string action = cmd["action"]?.ToString().ToLower();
             if (string.IsNullOrEmpty(action))
             {
                 return Response.Error("Action parameter is required.");
             }
 
             // Parameters used by various actions
-            JToken targetToken = @params["target"]; // Can be string (name/path) or int (instanceID)
-            string searchMethod = @params["searchMethod"]?.ToString().ToLower();
+            JToken targetToken = cmd["target"]; // Can be string (name/path) or int (instanceID)
+            string searchMethod = cmd["searchMethod"]?.ToString().ToLower();
 
             // Get common parameters (consolidated)
-            string name = @params["name"]?.ToString();
-            string tag = @params["tag"]?.ToString();
-            string layer = @params["layer"]?.ToString();
-            JToken parentToken = @params["parent"];
+            string name = cmd["name"]?.ToString();
+            string tag = cmd["tag"]?.ToString();
+            string layer = cmd["layer"]?.ToString();
+            JToken parentToken = cmd["parent"];
 
             // --- Prefab Redirection Check ---
             string targetPath =
@@ -64,8 +64,8 @@ namespace UnityMcpBridge.Editor.Tools
                     JObject properties = null;
                     if (action == "set_component_property")
                     {
-                        string compName = @params["componentName"]?.ToString();
-                        JObject compProps = @params["componentProperties"]?[compName] as JObject; // Handle potential nesting
+                        string compName = cmd["componentName"]?.ToString();
+                        JObject compProps = cmd["componentProperties"]?[compName] as JObject; // Handle potential nesting
                         if (string.IsNullOrEmpty(compName))
                             return Response.Error(
                                 "Missing 'componentName' for 'set_component_property' on prefab."
@@ -80,7 +80,7 @@ namespace UnityMcpBridge.Editor.Tools
                     }
                     else // action == "modify"
                     {
-                        properties = @params["componentProperties"] as JObject;
+                        properties = cmd["componentProperties"] as JObject;
                         if (properties == null)
                             return Response.Error(
                                 "Missing 'componentProperties' for 'modify' action on prefab."
@@ -114,13 +114,13 @@ namespace UnityMcpBridge.Editor.Tools
                 switch (action)
                 {
                     case "create":
-                        return CreateGameObject(@params);
+                        return CreateGameObject(cmd);
                     case "modify":
-                        return ModifyGameObject(@params, targetToken, searchMethod);
+                        return ModifyGameObject(cmd, targetToken, searchMethod);
                     case "delete":
                         return DeleteGameObject(targetToken, searchMethod);
                     case "find":
-                        return FindGameObjects(@params, targetToken, searchMethod);
+                        return FindGameObjects(cmd, targetToken, searchMethod);
                     case "get_components":
                         string getCompTarget = targetToken?.ToString(); // Expect name, path, or ID string
                         if (getCompTarget == null)
@@ -129,11 +129,11 @@ namespace UnityMcpBridge.Editor.Tools
                             );
                         return GetComponentsFromTarget(getCompTarget, searchMethod);
                     case "add_component":
-                        return AddComponentToTarget(@params, targetToken, searchMethod);
+                        return AddComponentToTarget(cmd, targetToken, searchMethod);
                     case "remove_component":
-                        return RemoveComponentFromTarget(@params, targetToken, searchMethod);
+                        return RemoveComponentFromTarget(cmd, targetToken, searchMethod);
                     case "set_component_property":
-                        return SetComponentPropertyOnTarget(@params, targetToken, searchMethod);
+                        return SetComponentPropertyOnTarget(cmd, targetToken, searchMethod);
 
                     default:
                         return Response.Error($"Unknown action: '{action}'.");
@@ -148,19 +148,19 @@ namespace UnityMcpBridge.Editor.Tools
 
         // --- Action Implementations ---
 
-        private object CreateGameObject(JObject @params)
+        private object CreateGameObject(JObject cmd)
         {
-            string name = @params["name"]?.ToString();
+            string name = cmd["name"]?.ToString();
             if (string.IsNullOrEmpty(name))
             {
                 return Response.Error("'name' parameter is required for 'create' action.");
             }
 
             // Get prefab creation parameters
-            bool saveAsPrefab = @params["saveAsPrefab"]?.ToObject<bool>() ?? false;
-            string prefabPath = @params["prefabPath"]?.ToString();
-            string tag = @params["tag"]?.ToString(); // Get tag for creation
-            string primitiveType = @params["primitiveType"]?.ToString(); // Keep primitiveType check
+            bool saveAsPrefab = cmd["saveAsPrefab"]?.ToObject<bool>() ?? false;
+            string prefabPath = cmd["prefabPath"]?.ToString();
+            string tag = cmd["tag"]?.ToString(); // Get tag for creation
+            string primitiveType = cmd["primitiveType"]?.ToString(); // Keep primitiveType check
             GameObject newGo = null; // Initialize as null
 
             // --- Try Instantiating Prefab First ---
@@ -334,7 +334,7 @@ namespace UnityMcpBridge.Editor.Tools
             Undo.RecordObject(newGo, "Set GameObject Properties");
 
             // Set Parent
-            JToken parentToken = @params["parent"];
+            JToken parentToken = cmd["parent"];
             if (parentToken != null)
             {
                 GameObject parentGo = FindObjectInternal(parentToken, "by_id_or_name_or_path"); // Flexible parent finding
@@ -347,9 +347,9 @@ namespace UnityMcpBridge.Editor.Tools
             }
 
             // Set Transform
-            Vector3? position = ParseVector3(@params["position"] as JArray);
-            Vector3? rotation = ParseVector3(@params["rotation"] as JArray);
-            Vector3? scale = ParseVector3(@params["scale"] as JArray);
+            Vector3? position = ParseVector3(cmd["position"] as JArray);
+            Vector3? rotation = ParseVector3(cmd["rotation"] as JArray);
+            Vector3? scale = ParseVector3(cmd["scale"] as JArray);
 
             if (position.HasValue)
                 newGo.transform.localPosition = position.Value;
@@ -401,7 +401,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
 
             // Set Layer (new for create action)
-            string layerName = @params["layer"]?.ToString();
+            string layerName = cmd["layer"]?.ToString();
             if (!string.IsNullOrEmpty(layerName))
             {
                 int layerId = LayerMask.NameToLayer(layerName);
@@ -418,7 +418,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
 
             // Add Components
-            if (@params["componentsToAdd"] is JArray componentsToAddArray)
+            if (cmd["componentsToAdd"] is JArray componentsToAddArray)
             {
                 foreach (var compToken in componentsToAddArray)
                 {
@@ -561,7 +561,7 @@ namespace UnityMcpBridge.Editor.Tools
         }
 
         private object ModifyGameObject(
-            JObject @params,
+            JObject cmd,
             JToken targetToken,
             string searchMethod
         )
@@ -581,7 +581,7 @@ namespace UnityMcpBridge.Editor.Tools
             bool modified = false;
 
             // Rename (using consolidated 'name' parameter)
-            string name = @params["name"]?.ToString();
+            string name = cmd["name"]?.ToString();
             if (!string.IsNullOrEmpty(name) && targetGo.name != name)
             {
                 targetGo.name = name;
@@ -589,7 +589,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
 
             // Change Parent (using consolidated 'parent' parameter)
-            JToken parentToken = @params["parent"];
+            JToken parentToken = cmd["parent"];
             if (parentToken != null)
             {
                 GameObject newParentGo = FindObjectInternal(parentToken, "by_id_or_name_or_path");
@@ -621,7 +621,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
 
             // Set Active State
-            bool? setActive = @params["setActive"]?.ToObject<bool?>();
+            bool? setActive = cmd["setActive"]?.ToObject<bool?>();
             if (setActive.HasValue && targetGo.activeSelf != setActive.Value)
             {
                 targetGo.SetActive(setActive.Value);
@@ -629,7 +629,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
 
             // Change Tag (using consolidated 'tag' parameter)
-            string tag = @params["tag"]?.ToString();
+            string tag = cmd["tag"]?.ToString();
             // Only attempt to change tag if a non-null tag is provided and it's different from the current one.
             // Allow setting an empty string to remove the tag (Unity uses "Untagged").
             if (tag != null && targetGo.tag != tag)
@@ -685,7 +685,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
 
             // Change Layer (using consolidated 'layer' parameter)
-            string layerName = @params["layer"]?.ToString();
+            string layerName = cmd["layer"]?.ToString();
             if (!string.IsNullOrEmpty(layerName))
             {
                 int layerId = LayerMask.NameToLayer(layerName);
@@ -703,9 +703,9 @@ namespace UnityMcpBridge.Editor.Tools
             }
 
             // Transform Modifications
-            Vector3? position = ParseVector3(@params["position"] as JArray);
-            Vector3? rotation = ParseVector3(@params["rotation"] as JArray);
-            Vector3? scale = ParseVector3(@params["scale"] as JArray);
+            Vector3? position = ParseVector3(cmd["position"] as JArray);
+            Vector3? rotation = ParseVector3(cmd["rotation"] as JArray);
+            Vector3? scale = ParseVector3(cmd["scale"] as JArray);
 
             if (position.HasValue && targetGo.transform.localPosition != position.Value)
             {
@@ -727,7 +727,7 @@ namespace UnityMcpBridge.Editor.Tools
             // Note: These might need more specific Undo recording per component
 
             // Remove Components
-            if (@params["componentsToRemove"] is JArray componentsToRemoveArray)
+            if (cmd["componentsToRemove"] is JArray componentsToRemoveArray)
             {
                 foreach (var compToken in componentsToRemoveArray)
                 {
@@ -743,7 +743,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
 
             // Add Components (similar to create)
-            if (@params["componentsToAdd"] is JArray componentsToAddArrayModify)
+            if (cmd["componentsToAdd"] is JArray componentsToAddArrayModify)
             {
                 foreach (var compToken in componentsToAddArrayModify)
                 {
@@ -769,7 +769,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
 
             // Set Component Properties
-            if (@params["componentProperties"] is JObject componentPropertiesObj)
+            if (cmd["componentProperties"] is JObject componentPropertiesObj)
             {
                 foreach (var prop in componentPropertiesObj.Properties())
                 {
@@ -845,17 +845,17 @@ namespace UnityMcpBridge.Editor.Tools
         }
 
         private object FindGameObjects(
-            JObject @params,
+            JObject cmd,
             JToken targetToken,
             string searchMethod
         )
         {
-            bool findAll = @params["findAll"]?.ToObject<bool>() ?? false;
+            bool findAll = cmd["findAll"]?.ToObject<bool>() ?? false;
             List<GameObject> foundObjects = FindObjectsInternal(
                 targetToken,
                 searchMethod,
                 findAll,
-                @params
+               cmd
             );
 
             if (foundObjects.Count == 0)
@@ -895,7 +895,7 @@ namespace UnityMcpBridge.Editor.Tools
         }
 
         private object AddComponentToTarget(
-            JObject @params,
+            JObject cmd,
             JToken targetToken,
             string searchMethod
         )
@@ -912,13 +912,13 @@ namespace UnityMcpBridge.Editor.Tools
             JObject properties = null;
 
             // Allow adding component specified directly or via componentsToAdd array (take first)
-            if (@params["componentName"] != null)
+            if (cmd["componentName"] != null)
             {
-                typeName = @params["componentName"]?.ToString();
-                properties = @params["componentProperties"]?[typeName] as JObject; // Check if props are nested under name
+                typeName = cmd["componentName"]?.ToString();
+                properties = cmd["componentProperties"]?[typeName] as JObject; // Check if props are nested under name
             }
             else if (
-                @params["componentsToAdd"] is JArray componentsToAddArray
+               cmd["componentsToAdd"] is JArray componentsToAddArray
                 && componentsToAddArray.Count > 0
             )
             {
@@ -951,7 +951,7 @@ namespace UnityMcpBridge.Editor.Tools
         }
 
         private object RemoveComponentFromTarget(
-            JObject @params,
+            JObject cmd,
             JToken targetToken,
             string searchMethod
         )
@@ -966,12 +966,12 @@ namespace UnityMcpBridge.Editor.Tools
 
             string typeName = null;
             // Allow removing component specified directly or via componentsToRemove array (take first)
-            if (@params["componentName"] != null)
+            if (cmd["componentName"] != null)
             {
-                typeName = @params["componentName"]?.ToString();
+                typeName = cmd["componentName"]?.ToString();
             }
             else if (
-                @params["componentsToRemove"] is JArray componentsToRemoveArray
+               cmd["componentsToRemove"] is JArray componentsToRemoveArray
                 && componentsToRemoveArray.Count > 0
             )
             {
@@ -997,7 +997,7 @@ namespace UnityMcpBridge.Editor.Tools
         }
 
         private object SetComponentPropertyOnTarget(
-            JObject @params,
+            JObject cmd,
             JToken targetToken,
             string searchMethod
         )
@@ -1010,13 +1010,13 @@ namespace UnityMcpBridge.Editor.Tools
                 );
             }
 
-            string compName = @params["componentName"]?.ToString();
+            string compName = cmd["componentName"]?.ToString();
             JObject propertiesToSet = null;
 
             if (!string.IsNullOrEmpty(compName))
             {
                 // Properties might be directly under componentProperties or nested under the component name
-                if (@params["componentProperties"] is JObject compProps)
+                if (cmd["componentProperties"] is JObject compProps)
                 {
                     propertiesToSet = compProps[compName] as JObject ?? compProps; // Allow flat or nested structure
                 }

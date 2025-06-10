@@ -27,16 +27,16 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Main handler for executing menu items or getting available ones.
         /// </summary>
-        public override object HandleCommand(JObject @params)
+        public override object HandleCommand(JObject cmd)
         {
-            string action = @params["action"]?.ToString().ToLower() ?? "execute"; // Default action
+            string action = cmd["action"]?.ToString().ToLower() ?? "execute"; // Default action
 
             try
             {
                 switch (action)
                 {
                     case "execute":
-                        return ExecuteItem(@params);
+                        return ExecuteItem(cmd);
                     case "get_available_menus":
                         // Getting a comprehensive list of *all* menu items dynamically is very difficult
                         // and often requires complex reflection or maintaining a manual list.
@@ -66,11 +66,11 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Executes a specific menu item.
         /// </summary>
-        private object ExecuteItem(JObject @params)
+        private object ExecuteItem(JObject cmd)
         {
-            string menuPath = @params["menu_path"]?.ToString();
-            // string alias = @params["alias"]?.ToString(); // TODO: Implement alias mapping based on refactor plan requirements.
-            // JObject parameters = @params["parameters"] as JObject; // TODO: Investigate parameter passing (often not directly supported by ExecuteMenuItem).
+            string menuPath = cmd["menu_path"]?.ToString();
+            // string alias =cmd["alias"]?.ToString(); // TODO: Implement alias mapping based on refactor plan requirements.
+            // JObject parameters =cmd["parameters"] as JObject; // TODO: Investigate parameter passing (often not directly supported by ExecuteMenuItem).
 
             if (string.IsNullOrWhiteSpace(menuPath))
             {

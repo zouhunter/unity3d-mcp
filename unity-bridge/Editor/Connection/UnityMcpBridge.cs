@@ -358,9 +358,8 @@ namespace UnityMcpBridge.Editor
                     };
                     return JsonConvert.SerializeObject(pingResponse);
                 }
-
                 // Use JObject for parameters as the new handlers likely expect this
-                JObject paramsObject = command.@params ?? new JObject();
+                JObject paramsObject = command.cmd ?? new JObject();
                 var tool = GetMcpTool(command.type);
                 if (tool == null)
                 {
@@ -385,8 +384,8 @@ namespace UnityMcpBridge.Editor
                     error = ex.Message, // Provide the specific error message
                     command = command?.type ?? "Unknown", // Include the command type if available
                     stackTrace = ex.StackTrace, // Include stack trace for detailed debugging
-                    paramsSummary = command?.@params != null
-                        ? GetParamsSummary(command.@params)
+                    paramsSummary = command?.cmd != null
+                        ? GetParamsSummary(command.cmd)
                         : "No parameters", // Summarize parameters for context
                 };
                 return JsonConvert.SerializeObject(response);
@@ -418,15 +417,15 @@ namespace UnityMcpBridge.Editor
             return null;
         }
         // Helper method to get a summary of parameters for error reporting
-        private static string GetParamsSummary(JObject @params)
+        private static string GetParamsSummary(JObject cmd)
         {
             try
             {
-                return @params == null || !@params.HasValues
+                return cmd == null || !cmd.HasValues
                     ? "No parameters"
                     : string.Join(
                         ", ",
-                        @params
+                       cmd
                             .Properties()
                             .Select(static p =>
                                 $"{p.Name}: {p.Value?.ToString()?[..Math.Min(20, p.Value?.ToString()?.Length ?? 0)]}"

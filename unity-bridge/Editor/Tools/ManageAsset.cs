@@ -35,9 +35,9 @@ namespace UnityMcpBridge.Editor.Tools
             "get_components",
         };
 
-        public override object HandleCommand(JObject @params)
+        public override object HandleCommand(JObject cmd)
         {
-            string action = @params["action"]?.ToString().ToLower();
+            string action = cmd["action"]?.ToString().ToLower();
             if (string.IsNullOrEmpty(action))
             {
                 return Response.Error("Action parameter is required.");
@@ -53,7 +53,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
 
             // Common parameters
-            string path = @params["path"]?.ToString();
+            string path = cmd["path"]?.ToString();
 
             try
             {
@@ -61,24 +61,24 @@ namespace UnityMcpBridge.Editor.Tools
                 {
                     case "import":
                         // Note: Unity typically auto-imports. This might re-import or configure import settings.
-                        return ReimportAsset(path, @params["properties"] as JObject);
+                        return ReimportAsset(path, cmd["properties"] as JObject);
                     case "create":
-                        return CreateAsset(@params);
+                        return CreateAsset(cmd);
                     case "modify":
-                        return ModifyAsset(path, @params["properties"] as JObject);
+                        return ModifyAsset(path, cmd["properties"] as JObject);
                     case "delete":
                         return DeleteAsset(path);
                     case "duplicate":
-                        return DuplicateAsset(path, @params["destination"]?.ToString());
+                        return DuplicateAsset(path, cmd["destination"]?.ToString());
                     case "move": // Often same as rename if within Assets/
                     case "rename":
-                        return MoveOrRenameAsset(path, @params["destination"]?.ToString());
+                        return MoveOrRenameAsset(path, cmd["destination"]?.ToString());
                     case "search":
-                        return SearchAssets(@params);
+                        return SearchAssets(cmd);
                     case "get_info":
                         return GetAssetInfo(
                             path,
-                            @params["generatePreview"]?.ToObject<bool>() ?? false
+                           cmd["generatePreview"]?.ToObject<bool>() ?? false
                         );
                     case "create_folder": // Added specific action for clarity
                         return CreateFolder(path);
@@ -136,11 +136,11 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private object CreateAsset(JObject @params)
+        private object CreateAsset(JObject cmd)
         {
-            string path = @params["path"]?.ToString();
-            string assetType = @params["assetType"]?.ToString();
-            JObject properties = @params["properties"] as JObject;
+            string path = cmd["path"]?.ToString();
+            string assetType = cmd["assetType"]?.ToString();
+            JObject properties = cmd["properties"] as JObject;
 
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for create.");
@@ -586,15 +586,15 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        private object SearchAssets(JObject @params)
+        private object SearchAssets(JObject cmd)
         {
-            string searchPattern = @params["searchPattern"]?.ToString();
-            string filterType = @params["filterType"]?.ToString();
-            string pathScope = @params["path"]?.ToString(); // Use path as folder scope
-            string filterDateAfterStr = @params["filterDateAfter"]?.ToString();
-            int pageSize = @params["pageSize"]?.ToObject<int?>() ?? 50; // Default page size
-            int pageNumber = @params["pageNumber"]?.ToObject<int?>() ?? 1; // Default page number (1-based)
-            bool generatePreview = @params["generatePreview"]?.ToObject<bool>() ?? false;
+            string searchPattern = cmd["searchPattern"]?.ToString();
+            string filterType = cmd["filterType"]?.ToString();
+            string pathScope = cmd["path"]?.ToString(); // Use path as folder scope
+            string filterDateAfterStr = cmd["filterDateAfter"]?.ToString();
+            int pageSize = cmd["pageSize"]?.ToObject<int?>() ?? 50; // Default page size
+            int pageNumber = cmd["pageNumber"]?.ToObject<int?>() ?? 1; // Default page number (1-based)
+            bool generatePreview = cmd["generatePreview"]?.ToObject<bool>() ?? false;
 
             List<string> searchFilters = new List<string>();
             if (!string.IsNullOrEmpty(searchPattern))

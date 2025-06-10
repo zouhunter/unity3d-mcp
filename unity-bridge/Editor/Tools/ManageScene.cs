@@ -21,13 +21,13 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Main handler for scene management actions.
         /// </summary>
-        public override object HandleCommand(JObject @params)
+        public override object HandleCommand(JObject cmd)
         {
-            string action = @params["action"]?.ToString().ToLower();
-            string name = @params["name"]?.ToString();
-            string path = @params["path"]?.ToString(); // Relative to Assets/
-            int? buildIndex = @params["buildIndex"]?.ToObject<int?>();
-            // bool loadAdditive = @params["loadAdditive"]?.ToObject<bool>() ?? false; // Example for future extension
+            string action = cmd["action"]?.ToString().ToLower();
+            string name = cmd["name"]?.ToString();
+            string path = cmd["path"]?.ToString(); // Relative to Assets/
+            int? buildIndex = cmd["buildIndex"]?.ToObject<int?>();
+            // bool loadAdditive =cmd["loadAdditive"]?.ToObject<bool>() ?? false; // Example for future extension
 
             // Ensure path is relative to Assets/, removing any leading "Assets/"
             string relativeDir = path ?? string.Empty;

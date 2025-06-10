@@ -18,21 +18,21 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Main handler for script management actions.
         /// </summary>
-        public override object HandleCommand(JObject @params)
+        public override object HandleCommand(JObject cmd)
         {
             // Extract parameters
-            string action = @params["action"]?.ToString().ToLower();
-            string name = @params["name"]?.ToString();
-            string path = @params["path"]?.ToString(); // Relative to Assets/
+            string action = cmd["action"]?.ToString().ToLower();
+            string name = cmd["name"]?.ToString();
+            string path = cmd["path"]?.ToString(); // Relative to Assets/
             string contents = null;
 
             // Check if we have base64 encoded contents
-            bool contentsEncoded = @params["contentsEncoded"]?.ToObject<bool>() ?? false;
-            if (contentsEncoded && @params["encodedContents"] != null)
+            bool contentsEncoded = cmd["contentsEncoded"]?.ToObject<bool>() ?? false;
+            if (contentsEncoded && cmd["encodedContents"] != null)
             {
                 try
                 {
-                    contents = DecodeBase64(@params["encodedContents"].ToString());
+                    contents = DecodeBase64(cmd["encodedContents"].ToString());
                 }
                 catch (Exception e)
                 {
@@ -41,11 +41,11 @@ namespace UnityMcpBridge.Editor.Tools
             }
             else
             {
-                contents = @params["contents"]?.ToString();
+                contents = cmd["contents"]?.ToString();
             }
 
-            string scriptType = @params["scriptType"]?.ToString(); // For templates/validation
-            string namespaceName = @params["namespace"]?.ToString(); // For organizing code
+            string scriptType = cmd["scriptType"]?.ToString(); // For templates/validation
+            string namespaceName = cmd["namespace"]?.ToString(); // For organizing code
 
             // Validate required parameters
             if (string.IsNullOrEmpty(action))

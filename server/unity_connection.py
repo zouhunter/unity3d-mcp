@@ -98,7 +98,7 @@ class UnityConnection:
             logger.error(f"Error during receive: {str(e)}")
             raise
 
-    def send_command(self, command_type: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
+    def send_command(self, command_type: str, cmd: Dict[str, Any] = None) -> Dict[str, Any]:
         """Send a command to Unity and return its response."""
         if not self.sock and not self.connect():
             raise ConnectionError("Not connected to Unity")
@@ -123,7 +123,7 @@ class UnityConnection:
                 raise ConnectionError(f"Connection verification failed: {str(e)}")
         
         # Normal command handling
-        command = {"type": command_type, "params": params or {}}
+        command = {"type": command_type, "cmd": cmd or {}}
         try:
             # Check for very large content that might cause JSON issues
             command_size = len(json.dumps(command))
@@ -131,7 +131,7 @@ class UnityConnection:
             if command_size > config.buffer_size / 2:
                 logger.warning(f"Large command detected ({command_size} bytes). This might cause issues.")
                 
-            logger.info(f"Sending command: {command_type} with params size: {command_size} bytes")
+            logger.info(f"Sending command: {command_type} with cmd size: {command_size} bytes")
             
             # Ensure we have a valid JSON string before sending
             command_json = json.dumps(command, ensure_ascii=False)

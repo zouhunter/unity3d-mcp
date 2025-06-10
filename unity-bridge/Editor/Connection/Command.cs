@@ -15,7 +15,7 @@ namespace UnityMcpBridge.Editor.Models
         /// <summary>
         /// The parameters for the command
         /// </summary>
-        public JObject @params { get; set; }
+        public JObject cmd { get; set; }
     }
 }
 

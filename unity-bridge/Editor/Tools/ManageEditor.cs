@@ -26,13 +26,13 @@ namespace UnityMcpBridge.Editor.Tools
         /// <summary>
         /// Main handler for editor management actions.
         /// </summary>
-        public override object HandleCommand(JObject @params)
+        public override object HandleCommand(JObject cmd)
         {
-            string action = @params["action"]?.ToString().ToLower();
+            string action = cmd["action"]?.ToString().ToLower();
             // Parameters for specific actions
-            string tagName = @params["tagName"]?.ToString();
-            string layerName = @params["layerName"]?.ToString();
-            bool waitForCompletion = @params["waitForCompletion"]?.ToObject<bool>() ?? false; // Example - not used everywhere
+            string tagName = cmd["tagName"]?.ToString();
+            string layerName = cmd["layerName"]?.ToString();
+            bool waitForCompletion = cmd["waitForCompletion"]?.ToObject<bool>() ?? false; // Example - not used everywhere
 
             if (string.IsNullOrEmpty(action))
             {
@@ -98,7 +98,7 @@ namespace UnityMcpBridge.Editor.Tools
                 case "get_selection":
                     return GetSelection();
                 case "set_active_tool":
-                    string toolName = @params["toolName"]?.ToString();
+                    string toolName = cmd["toolName"]?.ToString();
                     if (string.IsNullOrEmpty(toolName))
                         return Response.Error("'toolName' parameter required for set_active_tool.");
                     return SetActiveTool(toolName);
@@ -129,13 +129,13 @@ namespace UnityMcpBridge.Editor.Tools
 
                 // --- Settings (Example) ---
                 // case "set_resolution":
-                //     int? width = @params["width"]?.ToObject<int?>();
-                //     int? height = @params["height"]?.ToObject<int?>();
+                //     int? width =cmd["width"]?.ToObject<int?>();
+                //     int? height =cmd["height"]?.ToObject<int?>();
                 //     if (!width.HasValue || !height.HasValue) return Response.Error("'width' and 'height' parameters required.");
                 //     return SetGameViewResolution(width.Value, height.Value);
                 // case "set_quality":
                 //     // Handle string name or int index
-                //     return SetQualityLevel(@params["qualityLevel"]);
+                //     return SetQualityLevel(cmd["qualityLevel"]);
 
                 default:
                     return Response.Error(

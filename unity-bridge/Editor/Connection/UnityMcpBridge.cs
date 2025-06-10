@@ -52,20 +52,12 @@ namespace UnityMcpBridge.Editor
         {
             Start();
             EditorApplication.quitting += Stop;
+            AssemblyReloadEvents.beforeAssemblyReload += Stop;
         }
 
         public static void Start()
         {
             Stop();
-
-            try
-            {
-                ServerInstaller.EnsureServerInstalled();
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Failed to ensure UnityMcpServer is installed: {ex.Message}");
-            }
 
             if (isRunning)
             {

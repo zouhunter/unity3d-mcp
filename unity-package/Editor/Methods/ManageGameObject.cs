@@ -14,34 +14,25 @@ namespace UnityMcpBridge.Editor.Tools
 {
     /// <summary>
     /// Handles GameObject manipulation within the current scene (CRUD, find, components).
+    /// 对应方法名: manage_game_object
     /// </summary>
-    public class ManageGameObject : McpTool
+    public class ManageGameObject : IToolMethod
     {
-        public override string ToolName => "manage_gameobject";
-
-        // --- Main Handler ---
-
-        public override object HandleCommand(JObject cmd)
+        // 实现IToolMethod接口
+        public object ExecuteMethod(JObject args)
         {
-            string action = cmd["action"]?.ToString().ToLower();
+            string action = args["action"]?.ToString().ToLower();
             if (string.IsNullOrEmpty(action))
             {
                 return Response.Error("Action parameter is required.");
             }
 
-            // Parameters used by various actions
-            JToken targetToken = cmd["target"]; // Can be string (name/path) or int (instanceID)
-            string searchMethod = cmd["searchMethod"]?.ToString().ToLower();
-
-            // Get common parameters (consolidated)
-            string name = cmd["name"]?.ToString();
-            string tag = cmd["tag"]?.ToString();
-            string layer = cmd["layer"]?.ToString();
-            JToken parentToken = cmd["parent"];
+            // args used by various actions
+            JToken targetToken = args["target"];
+            string searchMethod = args["searchMethod"]?.ToString().ToLower();
 
             // --- Prefab Redirection Check ---
-            string targetPath =
-                targetToken?.Type == JTokenType.String ? targetToken.ToString() : null;
+            string targetPath = targetToken?.Type == JTokenType.String ? targetToken.ToString() : null;
             if (
                 !string.IsNullOrEmpty(targetPath)
                 && targetPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase)
@@ -59,53 +50,42 @@ namespace UnityMcpBridge.Editor.Tools
                     assetParams["path"] = targetPath;
 
                     // Extract properties.
-                    // For 'set_component_property', combine componentName and componentProperties.
-                    // For 'modify', directly use componentProperties.
                     JObject properties = null;
                     if (action == "set_component_property")
                     {
-                        string compName = cmd["componentName"]?.ToString();
-                        JObject compProps = cmd["componentProperties"]?[compName] as JObject; // Handle potential nesting
+                        string compName = args["componentName"]?.ToString();
+                        JObject compProps = args["componentProperties"]?[compName] as JObject;
                         if (string.IsNullOrEmpty(compName))
-                            return Response.Error(
-                                "Missing 'componentName' for 'set_component_property' on prefab."
-                            );
+                            return Response.Error("Missing 'componentName' for 'set_component_property' on prefab.");
                         if (compProps == null)
-                            return Response.Error(
-                                $"Missing or invalid 'componentProperties' for component '{compName}' for 'set_component_property' on prefab."
-                            );
+                            return Response.Error($"Missing or invalid 'componentProperties' for component '{compName}' for 'set_component_property' on prefab.");
 
                         properties = new JObject();
                         properties[compName] = compProps;
                     }
                     else // action == "modify"
                     {
-                        properties = cmd["componentProperties"] as JObject;
+                        properties = args["componentProperties"] as JObject;
                         if (properties == null)
-                            return Response.Error(
-                                "Missing 'componentProperties' for 'modify' action on prefab."
-                            );
+                            return Response.Error("Missing 'componentProperties' for 'modify' action on prefab.");
                     }
 
                     assetParams["properties"] = properties;
 
                     // Call ManageAsset handler
-                    return new ManageAsset().HandleCommand(assetParams);
+                    return new ManageAsset().ExecuteMethod(assetParams);
                 }
                 else if (
                     action == "delete"
                     || action == "add_component"
                     || action == "remove_component"
                     || action == "get_components"
-                ) // Added get_components here too
+                )
                 {
-                    // Explicitly block other modifications on the prefab asset itself via manage_gameobject
                     return Response.Error(
                         $"Action '{action}' on a prefab asset ('{targetPath}') should be performed using the 'manage_asset' command."
                     );
                 }
-                // Allow 'create' (instantiation) and 'find' to proceed, although finding a prefab asset by path might be less common via manage_gameobject.
-                // No specific handling needed here, the code below will run.
             }
             // --- End Prefab Redirection Check ---
 
@@ -114,26 +94,24 @@ namespace UnityMcpBridge.Editor.Tools
                 switch (action)
                 {
                     case "create":
-                        return CreateGameObject(cmd);
+                        return CreateGameObject(args);
                     case "modify":
-                        return ModifyGameObject(cmd, targetToken, searchMethod);
+                        return ModifyGameObject(args, targetToken, searchMethod);
                     case "delete":
                         return DeleteGameObject(targetToken, searchMethod);
                     case "find":
-                        return FindGameObjects(cmd, targetToken, searchMethod);
+                        return FindGameObjects(args, targetToken, searchMethod);
                     case "get_components":
-                        string getCompTarget = targetToken?.ToString(); // Expect name, path, or ID string
+                        string getCompTarget = targetToken?.ToString();
                         if (getCompTarget == null)
-                            return Response.Error(
-                                "'target' parameter required for get_components."
-                            );
+                            return Response.Error("'target' parameter required for get_components.");
                         return GetComponentsFromTarget(getCompTarget, searchMethod);
                     case "add_component":
-                        return AddComponentToTarget(cmd, targetToken, searchMethod);
+                        return AddComponentToTarget(args, targetToken, searchMethod);
                     case "remove_component":
-                        return RemoveComponentFromTarget(cmd, targetToken, searchMethod);
+                        return RemoveComponentFromTarget(args, targetToken, searchMethod);
                     case "set_component_property":
-                        return SetComponentPropertyOnTarget(cmd, targetToken, searchMethod);
+                        return SetComponentPropertyOnTarget(args, targetToken, searchMethod);
 
                     default:
                         return Response.Error($"Unknown action: '{action}'.");
@@ -156,7 +134,7 @@ namespace UnityMcpBridge.Editor.Tools
                 return Response.Error("'name' parameter is required for 'create' action.");
             }
 
-            // Get prefab creation parameters
+            // Get prefab creation args
             bool saveAsPrefab = cmd["saveAsPrefab"]?.ToObject<bool>() ?? false;
             string prefabPath = cmd["prefabPath"]?.ToString();
             string tag = cmd["tag"]?.ToString(); // Get tag for creation
@@ -2204,7 +2182,7 @@ namespace UnityMcpBridge.Editor.Tools
                 var type = c.GetType();
                 BindingFlags flags = BindingFlags.Public | BindingFlags.Instance;
                 
-                foreach (var prop in type.GetProperties(flags).Where(p => p.CanRead && p.GetIndexParameters().Length == 0)) {
+                foreach (var prop in type.GetProperties(flags).Where(p => p.CanRead && p.GetIndexargs().Length == 0)) {
                     try { properties[prop.Name] = prop.GetValue(c); } catch { }
                 }
                 foreach (var field in type.GetFields(flags)) {

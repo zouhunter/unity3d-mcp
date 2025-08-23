@@ -13,21 +13,17 @@ namespace UnityMcpBridge.Editor.Tools
 {
     /// <summary>
     /// Handles scene management operations like loading, saving, creating, and querying hierarchy.
+    /// 对应方法名: manage_scene
     /// </summary>
-    public class ManageScene : McpTool
+    public class ManageScene : IToolMethod
     {
-        public override string ToolName => "manage_scene";
-
-        /// <summary>
-        /// Main handler for scene management actions.
-        /// </summary>
-        public override object HandleCommand(JObject cmd)
+        // 实现IToolMethod接口
+        public object ExecuteMethod(JObject args)
         {
-            string action = cmd["action"]?.ToString().ToLower();
-            string name = cmd["name"]?.ToString();
-            string path = cmd["path"]?.ToString(); // Relative to Assets/
-            int? buildIndex = cmd["buildIndex"]?.ToObject<int?>();
-            // bool loadAdditive =cmd["loadAdditive"]?.ToObject<bool>() ?? false; // Example for future extension
+            string action = args["action"]?.ToString().ToLower();
+            string name = args["name"]?.ToString();
+            string path = args["path"]?.ToString(); // Relative to Assets/
+            int? buildIndex = args["buildIndex"]?.ToObject<int?>();
 
             // Ensure path is relative to Assets/, removing any leading "Assets/"
             string relativeDir = path ?? string.Empty;
@@ -41,7 +37,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
 
             // Apply default *after* sanitizing, using the original path variable for the check
-            if (string.IsNullOrEmpty(path) && action == "create") // Check original path for emptiness
+            if (string.IsNullOrEmpty(path) && action == "create")
             {
                 relativeDir = "Scenes"; // Default relative directory
             }
@@ -52,12 +48,10 @@ namespace UnityMcpBridge.Editor.Tools
             }
 
             string sceneFileName = string.IsNullOrEmpty(name) ? null : $"{name}.unity";
-            // Construct full system path correctly: ProjectRoot/Assets/relativeDir/sceneFileName
-            string fullPathDir = Path.Combine(Application.dataPath, relativeDir); // Combine with Assets path (Application.dataPath ends in Assets)
+            string fullPathDir = Path.Combine(Application.dataPath, relativeDir);
             string fullPath = string.IsNullOrEmpty(sceneFileName)
                 ? null
                 : Path.Combine(fullPathDir, sceneFileName);
-            // Ensure relativePath always starts with "Assets/" and uses forward slashes
             string relativePath = string.IsNullOrEmpty(sceneFileName)
                 ? null
                 : Path.Combine("Assets", relativeDir, sceneFileName).Replace('\\', '/');
@@ -71,9 +65,7 @@ namespace UnityMcpBridge.Editor.Tools
                 }
                 catch (Exception e)
                 {
-                    return Response.Error(
-                        $"Could not create directory '{fullPathDir}': {e.Message}"
-                    );
+                    return Response.Error($"Could not create directory '{fullPathDir}': {e.Message}");
                 }
             }
 
@@ -82,22 +74,16 @@ namespace UnityMcpBridge.Editor.Tools
             {
                 case "create":
                     if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(relativePath))
-                        return Response.Error(
-                            "'name' and 'path' parameters are required for 'create' action."
-                        );
+                        return Response.Error("'name' and 'path' args are required for 'create' action.");
                     return CreateScene(fullPath, relativePath);
                 case "load":
-                    // Loading can be done by path/name or build index
                     if (!string.IsNullOrEmpty(relativePath))
                         return LoadScene(relativePath);
                     else if (buildIndex.HasValue)
                         return LoadScene(buildIndex.Value);
                     else
-                        return Response.Error(
-                            "Either 'name'/'path' or 'buildIndex' must be provided for 'load' action."
-                        );
+                        return Response.Error("Either 'name'/'path' or 'buildIndex' must be provided for 'load' action.");
                 case "save":
-                    // Save current scene, optionally to a new path
                     return SaveScene(fullPath, relativePath);
                 case "get_hierarchy":
                     return GetSceneHierarchy();
@@ -105,7 +91,6 @@ namespace UnityMcpBridge.Editor.Tools
                     return GetActiveSceneInfo();
                 case "get_build_settings":
                     return GetBuildSettingsScenes();
-                // Add cases for modifying build settings, additive loading, unloading etc.
                 default:
                     return Response.Error(
                         $"Unknown action: '{action}'. Valid actions: create, load, save, get_hierarchy, get_active, get_build_settings."

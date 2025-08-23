@@ -13,11 +13,10 @@ namespace UnityMcpBridge.Editor.Tools
     /// <summary>
     /// Handles reading and clearing Unity Editor console log entries.
     /// Uses reflection to access internal LogEntry methods/properties.
+    /// 对应方法名: read_console
     /// </summary>
-    public class ReadConsole : McpTool
+    public class ReadConsole : IToolMethod
     {
-        public override string ToolName => "read_console";
-
         // Reflection members for accessing internal LogEntry data
         // private static MethodInfo _getEntriesMethod; // Removed as it's unused and fails reflection
         private static MethodInfo _startGettingEntriesMethod;
@@ -119,9 +118,8 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        // --- Main Handler ---
-
-        public override object HandleCommand(JObject cmd)
+        // 实现IToolMethod接口
+        public object ExecuteMethod(JObject args)
         {
             // Check if ALL required reflection members were successfully initialized.
             if (
@@ -137,16 +135,15 @@ namespace UnityMcpBridge.Editor.Tools
                 || _instanceIdField == null
             )
             {
-                // Log the error here as well for easier debugging in Unity Console
                 Debug.LogError(
-                    "[ReadConsole] HandleCommand called but reflection members are not initialized. Static constructor might have failed silently or there's an issue."
+                    "[ReadConsole] ExecuteMethod called but reflection members are not initialized. Static constructor might have failed silently or there's an issue."
                 );
                 return Response.Error(
                     "ReadConsole handler failed to initialize due to reflection errors. Cannot access console logs."
                 );
             }
 
-            string action = cmd["action"]?.ToString().ToLower() ?? "get";
+            string action = args["action"]?.ToString().ToLower() ?? "get";
 
             try
             {
@@ -156,20 +153,19 @@ namespace UnityMcpBridge.Editor.Tools
                 }
                 else if (action == "get")
                 {
-                    // Extract parameters for 'get'
+                    // Extract args for 'get'
                     var types =
-                        (cmd["types"] as JArray)?.Select(t => t.ToString().ToLower()).ToList()
+                        (args["types"] as JArray)?.Select(t => t.ToString().ToLower()).ToList()
                         ?? new List<string> { "error", "warning", "log" };
-                    int? count = cmd["count"]?.ToObject<int?>();
-                    string filterText = cmd["filterText"]?.ToString();
-                    string sinceTimestampStr = cmd["sinceTimestamp"]?.ToString(); // TODO: Implement timestamp filtering
-                    string format = (cmd["format"]?.ToString() ?? "detailed").ToLower();
-                    bool includeStacktrace =
-                       cmd["includeStacktrace"]?.ToObject<bool?>() ?? true;
+                    int? count = args["count"]?.ToObject<int?>();
+                    string filterText = args["filterText"]?.ToString();
+                    string sinceTimestampStr = args["sinceTimestamp"]?.ToString();
+                    string format = (args["format"]?.ToString() ?? "detailed").ToLower();
+                    bool includeStacktrace = args["includeStacktrace"]?.ToObject<bool?>() ?? true;
 
                     if (types.Contains("all"))
                     {
-                        types = new List<string> { "error", "warning", "log" }; // Expand 'all'
+                        types = new List<string> { "error", "warning", "log" };
                     }
 
                     if (!string.IsNullOrEmpty(sinceTimestampStr))
@@ -177,7 +173,6 @@ namespace UnityMcpBridge.Editor.Tools
                         Debug.LogWarning(
                             "[ReadConsole] Filtering by 'since_timestamp' is not currently implemented."
                         );
-                        // Need a way to get timestamp per log entry.
                     }
 
                     return GetConsoleEntries(types, count, filterText, format, includeStacktrace);
@@ -202,7 +197,7 @@ namespace UnityMcpBridge.Editor.Tools
         {
             try
             {
-                _clearMethod.Invoke(null, null); // Static method, no instance, no parameters
+                _clearMethod.Invoke(null, null); // Static method, no instance, no args
                 return Response.Success("Console cleared successfully.");
             }
             catch (Exception e)

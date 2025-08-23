@@ -1,6 +1,6 @@
 """
 Configuration settings for the Unity MCP Server.
-This file contains all configurable parameters for the server.
+This file contains all configurable args for the server.
 """
 
 from dataclasses import dataclass

@@ -11,28 +11,26 @@ namespace UnityMcpBridge.Editor.Tools
 {
     /// <summary>
     /// Handles CRUD operations for C# scripts within the Unity project.
+    /// 对应方法名: manage_script
     /// </summary>
-    public class ManageScript : McpTool
+    public class ManageScript : IToolMethod
     {
-        public override string ToolName => "manage_script";
-        /// <summary>
-        /// Main handler for script management actions.
-        /// </summary>
-        public override object HandleCommand(JObject cmd)
+        // 实现IToolMethod接口
+        public object ExecuteMethod(JObject args)
         {
-            // Extract parameters
-            string action = cmd["action"]?.ToString().ToLower();
-            string name = cmd["name"]?.ToString();
-            string path = cmd["path"]?.ToString(); // Relative to Assets/
+            // Extract args
+            string action = args["action"]?.ToString().ToLower();
+            string name = args["name"]?.ToString();
+            string path = args["path"]?.ToString(); // Relative to Assets/
             string contents = null;
 
             // Check if we have base64 encoded contents
-            bool contentsEncoded = cmd["contentsEncoded"]?.ToObject<bool>() ?? false;
-            if (contentsEncoded && cmd["encodedContents"] != null)
+            bool contentsEncoded = args["contentsEncoded"]?.ToObject<bool>() ?? false;
+            if (contentsEncoded && args["encodedContents"] != null)
             {
                 try
                 {
-                    contents = DecodeBase64(cmd["encodedContents"].ToString());
+                    contents = DecodeBase64(args["encodedContents"].ToString());
                 }
                 catch (Exception e)
                 {
@@ -41,13 +39,13 @@ namespace UnityMcpBridge.Editor.Tools
             }
             else
             {
-                contents = cmd["contents"]?.ToString();
+                contents = args["contents"]?.ToString();
             }
 
-            string scriptType = cmd["scriptType"]?.ToString(); // For templates/validation
-            string namespaceName = cmd["namespace"]?.ToString(); // For organizing code
+            string scriptType = args["scriptType"]?.ToString();
+            string namespaceName = args["namespace"]?.ToString();
 
-            // Validate required parameters
+            // Validate required args
             if (string.IsNullOrEmpty(action))
             {
                 return Response.Error("Action parameter is required.");
@@ -56,7 +54,7 @@ namespace UnityMcpBridge.Editor.Tools
             {
                 return Response.Error("Name parameter is required.");
             }
-            // Basic name validation (alphanumeric, underscores, cannot start with number)
+            // Basic name validation
             if (!Regex.IsMatch(name, @"^[a-zA-Z_][a-zA-Z0-9_]*$"))
             {
                 return Response.Error(
@@ -64,9 +62,8 @@ namespace UnityMcpBridge.Editor.Tools
                 );
             }
 
-            // Ensure path is relative to Assets/, removing any leading "Assets/"
-            // Set default directory to "Scripts" if path is not provided
-            string relativeDir = path ?? "Scripts"; // Default to "Scripts" if path is null
+            // Process path
+            string relativeDir = path ?? "Scripts";
             if (!string.IsNullOrEmpty(relativeDir))
             {
                 relativeDir = relativeDir.Replace('\\', '/').Trim('/');
@@ -75,18 +72,16 @@ namespace UnityMcpBridge.Editor.Tools
                     relativeDir = relativeDir.Substring("Assets/".Length).TrimStart('/');
                 }
             }
-            // Handle empty string case explicitly after processing
             if (string.IsNullOrEmpty(relativeDir))
             {
-                relativeDir = "Scripts"; // Ensure default if path was provided as "" or only "/" or "Assets/"
+                relativeDir = "Scripts";
             }
 
             // Construct paths
             string scriptFileName = $"{name}.cs";
-            string fullPathDir = Path.Combine(Application.dataPath, relativeDir); // Application.dataPath ends in "Assets"
+            string fullPathDir = Path.Combine(Application.dataPath, relativeDir);
             string fullPath = Path.Combine(fullPathDir, scriptFileName);
-            string relativePath = Path.Combine("Assets", relativeDir, scriptFileName)
-                .Replace('\\', '/'); // Ensure "Assets/" prefix and forward slashes
+            string relativePath = Path.Combine("Assets", relativeDir, scriptFileName).Replace('\\', '/');
 
             // Ensure the target directory exists for create/update
             if (action == "create" || action == "update")
@@ -97,9 +92,7 @@ namespace UnityMcpBridge.Editor.Tools
                 }
                 catch (Exception e)
                 {
-                    return Response.Error(
-                        $"Could not create directory '{fullPathDir}': {e.Message}"
-                    );
+                    return Response.Error($"Could not create directory '{fullPathDir}': {e.Message}");
                 }
             }
 
@@ -107,14 +100,7 @@ namespace UnityMcpBridge.Editor.Tools
             switch (action)
             {
                 case "create":
-                    return CreateScript(
-                        fullPath,
-                        relativePath,
-                        name,
-                        contents,
-                        scriptType,
-                        namespaceName
-                    );
+                    return CreateScript(fullPath, relativePath, name, contents, scriptType, namespaceName);
                 case "read":
                     return ReadScript(fullPath, relativePath);
                 case "update":

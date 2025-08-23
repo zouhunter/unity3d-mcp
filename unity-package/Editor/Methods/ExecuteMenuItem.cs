@@ -1,19 +1,22 @@
 using System;
 using System.Collections.Generic; // Added for HashSet
+using System.Linq;
+using System.Reflection;
+using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityMcpBridge.Editor.Helpers; // For Response class
+using UnityMcpBridge.Editor.Tools; // 添加这个引用
 
 namespace UnityMcpBridge.Editor.Tools
 {
     /// <summary>
     /// Handles executing Unity Editor menu items by path.
+    /// 对应方法名: execute_menu_item
     /// </summary>
-    public class ExecuteMenuItem : McpTool
+    public class ExecuteMenuItem : IToolMethod
     {
-        public override string ToolName => "execute_menu_item";
-
         // Basic blacklist to prevent accidental execution of potentially disruptive menu items.
         // This can be expanded based on needs.
         private static readonly HashSet<string> _menuPathBlacklist = new HashSet<string>(
@@ -24,43 +27,27 @@ namespace UnityMcpBridge.Editor.Tools
             // Add other potentially dangerous items like "Edit/Preferences...", "File/Build Settings..." if needed
         };
 
-        /// <summary>
-        /// Main handler for executing menu items or getting available ones.
-        /// </summary>
+        // 实现IToolMethod接口
+        public object ExecuteMethod(JObject args)
+        {
+            // 从args中提取action，默认为execute
+            string action = args["action"]?.ToString()?.ToLower() ?? "execute";
+            
+            switch (action)
+            {
+                case "execute":
+                    return ExecuteItem(args);
+                case "get_available_menus":
+                    return GetAvailableMenus(args);
+                default:
+                    return Response.Error($"Unknown action: '{action}' for execute_menu_item");
+            }
+        }
+
+        // 保持原有的HandleCommand方法以向后兼容
         public override object HandleCommand(JObject cmd)
         {
-            string action = cmd["action"]?.ToString().ToLower() ?? "execute"; // Default action
-
-            try
-            {
-                switch (action)
-                {
-                    case "execute":
-                        return ExecuteItem(cmd);
-                    case "get_available_menus":
-                        // Getting a comprehensive list of *all* menu items dynamically is very difficult
-                        // and often requires complex reflection or maintaining a manual list.
-                        // Returning a placeholder/acknowledgement for now.
-                        Debug.LogWarning(
-                            "[ExecuteMenuItem] 'get_available_menus' action is not fully implemented. Dynamically listing all menu items is complex."
-                        );
-                        // Returning an empty list as per the refactor plan's requirements.
-                        return Response.Success(
-                            "'get_available_menus' action is not fully implemented. Returning empty list.",
-                            new List<string>()
-                        );
-                    // TODO: Consider implementing a basic list of common/known menu items or exploring reflection techniques if this feature becomes critical.
-                    default:
-                        return Response.Error(
-                            $"Unknown action: '{action}'. Valid actions are 'execute', 'get_available_menus'."
-                        );
-                }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[ExecuteMenuItem] Action '{action}' failed: {e}");
-                return Response.Error($"Internal error processing action '{action}': {e.Message}");
-            }
+            return ExecuteMethod(cmd);
         }
 
         /// <summary>
@@ -70,7 +57,7 @@ namespace UnityMcpBridge.Editor.Tools
         {
             string menuPath = cmd["menu_path"]?.ToString();
             // string alias =cmd["alias"]?.ToString(); // TODO: Implement alias mapping based on refactor plan requirements.
-            // JObject parameters =cmd["parameters"] as JObject; // TODO: Investigate parameter passing (often not directly supported by ExecuteMenuItem).
+            // JObject args =cmd["args"] as JObject; // TODO: Investigate parameter passing (often not directly supported by ExecuteMenuItem).
 
             if (string.IsNullOrWhiteSpace(menuPath))
             {
@@ -88,9 +75,9 @@ namespace UnityMcpBridge.Editor.Tools
             // TODO: Implement alias lookup here if needed (Map alias to actual menuPath).
             // if (!string.IsNullOrEmpty(alias)) { menuPath = LookupAlias(alias); if(menuPath == null) return Response.Error(...); }
 
-            // TODO: Handle parameters ('parameters' object) if a viable method is found.
+            // TODO: Handle args ('args' object) if a viable method is found.
             // This is complex as EditorApplication.ExecuteMenuItem doesn't take arguments directly.
-            // It might require finding the underlying EditorWindow or command if parameters are needed.
+            // It might require finding the underlying EditorWindow or command if args are needed.
 
             try
             {
@@ -131,6 +118,21 @@ namespace UnityMcpBridge.Editor.Tools
                     $"Error setting up execution for menu item '{menuPath}': {e.Message}"
                 );
             }
+        }
+
+        private object GetAvailableMenus(JObject cmd)
+        {
+            // Getting a comprehensive list of *all* menu items dynamically is very difficult
+            // and often requires complex reflection or maintaining a manual list.
+            // Returning a placeholder/acknowledgement for now.
+            Debug.LogWarning(
+                "[ExecuteMenuItem] 'get_available_menus' action is not fully implemented. Dynamically listing all menu items is complex."
+            );
+            // Returning an empty list as per the refactor plan's requirements.
+            return Response.Success(
+                "'get_available_menus' action is not fully implemented. Returning empty list.",
+                new List<string>()
+            );
         }
 
         // TODO: Add helper for alias lookup if implementing aliases.

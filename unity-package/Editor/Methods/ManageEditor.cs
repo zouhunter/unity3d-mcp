@@ -10,29 +10,94 @@ using UnityMcpBridge.Editor.Helpers; // For Response class
 namespace UnityMcpBridge.Editor.Tools
 {
     /// <summary>
+    /// Handles Unity asset management operations.
+    /// 对应方法名: manage_asset
+    /// </summary>
+    public class ManageAsset : IToolMethod
+    {
+        // Define the list of valid actions
+        private static readonly List<string> ValidActions = new List<string>
+        {
+            "import",
+            "create",
+            "modify",
+            "delete",
+            "duplicate",
+            "move",
+            "rename",
+            "search",
+            "get_info",
+            "create_folder",
+            "get_components",
+        };
+
+        // 实现IToolMethod接口
+        public object ExecuteMethod(JObject args)
+        {
+            string action = args["action"]?.ToString()?.ToLower() ?? "";
+            
+            switch (action)
+            {
+                case "import":
+                    // Note: Unity typically auto-imports. This might re-import or configure import settings.
+                    return ReimportAsset(args);
+                case "create":
+                    return CreateAsset(args);
+                case "modify":
+                    return ModifyAsset(args);
+                case "delete":
+                    return DeleteAsset(args);
+                case "duplicate":
+                    return DuplicateAsset(args);
+                case "move": // Often same as rename if within Assets/
+                case "rename":
+                    return MoveOrRenameAsset(args);
+                case "search":
+                    return SearchAssets(args);
+                case "get_info":
+                    return GetAssetInfo(
+                        args,
+                       args["generatePreview"]?.ToObject<bool>() ?? false
+                    );
+                case "create_folder": // Added specific action for clarity
+                    return CreateFolder(args);
+                case "get_components":
+                    return GetComponentsFromAsset(args);
+
+                default:
+                    // This error message is less likely to be hit now, but kept here as a fallback or for potential future modifications.
+                    string validActionsListDefault = string.Join(", ", ValidActions);
+                    return Response.Error(
+                        $"Unknown action: '{action}'. Valid actions are: {validActionsListDefault}"
+                    );
+            }
+        }
+
+        // --- Action Implementations ---
+        // ... 其他现有方法保持不变 ...
+    }
+
+    /// <summary>
     /// Handles operations related to controlling and querying the Unity Editor state,
     /// including managing Tags and Layers.
+    /// 对应方法名: manage_editor
     /// </summary>
-    public class ManageEditor : McpTool
+    public class ManageEditor : IToolMethod
     {
-        public override string ToolName => "manage_editor";
-
         // Constant for starting user layer index
         private const int FirstUserLayerIndex = 8;
 
         // Constant for total layer count
         private const int TotalLayerCount = 32;
 
-        /// <summary>
-        /// Main handler for editor management actions.
-        /// </summary>
-        public override object HandleCommand(JObject cmd)
+        // 实现IToolMethod接口
+        public object ExecuteMethod(JObject args)
         {
-            string action = cmd["action"]?.ToString().ToLower();
-            // Parameters for specific actions
-            string tagName = cmd["tagName"]?.ToString();
-            string layerName = cmd["layerName"]?.ToString();
-            bool waitForCompletion = cmd["waitForCompletion"]?.ToObject<bool>() ?? false; // Example - not used everywhere
+            string action = args["action"]?.ToString().ToLower();
+            // args for specific actions
+            string tagName = args["tagName"]?.ToString();
+            string layerName = args["layerName"]?.ToString();
+            bool waitForCompletion = args["waitForCompletion"]?.ToObject<bool>() ?? false;
 
             if (string.IsNullOrEmpty(action))
             {
@@ -98,7 +163,7 @@ namespace UnityMcpBridge.Editor.Tools
                 case "get_selection":
                     return GetSelection();
                 case "set_active_tool":
-                    string toolName = cmd["toolName"]?.ToString();
+                    string toolName = args["toolName"]?.ToString();
                     if (string.IsNullOrEmpty(toolName))
                         return Response.Error("'toolName' parameter required for set_active_tool.");
                     return SetActiveTool(toolName);
@@ -113,7 +178,7 @@ namespace UnityMcpBridge.Editor.Tools
                         return Response.Error("'tagName' parameter required for remove_tag.");
                     return RemoveTag(tagName);
                 case "get_tags":
-                    return GetTags(); // Helper to list current tags
+                    return GetTags();
 
                 // Layer Management
                 case "add_layer":
@@ -125,17 +190,7 @@ namespace UnityMcpBridge.Editor.Tools
                         return Response.Error("'layerName' parameter required for remove_layer.");
                     return RemoveLayer(layerName);
                 case "get_layers":
-                    return GetLayers(); // Helper to list current layers
-
-                // --- Settings (Example) ---
-                // case "set_resolution":
-                //     int? width =cmd["width"]?.ToObject<int?>();
-                //     int? height =cmd["height"]?.ToObject<int?>();
-                //     if (!width.HasValue || !height.HasValue) return Response.Error("'width' and 'height' parameters required.");
-                //     return SetGameViewResolution(width.Value, height.Value);
-                // case "set_quality":
-                //     // Handle string name or int index
-                //     return SetQualityLevel(cmd["qualityLevel"]);
+                    return GetLayers();
 
                 default:
                     return Response.Error(

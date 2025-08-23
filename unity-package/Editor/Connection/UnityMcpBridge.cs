@@ -358,7 +358,7 @@ namespace UnityMcpBridge.Editor
                     };
                     return JsonConvert.SerializeObject(pingResponse);
                 }
-                // Use JObject for parameters as the new handlers likely expect this
+                // Use JObject for args as the new handlers likely expect this
                 JObject paramsObject = command.cmd ?? new JObject();
                 var tool = GetMcpTool(command.type);
                 if (tool == null)
@@ -386,7 +386,7 @@ namespace UnityMcpBridge.Editor
                     stackTrace = ex.StackTrace, // Include stack trace for detailed debugging
                     paramsSummary = command?.cmd != null
                         ? GetParamsSummary(command.cmd)
-                        : "No parameters", // Summarize parameters for context
+                        : "No args", // Summarize args for context
                 };
                 return JsonConvert.SerializeObject(response);
             }
@@ -416,13 +416,13 @@ namespace UnityMcpBridge.Editor
             }
             return null;
         }
-        // Helper method to get a summary of parameters for error reporting
+        // Helper method to get a summary of args for error reporting
         private static string GetParamsSummary(JObject cmd)
         {
             try
             {
                 return cmd == null || !cmd.HasValues
-                    ? "No parameters"
+                    ? "No args"
                     : string.Join(
                         ", ",
                        cmd
@@ -434,7 +434,7 @@ namespace UnityMcpBridge.Editor
             }
             catch
             {
-                return "Could not summarize parameters";
+                return "Could not summarize args";
             }
         }
     }

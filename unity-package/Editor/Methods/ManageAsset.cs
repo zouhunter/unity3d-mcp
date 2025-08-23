@@ -7,18 +7,16 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityMcpBridge.Editor.Helpers; // For Response class
+using UnityMcpBridge.Editor.Tools; // 添加这个引用
 
 namespace UnityMcpBridge.Editor.Tools
 {
     /// <summary>
-    /// Handles asset management operations within the Unity project.
+    /// Handles Unity asset management operations.
+    /// 对应方法名: manage_asset
     /// </summary>
-    public class ManageAsset : McpTool
+    public class ManageAsset : IToolMethod
     {
-        public override string ToolName => "manage_asset";
-
-        // --- Main Handler ---
-
         // Define the list of valid actions
         private static readonly List<string> ValidActions = new List<string>
         {
@@ -35,77 +33,59 @@ namespace UnityMcpBridge.Editor.Tools
             "get_components",
         };
 
+        // 实现IToolMethod接口
+        public object ExecuteMethod(JObject args)
+        {
+            string action = args["action"]?.ToString()?.ToLower() ?? "";
+            
+            switch (action)
+            {
+                case "import":
+                    // Note: Unity typically auto-imports. This might re-import or configure import settings.
+                    return ReimportAsset(args);
+                case "create":
+                    return CreateAsset(args);
+                case "modify":
+                    return ModifyAsset(args);
+                case "delete":
+                    return DeleteAsset(args);
+                case "duplicate":
+                    return DuplicateAsset(args);
+                case "move": // Often same as rename if within Assets/
+                case "rename":
+                    return MoveOrRenameAsset(args);
+                case "search":
+                    return SearchAssets(args);
+                case "get_info":
+                    return GetAssetInfo(
+                        args,
+                       args["generatePreview"]?.ToObject<bool>() ?? false
+                    );
+                case "create_folder": // Added specific action for clarity
+                    return CreateFolder(args);
+                case "get_components":
+                    return GetComponentsFromAsset(args);
+
+                default:
+                    // This error message is less likely to be hit now, but kept here as a fallback or for potential future modifications.
+                    string validActionsListDefault = string.Join(", ", ValidActions);
+                    return Response.Error(
+                        $"Unknown action: '{action}'. Valid actions are: {validActionsListDefault}"
+                    );
+            }
+        }
+
+        // 保持原有的HandleCommand方法以向后兼容
         public override object HandleCommand(JObject cmd)
         {
-            string action = cmd["action"]?.ToString().ToLower();
-            if (string.IsNullOrEmpty(action))
-            {
-                return Response.Error("Action parameter is required.");
-            }
-
-            // Check if the action is valid before switching
-            if (!ValidActions.Contains(action))
-            {
-                string validActionsList = string.Join(", ", ValidActions);
-                return Response.Error(
-                    $"Unknown action: '{action}'. Valid actions are: {validActionsList}"
-                );
-            }
-
-            // Common parameters
-            string path = cmd["path"]?.ToString();
-
-            try
-            {
-                switch (action)
-                {
-                    case "import":
-                        // Note: Unity typically auto-imports. This might re-import or configure import settings.
-                        return ReimportAsset(path, cmd["properties"] as JObject);
-                    case "create":
-                        return CreateAsset(cmd);
-                    case "modify":
-                        return ModifyAsset(path, cmd["properties"] as JObject);
-                    case "delete":
-                        return DeleteAsset(path);
-                    case "duplicate":
-                        return DuplicateAsset(path, cmd["destination"]?.ToString());
-                    case "move": // Often same as rename if within Assets/
-                    case "rename":
-                        return MoveOrRenameAsset(path, cmd["destination"]?.ToString());
-                    case "search":
-                        return SearchAssets(cmd);
-                    case "get_info":
-                        return GetAssetInfo(
-                            path,
-                           cmd["generatePreview"]?.ToObject<bool>() ?? false
-                        );
-                    case "create_folder": // Added specific action for clarity
-                        return CreateFolder(path);
-                    case "get_components":
-                        return GetComponentsFromAsset(path);
-
-                    default:
-                        // This error message is less likely to be hit now, but kept here as a fallback or for potential future modifications.
-                        string validActionsListDefault = string.Join(", ", ValidActions);
-                        return Response.Error(
-                            $"Unknown action: '{action}'. Valid actions are: {validActionsListDefault}"
-                        );
-                }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[ManageAsset] Action '{action}' failed for path '{path}': {e}");
-                return Response.Error(
-                    $"Internal error processing action '{action}' on '{path}': {e.Message}"
-                );
-            }
+            return ExecuteMethod(cmd);
         }
 
         // --- Action Implementations ---
 
-        private object ReimportAsset(string path, JObject properties)
+        private object ReimportAsset(JObject args)
         {
+            string path = args["path"]?.ToString();
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for reimport.");
             string fullPath = SanitizeAssetPath(path);
@@ -117,6 +97,7 @@ namespace UnityMcpBridge.Editor.Tools
                 // TODO: Apply importer properties before reimporting?
                 // This is complex as it requires getting the AssetImporter, casting it,
                 // applying properties via reflection or specific methods, saving, then reimporting.
+                JObject properties = args["properties"] as JObject;
                 if (properties != null && properties.HasValues)
                 {
                     Debug.LogWarning(

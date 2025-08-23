@@ -13,7 +13,7 @@ namespace UnityMcpBridge.Editor.Models
         public string type { get; set; }
 
         /// <summary>
-        /// The parameters for the command
+        /// The args for the command
         /// </summary>
         public JObject cmd { get; set; }
     }

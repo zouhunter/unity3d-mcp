@@ -26,14 +26,67 @@ def register_function_call_tools(mcp: FastMCP):
             包含函数调用结果的字典。
         """
         
-        # 获取Unity连接实例
-        bridge = get_unity_connection()
-        
-        # 准备发送给Unity的参数
-        params = {
-            "func": func,
-            "args": json.dumps(args)  # 将对象序列化为JSON字符串发送给Unity
-        }
-        
-        # 通过bridge发送命令
-        return bridge.send_command("function_call", params) 
+        try:
+            # 验证函数名称
+            if not func or not isinstance(func, str):
+                return {
+                    "success": False,
+                    "error": "函数名称无效或为空",
+                    "result": None
+                }
+            
+            # 验证参数类型
+            if not isinstance(args, dict):
+                return {
+                    "success": False,
+                    "error": "参数必须是对象类型",
+                    "result": None
+                }
+            
+            # 获取Unity连接实例
+            bridge = get_unity_connection()
+            
+            if bridge is None:
+                return {
+                    "success": False,
+                    "error": "无法获取Unity连接",
+                    "result": None
+                }
+            
+            # 准备发送给Unity的参数
+            params = {
+                "func": func,
+                "args": json.dumps(args)  # 将对象序列化为JSON字符串发送给Unity
+            }
+            
+            # 通过bridge发送命令
+            result = bridge.send_command("function_call", params)
+            
+            # 确保返回结果包含success标志
+            if isinstance(result, dict):
+                return result
+            else:
+                return {
+                    "success": True,
+                    "result": result,
+                    "error": None
+                }
+                
+        except json.JSONEncodeError as e:
+            return {
+                "success": False,
+                "error": f"参数序列化失败: {str(e)}",
+                "result": None
+            }
+        except ConnectionError as e:
+            return {
+                "success": False,
+                "error": f"Unity连接错误: {str(e)}",
+                "result": None
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"函数调用失败: {str(e)}",
+                "result": None
+            } 

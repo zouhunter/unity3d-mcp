@@ -2,13 +2,18 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 using System.Threading.Tasks;
+using System.Diagnostics;
+using System;
+using System.Net.Sockets;
+using System.Net;
+using Debug = UnityEngine.Debug;
 
 namespace UnityMcpBridge.Editor.Windows
 {
     public class UnityMcpEditorWindow : EditorWindow
     {
         private bool isUnityBridgeRunning = false;
-        private const int unityPort = 6400; // Hardcoded Unity port
+        private int unityPort => UnityMcpBridge.unityPort; // Hardcoded Unity port
 
         [MenuItem("Window/Unity MCP")]
         public static void ShowWindow()
@@ -18,20 +23,38 @@ namespace UnityMcpBridge.Editor.Windows
 
         private async Task<bool> IsPortInUseAsync(int port)
         {
-            try
+            return await Task.Run(() =>
             {
-                using (var tcpClient = new System.Net.Sockets.TcpClient())
+                try
                 {
-                    var connectTask = tcpClient.ConnectAsync("localhost", port);
-                    var timeoutTask = Task.Delay(500); // 500ms 超时
-                    var completedTask = await Task.WhenAny(connectTask, timeoutTask);
-                    return completedTask == connectTask && tcpClient.Connected;
+                    // 使用 netstat 命令查询端口占用情况
+                    ProcessStartInfo startInfo = new ProcessStartInfo
+                    {
+                        FileName = "cmd.exe",
+                        Arguments = $"/c netstat -ano | findstr :{port}",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+
+                    using (Process process = Process.Start(startInfo))
+                    {
+                        if (process == null) return false;
+
+                        string output = process.StandardOutput.ReadToEnd();
+                        process.WaitForExit();
+
+                        // 如果输出包含端口信息，说明端口被占用
+                        return !string.IsNullOrWhiteSpace(output) && output.Contains($":{port}");
+                    }
                 }
-            }
-            catch
-            {
-                return false;
-            }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"检查端口占用时发生错误: {ex.Message}");
+                    return false;
+                }
+            });
         }
 
         private async void OnEnable()
@@ -85,6 +108,8 @@ namespace UnityMcpBridge.Editor.Windows
             {
                 ToggleUnityBridge();
             }
+
+            EditorGUILayout.Space(5);
             EditorGUILayout.EndVertical();
         }
         private async void ToggleUnityBridge()

@@ -1,7 +1,7 @@
 {
-  "name": "weli-unity.mcp",
+  "name": "io.unity.mcp",
   "version": "1.0.1",
-  "displayName": "MCPBridge",
+  "displayName": "UnityMCP",
   "description": "cursor unity mcp bridge!",
   "unity": "2020.3"
 }

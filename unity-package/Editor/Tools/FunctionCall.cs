@@ -51,6 +51,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// </summary>
         private object ExecuteFunction(string functionName, string argsJson)
         {
+            Debug.Log($"[FunctionCall] Executing function: {functionName}->{argsJson}");
             try
             {
                 // 确保方法已注册
@@ -71,7 +72,7 @@ namespace UnityMcpBridge.Editor.Tools
             catch (Exception e)
             {
                 Debug.LogError($"[FunctionCall] Failed to execute function '{functionName}': {e}");
-                return Response.Error($"Error executing function '{functionName}': {e.Message}");
+                return Response.Error($"Error executing function '{functionName}->{argsJson}': {e.Message}");
             }
         }
 

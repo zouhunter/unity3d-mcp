@@ -44,12 +44,6 @@ namespace UnityMcpBridge.Editor.Tools
             }
         }
 
-        // 保持原有的HandleCommand方法以向后兼容
-        public override object HandleCommand(JObject cmd)
-        {
-            return ExecuteMethod(cmd);
-        }
-
         /// <summary>
         /// Executes a specific menu item.
         /// </summary>

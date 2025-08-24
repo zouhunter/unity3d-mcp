@@ -46,25 +46,25 @@ namespace UnityMcpBridge.Editor.Tools
                 case "create":
                     return CreateAsset(args);
                 case "modify":
-                    return ModifyAsset(args);
+                    return ModifyAsset(args["path"]?.ToString(), args["properties"] as JObject);
                 case "delete":
-                    return DeleteAsset(args);
+                    return DeleteAsset(args["path"]?.ToString());
                 case "duplicate":
-                    return DuplicateAsset(args);
+                    return DuplicateAsset(args["path"]?.ToString(), args["destination"]?.ToString());
                 case "move": // Often same as rename if within Assets/
                 case "rename":
-                    return MoveOrRenameAsset(args);
+                    return MoveOrRenameAsset(args["path"]?.ToString(), args["destination"]?.ToString());
                 case "search":
                     return SearchAssets(args);
                 case "get_info":
                     return GetAssetInfo(
-                        args,
+                        args["path"]?.ToString(),
                        args["generatePreview"]?.ToObject<bool>() ?? false
                     );
                 case "create_folder": // Added specific action for clarity
-                    return CreateFolder(args);
+                    return CreateFolder(args["path"]?.ToString());
                 case "get_components":
-                    return GetComponentsFromAsset(args);
+                    return GetComponentsFromAsset(args["path"]?.ToString());
 
                 default:
                     // This error message is less likely to be hit now, but kept here as a fallback or for potential future modifications.
@@ -74,13 +74,6 @@ namespace UnityMcpBridge.Editor.Tools
                     );
             }
         }
-
-        // 保持原有的HandleCommand方法以向后兼容
-        public override object HandleCommand(JObject cmd)
-        {
-            return ExecuteMethod(cmd);
-        }
-
         // --- Action Implementations ---
 
         private object ReimportAsset(JObject args)

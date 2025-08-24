@@ -12,23 +12,21 @@ def register_functions_call_tools(mcp: FastMCP):
     @mcp.tool()
     def functions_call(
         ctx: Context,
-        function_calls: str
+        funcs: List[str],
+        args: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """批量函数调用工具，可以按顺序调用Unity中的多个函数并收集所有返回值。
 
         Args:
             ctx: MCP上下文。
-            function_calls: 函数调用列表的JSON字符串，格式如下：
+            funcs: 函数名称列表，例如：["Function1", "Function2", "Function3"]
+            args: 对应的参数列表，每个元素是参数对象，例如：
                 [
-                    {
-                        "func": "Function1",
-                        "args": "{\"param1\": \"value1\"}"
-                    },
-                    {
-                        "func": "Function2",
-                        "args": "{\"param2\": 123}"
-                    }
+                    {"param1": "value1"}, 
+                    {"param2": 123}, 
+                    {"param3": true}
                 ]
+                注意：funcs数组和args数组的长度必须相等，按索引位置一一对应。
 
         Returns:
             包含所有函数调用结果的字典：
@@ -52,36 +50,47 @@ def register_functions_call_tools(mcp: FastMCP):
         failed_calls = 0
         
         try:
-            # 解析函数调用列表
-            calls_list = json.loads(function_calls)
-            if not isinstance(calls_list, list):
+            # 验证输入参数
+            if not isinstance(funcs, list) or not isinstance(args, list):
                 return {
                     "success": False,
                     "results": [],
-                    "errors": ["function_calls参数必须是一个JSON数组"],
+                    "errors": ["funcs和args参数必须是数组类型"],
                     "total_calls": 0,
                     "successful_calls": 0,
                     "failed_calls": 1
                 }
             
-            total_calls = len(calls_list)
+            # 验证数组长度是否一致
+            if len(funcs) != len(args):
+                return {
+                    "success": False,
+                    "results": [],
+                    "errors": [f"funcs数组长度({len(funcs)})与args数组长度({len(args)})不匹配"],
+                    "total_calls": 0,
+                    "successful_calls": 0,
+                    "failed_calls": 1
+                }
+            
+            total_calls = len(funcs)
             
             # 按顺序执行每个函数调用
-            for i, call_info in enumerate(calls_list):
+            for i in range(total_calls):
                 try:
-                    # 验证调用信息格式
-                    if not isinstance(call_info, dict):
-                        error_msg = f"第{i+1}个调用信息必须是字典格式"
+                    func = funcs[i]
+                    arg = args[i]
+                    
+                    # 验证函数名称
+                    if not func or not isinstance(func, str):
+                        error_msg = f"第{i+1}个函数名称无效或为空"
                         errors.append(error_msg)
                         results.append(None)
                         failed_calls += 1
                         continue
                     
-                    func = call_info.get("func")
-                    args = call_info.get("args", "{}")
-                    
-                    if not func:
-                        error_msg = f"第{i+1}个调用缺少func参数"
+                    # 验证参数格式（应该是字典对象）
+                    if not isinstance(arg, dict):
+                        error_msg = f"第{i+1}个参数必须是对象类型"
                         errors.append(error_msg)
                         results.append(None)
                         failed_calls += 1
@@ -90,7 +99,7 @@ def register_functions_call_tools(mcp: FastMCP):
                     # 准备发送给Unity的参数
                     params = {
                         "func": func,
-                        "args": args
+                        "args": json.dumps(arg)  # 将对象序列化为JSON字符串发送给Unity
                     }
                     
                     # 调用Unity函数
@@ -105,15 +114,6 @@ def register_functions_call_tools(mcp: FastMCP):
                     results.append(None)
                     failed_calls += 1
             
-        except json.JSONDecodeError as e:
-            return {
-                "success": False,
-                "results": [],
-                "errors": [f"JSON解析失败: {str(e)}"],
-                "total_calls": 0,
-                "successful_calls": 0,
-                "failed_calls": 1
-            }
         except Exception as e:
             return {
                 "success": False,

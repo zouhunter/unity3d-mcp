@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "unityMCP": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "D:\\unity-ugui-mcp\\server",
+        "run",
+        "server.py"
+      ]
+    },
+    "blender": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "uvx",
+        "blender-mcp"
+      ]
+    },
+     "Framelink Figma MCP": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "figma-developer-mcp", "--figma-api-key=figd_MDWK9P_2FirU4qbzw1DwsXZMNoWJ_S3CPTwzRXrQ", "--stdio"]
+    }
+  }
+}

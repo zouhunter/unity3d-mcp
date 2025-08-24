@@ -10,12 +10,11 @@ class ServerConfig:
     """Main configuration class for the MCP server."""
     
     # Network settings
-    unity_host: str = "localhost"
+    unity_host: str = "127.0.0.1"
     unity_port: int = 6400
-    mcp_port: int = 6500
     
     # Connection settings
-    connection_timeout: float = 86400.0  # 24 hours timeout
+    connection_timeout: float = 5.0  # 5s timeout
     buffer_size: int = 16 * 1024 * 1024  # 16MB buffer
     
     # Logging settings

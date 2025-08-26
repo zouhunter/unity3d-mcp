@@ -34,7 +34,16 @@ namespace UnityMcp.Tools
                 if (!cur.select.TryGetValue(keyToLookup, out var next) &&
                     !cur.select.TryGetValue(Default, out next))
                 {
-                    ErrorMessage = $"Key {cur.key} -> {keyToLookup} not found";
+                    var supportedKeys = cur.select.Keys
+                        .Where(k => k?.ToString() != Default)
+                        .Select(k => k?.ToString() ?? "null")
+                        .ToList();
+
+                    string supportedKeysList = supportedKeys.Count > 0
+                        ? string.Join(", ", supportedKeys)
+                        : "none";
+
+                    ErrorMessage = $"Invalid value '{keyToLookup}' for key '{cur.key}'. Supported values: [{supportedKeysList}]";
                     return null;
                 }
                 cur = next;

@@ -17,64 +17,28 @@ namespace UnityMcp.Tools
     /// </summary>
     public class ManageAsset : StateMethodBase
     {
-        // Define the list of valid actions
-        private static readonly List<string> ValidActions = new List<string>
+        /// <summary>
+        /// 创建状态树
+        /// </summary>
+        /// <returns>状态树</returns>
+        protected override StateTree CreateStateTree()
         {
-            "import",
-            "create",
-            "modify",
-            "delete",
-            "duplicate",
-            "move",
-            "rename",
-            "search",
-            "get_info",
-            "create_folder",
-            "get_components",
-        };
-
-        // 实现IToolMethod接口
-        public override object ExecuteMethod(JObject args)
-        {
-            string action = args["action"]?.ToString()?.ToLower() ?? "";
-
-            switch (action)
-            {
-                case "import":
-                    // Note: Unity typically auto-imports. This might re-import or configure import settings.
-                    return ReimportAsset(args);
-                case "create":
-                    return CreateAsset(args);
-                case "modify":
-                    return ModifyAsset(args["path"]?.ToString(), args["properties"] as JObject);
-                case "delete":
-                    return DeleteAsset(args["path"]?.ToString());
-                case "duplicate":
-                    return DuplicateAsset(args["path"]?.ToString(), args["destination"]?.ToString());
-                case "move": // Often same as rename if within Assets/
-                case "rename":
-                    return MoveOrRenameAsset(args["path"]?.ToString(), args["destination"]?.ToString());
-                case "search":
-                    return SearchAssets(args);
-                case "get_info":
-                    return GetAssetInfo(
-                        args["path"]?.ToString(),
-                       args["generatePreview"]?.ToObject<bool>() ?? false
-                    );
-                case "create_folder": // Added specific action for clarity
-                    return CreateFolder(args["path"]?.ToString());
-                case "get_components":
-                    return GetComponentsFromAsset(args["path"]?.ToString());
-
-                default:
-                    // This error message is less likely to be hit now, but kept here as a fallback or for potential future modifications.
-                    string validActionsListDefault = string.Join(", ", ValidActions);
-                    return Response.Error(
-                        $"Unknown action: '{action}'. Valid actions are: {validActionsListDefault}"
-                    );
-            }
+            return StateTreeBuilder
+                .Create()
+                .Key("action")
+                    .Leaf("import", ReimportAsset)
+                    .Leaf("create", CreateAsset)
+                    .Leaf("modify", (args) => ModifyAsset(args["path"]?.ToString(), args["properties"] as JObject))
+                    .Leaf("delete", (args) => DeleteAsset(args["path"]?.ToString()))
+                    .Leaf("duplicate", (args) => DuplicateAsset(args["path"]?.ToString(), args["destination"]?.ToString()))
+                    .Leaf("move", (args) => MoveOrRenameAsset(args["path"]?.ToString(), args["destination"]?.ToString()))
+                    .Leaf("rename", (args) => MoveOrRenameAsset(args["path"]?.ToString(), args["destination"]?.ToString()))
+                    .Leaf("search", SearchAssets)
+                    .Leaf("get_info", (args) => GetAssetInfo(args["path"]?.ToString(), args["generatePreview"]?.ToObject<bool>() ?? false))
+                    .Leaf("create_folder", (args) => CreateFolder(args["path"]?.ToString()))
+                    .Leaf("get_components", (args) => GetComponentsFromAsset(args["path"]?.ToString()))
+                .Build();
         }
-        // --- Action Implementations ---
 
         private object ReimportAsset(JObject args)
         {
@@ -1210,13 +1174,6 @@ namespace UnityMcp.Tools
             };
         }
 
-        protected override StateTree CreateStateTree()
-        {
-            return StateTreeBuilder
-                .Create()
-                .DefaultLeaf((ctx) => Response.Error("State tree not implemented for manage_asset. Use ExecuteMethod."))
-                .Build();
-        }
     }
 }
 

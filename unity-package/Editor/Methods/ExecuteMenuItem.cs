@@ -20,10 +20,9 @@ namespace UnityMcp.Tools
             return StateTreeBuilder.Create()
                 .Key("action")
                     .Leaf("execute", ExecuteItem)
-                    .DefaultLeaf((ctx) => Response.Error($"Unknown action: '{ctx["action"]?.ToString() ?? "null"}' for execute_menu_item"))
+                    .DefaultLeaf(Fallback)
                 .Build();
         }
-
         /// <summary>
         /// Executes a specific menu item.
         /// </summary>
@@ -47,5 +46,14 @@ namespace UnityMcp.Tools
                 $"Attempted to execute menu item: '{menuPath}'. Check Unity logs for confirmation or errors."
             );
         }
+
+        /// <summary>
+        /// Fallback method for unknown actions.
+        /// </summary>
+        private object Fallback(JObject cmd)
+        {
+            return Response.Error($"Unknown action: '{cmd["action"]?.ToString() ?? "null"}' for execute_menu_item");
+        }
+
     }
 }

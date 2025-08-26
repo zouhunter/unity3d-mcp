@@ -28,21 +28,18 @@ namespace UnityMcp.Tools
             // Add other potentially dangerous items like "Edit/Preferences...", "File/Build Settings..." if needed
         };
 
-        // 实现IToolMethod接口
+        // 实现IToolMethod接口 —— 使用 StateTree 分发
         public object ExecuteMethod(JObject args)
         {
-            // 从args中提取action，默认为execute
             string action = args["action"]?.ToString()?.ToLower() ?? "execute";
+            var stateTree = StateTreeBuilder.Create()
+                .Key("action")
+                    .Leaf("execute", ExecuteItem)
+                    .Leaf("get_available_menus", GetAvailableMenus)
+                    .DefaultLeaf((ctx) => Response.Error($"Unknown action: '{action}' for execute_menu_item"))
+                .Build();
 
-            switch (action)
-            {
-                case "execute":
-                    return ExecuteItem(args);
-                case "get_available_menus":
-                    return GetAvailableMenus(args);
-                default:
-                    return Response.Error($"Unknown action: '{action}' for execute_menu_item");
-            }
+            return stateTree.Run(args) ?? Response.Error("No action executed.");
         }
 
         /// <summary>

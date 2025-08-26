@@ -3,5 +3,8 @@
   "version": "1.0.1",
   "displayName": "UnityMCP",
   "description": "cursor unity mcp bridge!",
-  "unity": "2020.3"
+  "unity": "2020.3",
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  }
 }

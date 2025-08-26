@@ -3,6 +3,7 @@ using System;
 using System.Linq;
 using UnityEngine;
 using System.Text;
+using Newtonsoft.Json.Linq;
 
 namespace UnityMcp.Tools
 {
@@ -10,82 +11,109 @@ namespace UnityMcp.Tools
     {
         public string key;                         // 当前层变量
         public Dictionary<object, StateTree> select = new();
-        public Action Act;                         // 叶子函数
+        public Func<JObject, object> func;     // 叶子函数
         public const string Default = "*";          // 通配标识
 
         /* 隐式转换：Action → 叶子节点 */
-        public static implicit operator StateTree(Action a) => new() { Act = a };
+        public static implicit operator StateTree(Func<JObject, object> a) => new() { func = a };
 
-        /* 运行：沿树唯一路径 */
-        public void Run(IReadOnlyDictionary<string, object> ctx)
+        /* 运行：沿树唯一路径（JObject 上下文） */
+        public object Run(JObject ctx)
         {
             var cur = this;
-            while (cur.Act == null)
+            while (cur.func == null)
             {
-                if (!cur.select.TryGetValue(ctx.TryGetValue(cur.key!, out var v) ? v! : Default, out var next) &&
+                object keyToLookup = Default;
+
+                if (!string.IsNullOrEmpty(cur.key) && ctx != null && ctx.TryGetValue(cur.key, out JToken token))
+                {
+                    keyToLookup = ConvertTokenToKey(token);
+                }
+
+                if (!cur.select.TryGetValue(keyToLookup, out var next) &&
                     !cur.select.TryGetValue(Default, out next))
                     break;
                 cur = next;
             }
-            cur.Act?.Invoke();
+            return cur.func?.Invoke(ctx);
+        }
+
+        private static object ConvertTokenToKey(JToken token)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return Default;
+
+            if (token.Type == JTokenType.Integer)
+            {
+                long longVal = token.Value<long>();
+                if (longVal <= int.MaxValue && longVal >= int.MinValue)
+                {
+                    return (int)longVal;
+                }
+                return longVal;
+            }
+
+            if (token.Type == JTokenType.Float)
+            {
+                return token.Value<double>();
+            }
+
+            if (token.Type == JTokenType.Boolean)
+            {
+                return token.Value<bool>();
+            }
+
+            if (token.Type == JTokenType.String)
+            {
+                return token.Value<string>();
+            }
+
+            if (token is JValue jv && jv.Value != null)
+            {
+                return jv.Value;
+            }
+
+            return token.ToString();
         }
 
         /* 美化打印（Unicode 框线） */
-        public void Print(StringBuilder sb, string indent = "", bool last = true)
+        public void Print(StringBuilder sb, string indent = "", bool last = true, string parentEdgeLabel = null)
         {
-            // 打印当前节点
-            if (!string.IsNullOrEmpty(key))
-            {
-                sb.AppendLine($"{indent}└─ {key}");
-            }
-            else
+            // 根节点：打印标题
+            if (string.IsNullOrEmpty(indent))
             {
                 sb.AppendLine($"{indent}StateTree");
             }
 
-            // 获取所有子节点
-            var entries = select.ToList();
+            // 若当前节点有 key，打印一次节点 key（避免与父边标签重复）
+            string edgesIndent = indent;
+            if (!string.IsNullOrEmpty(key) && key != parentEdgeLabel)
+            {
+                sb.AppendLine($"{indent}└─ {key}");
+                edgesIndent = indent + "   ";
+            }
 
+            // 枚举并打印当前节点的边（entry.Key 为边标签）
+            var entries = select.ToList();
             for (int i = 0; i < entries.Count; i++)
             {
                 var entry = entries[i];
                 bool isLastChild = i == entries.Count - 1;
+                string connector = isLastChild ? "└─" : "├─";
+                string label = entry.Key?.ToString() == Default ? "*" : entry.Key?.ToString();
 
-                // 构建新的缩进
-                string newIndent = indent + (last ? "   " : "│  ");
-
-                // 打印子节点
-                if (entry.Value.Act != null)
+                if (entry.Value.func != null)
                 {
-                    // 叶子节点（有Action）
-                    string actionName = entry.Value.Act.Method?.Name ?? "Anonymous";
-                    string connector = isLastChild ? "└─" : "├─";
-
-                    if (entry.Key.ToString() == Default)
-                    {
-                        sb.AppendLine($"{newIndent}{connector} * → {actionName}");
-                    }
-                    else
-                    {
-                        sb.AppendLine($"{newIndent}{connector} {entry.Key} → {actionName}");
-                    }
+                    string actionName = entry.Value.func.Method?.Name ?? "Anonymous";
+                    sb.AppendLine($"{edgesIndent}{connector} {label} → {actionName}");
                 }
                 else
                 {
-                    // 非叶子节点（有子节点）
-                    string connector = isLastChild ? "└─" : "├─";
-
-                    if (entry.Key.ToString() == Default)
-                    {
-                        sb.AppendLine($"{newIndent}{connector} *");
-                    }
-                    else
-                    {
-                        sb.AppendLine($"{newIndent}{connector} {entry.Key}");
-                    }
-
-                    // 递归打印子节点
-                    entry.Value.Print(sb, newIndent, isLastChild);
+                    // 打印边标签
+                    sb.AppendLine($"{edgesIndent}{connector} {label}");
+                    // 递归到子节点；如果子节点的 key 与边标签不同，则在子层级打印该 key
+                    string nextIndent = edgesIndent + (isLastChild ? "   " : "│  ");
+                    entry.Value.Print(sb, nextIndent, isLastChild, label);
                 }
             }
         }

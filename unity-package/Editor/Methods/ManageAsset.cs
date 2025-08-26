@@ -37,7 +37,7 @@ namespace UnityMcp.Tools
         public object ExecuteMethod(JObject args)
         {
             string action = args["action"]?.ToString()?.ToLower() ?? "";
-            
+
             switch (action)
             {
                 case "import":

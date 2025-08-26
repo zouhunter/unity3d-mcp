@@ -13,5 +13,10 @@ namespace UnityMcp.Tools
         /// <param name="args">参数对象</param>
         /// <returns>执行结果</returns>
         object ExecuteMethod(JObject args);
+        /// <summary>
+        /// 预览方法
+        /// </summary>
+        /// <returns>预览结果</returns>
+        string Preview();
     }
-} 
+}

@@ -15,7 +15,7 @@ namespace UnityMcp.Tools
     /// Handles Unity asset management operations.
     /// 对应方法名: manage_asset
     /// </summary>
-    public class ManageAsset : IToolMethod
+    public class ManageAsset : StateMethodBase
     {
         // Define the list of valid actions
         private static readonly List<string> ValidActions = new List<string>
@@ -34,7 +34,7 @@ namespace UnityMcp.Tools
         };
 
         // 实现IToolMethod接口
-        public object ExecuteMethod(JObject args)
+        public override object ExecuteMethod(JObject args)
         {
             string action = args["action"]?.ToString()?.ToLower() ?? "";
 
@@ -1208,6 +1208,14 @@ namespace UnityMcp.Tools
                 previewHeight = previewHeight,
                 // TODO: Add more metadata? Importer settings? Dependencies?
             };
+        }
+
+        protected override StateTree CreateStateTree()
+        {
+            return StateTreeBuilder
+                .Create()
+                .DefaultLeaf((ctx) => Response.Error("State tree not implemented for manage_asset. Use ExecuteMethod."))
+                .Build();
         }
     }
 }

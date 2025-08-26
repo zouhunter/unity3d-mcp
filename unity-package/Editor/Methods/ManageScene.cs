@@ -8,6 +8,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityMcp.Helpers; // For Response class
+using UnityMcp;
 
 namespace UnityMcp.Tools
 {
@@ -15,10 +16,10 @@ namespace UnityMcp.Tools
     /// Handles scene management operations like loading, saving, creating, and querying hierarchy.
     /// 对应方法名: manage_scene
     /// </summary>
-    public class ManageScene : IToolMethod
+    public class ManageScene : StateMethodBase
     {
         // 实现IToolMethod接口
-        public object ExecuteMethod(JObject args)
+        public override object ExecuteMethod(JObject args)
         {
             string action = args["action"]?.ToString().ToLower();
             string name = args["name"]?.ToString();
@@ -408,6 +409,14 @@ namespace UnityMcp.Tools
             };
 
             return gameObjectData;
+        }
+
+        protected override StateTree CreateStateTree()
+        {
+            return StateTreeBuilder
+                .Create()
+                .DefaultLeaf((ctx) => Response.Error("State tree not implemented for manage_scene. Use ExecuteMethod."))
+                .Build();
         }
     }
 }

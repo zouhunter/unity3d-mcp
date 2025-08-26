@@ -16,7 +16,7 @@ namespace UnityMcp.Tools
     /// Handles executing Unity Editor menu items by path.
     /// 对应方法名: execute_menu_item
     /// </summary>
-    public class ExecuteMenuItem : IToolMethod
+    public class ExecuteMenuItem : StateMethodBase
     {
         // Basic blacklist to prevent accidental execution of potentially disruptive menu items.
         // This can be expanded based on needs.
@@ -29,7 +29,7 @@ namespace UnityMcp.Tools
         };
 
         // 实现IToolMethod接口 —— 使用 StateTree 分发
-        public object ExecuteMethod(JObject args)
+        public override object ExecuteMethod(JObject args)
         {
             string action = args["action"]?.ToString()?.ToLower() ?? "execute";
             var stateTree = StateTreeBuilder.Create()
@@ -129,6 +129,14 @@ namespace UnityMcp.Tools
 
         // TODO: Add helper for alias lookup if implementing aliases.
         // private static string LookupAlias(string alias) { ... return actualMenuPath or null ... }
+
+        protected override StateTree CreateStateTree()
+        {
+            return StateTreeBuilder
+                .Create()
+                .DefaultLeaf((ctx) => Response.Error("State tree not implemented for execute_menu_item. Use ExecuteMethod."))
+                .Build();
+        }
     }
 }
 

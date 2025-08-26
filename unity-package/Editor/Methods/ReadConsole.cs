@@ -16,7 +16,7 @@ namespace UnityMcp.Tools
     /// Uses reflection to access internal LogEntry methods/properties.
     /// 对应方法名: read_console
     /// </summary>
-    public class ReadConsole : IToolMethod
+    public class ReadConsole : StateMethodBase
     {
         // Reflection members for accessing internal LogEntry data
         // private static MethodInfo _getEntriesMethod; // Removed as it's unused and fails reflection
@@ -120,7 +120,7 @@ namespace UnityMcp.Tools
         }
 
         // 实现IToolMethod接口
-        public object ExecuteMethod(JObject args)
+        public override object ExecuteMethod(JObject args)
         {
             // Check if ALL required reflection members were successfully initialized.
             if (
@@ -509,6 +509,14 @@ namespace UnityMcp.Tools
            Exception: 262161 (ScriptingException | Error | kFatal?) - Complex combination
            Assertion: 4194306 (ScriptingAssertion | Assert) or 2 (Assert)
         */
+
+        protected override StateTree CreateStateTree()
+        {
+            return StateTreeBuilder
+                .Create()
+                .DefaultLeaf((ctx) => Response.Error("State tree not implemented for read_console. Use ExecuteMethod."))
+                .Build();
+        }
     }
 }
 

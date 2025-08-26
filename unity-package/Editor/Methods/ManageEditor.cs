@@ -15,7 +15,7 @@ namespace UnityMcp.Tools
     /// including managing Tags and Layers.
     /// 对应方法名: manage_editor
     /// </summary>
-    public class ManageEditor : IToolMethod
+    public class ManageEditor : StateMethodBase
     {
         // Constant for starting user layer index
         private const int FirstUserLayerIndex = 8;
@@ -24,7 +24,7 @@ namespace UnityMcp.Tools
         private const int TotalLayerCount = 32;
 
         // 实现IToolMethod接口
-        public object ExecuteMethod(JObject args)
+        public override object ExecuteMethod(JObject args)
         {
             string action = args["action"]?.ToString().ToLower();
             // args for specific actions
@@ -552,6 +552,13 @@ namespace UnityMcp.Tools
                 return null;
             }
         }
+        protected override StateTree CreateStateTree()
+        {
+            return StateTreeBuilder
+                .Create()
+                .DefaultLeaf((ctx) => Response.Error("State tree not implemented for manage_editor. Use ExecuteMethod."))
+                .Build();
+        }
 
         // --- Example Implementations for Settings ---
         /*
@@ -576,6 +583,7 @@ namespace UnityMcp.Tools
             }
             return UnityEditor.Tools.current.ToString();
         }
+
     }
 }
 

@@ -16,10 +16,10 @@ namespace UnityMcp.Tools
     /// Handles GameObject manipulation within the current scene (CRUD, find, components).
     /// 对应方法名: manage_game_object
     /// </summary>
-    public class ManageGameObject : IToolMethod
+    public class ManageGameObject : StateMethodBase
     {
         // 实现IToolMethod接口
-        public object ExecuteMethod(JObject args)
+        public override object ExecuteMethod(JObject args)
         {
             string action = args["action"]?.ToString().ToLower();
             if (string.IsNullOrEmpty(action))
@@ -2194,6 +2194,14 @@ namespace UnityMcp.Tools
             }
             */
             return data;
+        }
+
+        protected override StateTree CreateStateTree()
+        {
+            return StateTreeBuilder
+                .Create()
+                .DefaultLeaf((ctx) => Response.Error("State tree not implemented for manage_game_object. Use ExecuteMethod."))
+                .Build();
         }
     }
 }

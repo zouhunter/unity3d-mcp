@@ -6,7 +6,6 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityMcp.Helpers;
-using UnityMcp;
 
 namespace UnityMcp.Tools
 {
@@ -14,10 +13,10 @@ namespace UnityMcp.Tools
     /// Handles CRUD operations for C# scripts within the Unity project.
     /// 对应方法名: manage_script
     /// </summary>
-    public class ManageScript : IToolMethod
+    public class ManageScript : StateMethodBase
     {
         // 实现IToolMethod接口
-        public object ExecuteMethod(JObject args)
+        public override object ExecuteMethod(JObject args)
         {
             // Extract args
             string action = args["action"]?.ToString().ToLower();
@@ -369,6 +368,14 @@ namespace UnityMcp.Tools
             return braceBalance == 0;
             // This is extremely basic. A real C# parser/compiler check would be ideal
             // but is complex to implement directly here.
+        }
+
+        protected override StateTree CreateStateTree()
+        {
+            return StateTreeBuilder
+                .Create()
+                .DefaultLeaf((ctx) => Response.Error("State tree not implemented for manage_script. Use ExecuteMethod."))
+                .Build();
         }
     }
 }

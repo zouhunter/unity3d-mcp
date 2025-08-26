@@ -13,6 +13,7 @@ namespace UnityMcp.Tools
         public Dictionary<object, StateTree> select = new();
         public Func<JObject, object> func;     // 叶子函数
         public const string Default = "*";          // 通配标识
+        public string ErrorMessage;//执行错误信息
 
         /* 隐式转换：Action → 叶子节点 */
         public static implicit operator StateTree(Func<JObject, object> a) => new() { func = a };
@@ -32,7 +33,10 @@ namespace UnityMcp.Tools
 
                 if (!cur.select.TryGetValue(keyToLookup, out var next) &&
                     !cur.select.TryGetValue(Default, out next))
-                    break;
+                {
+                    ErrorMessage = $"Key {cur.key} -> {keyToLookup} not found";
+                    return null;
+                }
                 cur = next;
             }
             return cur.func?.Invoke(ctx);
@@ -89,7 +93,7 @@ namespace UnityMcp.Tools
             string edgesIndent = indent;
             if (!string.IsNullOrEmpty(key) && key != parentEdgeLabel)
             {
-                sb.AppendLine($"{indent}└─ {key}");
+                sb.AppendLine($"{indent}└─ {key}:");
                 edgesIndent = indent + "   ";
             }
 

@@ -5,9 +5,10 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditorInternal; // Required for tag management
 using UnityEngine;
-using UnityMcpBridge.Editor.Helpers; // For Response class
+using UnityMcp.Helpers; // For Response class
+using UnityMcp;
 
-namespace UnityMcpBridge.Editor.Tools
+namespace UnityMcp.Tools
 {
     /// <summary>
     /// Handles operations related to controlling and querying the Unity Editor state,
@@ -197,7 +198,7 @@ namespace UnityMcpBridge.Editor.Tools
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogWarning(
+                        if (UnityMcp.EnableLog) Debug.LogWarning(
                             $"Could not get info for window {window.GetType().Name}: {ex.Message}"
                         );
                     }
@@ -539,7 +540,7 @@ namespace UnityMcpBridge.Editor.Tools
                 );
                 if (tagManagerAssets == null || tagManagerAssets.Length == 0)
                 {
-                    Debug.LogError("[ManageEditor] TagManager.asset not found in ProjectSettings.");
+                    if (UnityMcp.EnableLog) Debug.LogError("[ManageEditor] TagManager.asset not found in ProjectSettings.");
                     return null;
                 }
                 // The first object in the asset file should be the TagManager
@@ -547,7 +548,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ManageEditor] Error accessing TagManager.asset: {e.Message}");
+                if (UnityMcp.EnableLog) Debug.LogError($"[ManageEditor] Error accessing TagManager.asset: {e.Message}");
                 return null;
             }
         }

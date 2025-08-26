@@ -1,8 +1,6 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
 using Newtonsoft.Json.Linq;
-namespace UnityMcpBridge.Editor.Tools
+
+namespace UnityMcp.Tools
 {
     public abstract class McpTool
     {

@@ -7,9 +7,9 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityMcpBridge.Editor.Helpers; // For Response class
+using UnityMcp.Helpers; // For Response class
 
-namespace UnityMcpBridge.Editor.Tools
+namespace UnityMcp.Tools
 {
     /// <summary>
     /// Handles scene management operations like loading, saving, creating, and querying hierarchy.

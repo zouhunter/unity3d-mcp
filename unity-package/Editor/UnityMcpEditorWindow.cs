@@ -8,12 +8,12 @@ using System.Net.Sockets;
 using System.Net;
 using Debug = UnityEngine.Debug;
 
-namespace UnityMcpBridge.Editor.Windows
+namespace UnityMcp.Windows
 {
     public class UnityMcpEditorWindow : EditorWindow
     {
         private bool isUnityBridgeRunning = false;
-        private int unityPort => UnityMcpBridge.unityPort; // Hardcoded Unity port
+        private int unityPort => UnityMcp.unityPort; // Hardcoded Unity port
 
         [MenuItem("Window/Unity MCP")]
         public static void ShowWindow()
@@ -111,12 +111,16 @@ namespace UnityMcpBridge.Editor.Windows
 
             EditorGUILayout.Space(5);
             EditorGUILayout.EndVertical();
+
+            // 添加控制面板
+            EditorGUILayout.Space(10);
+            DrawControlPanel();
         }
         private async void ToggleUnityBridge()
         {
             if (isUnityBridgeRunning)
             {
-                UnityMcpBridge.Stop();
+                UnityMcp.Stop();
                 isUnityBridgeRunning = false;
             }
             else
@@ -129,10 +133,25 @@ namespace UnityMcpBridge.Editor.Windows
                     return;
                 }
 
-                UnityMcpBridge.Start();
+                UnityMcp.Start();
                 isUnityBridgeRunning = true;
             }
+            EditorPrefs.SetBool("mcp_open_state", isUnityBridgeRunning);
             Repaint();
+        }
+
+        private void DrawControlPanel()
+        {
+            EditorGUILayout.BeginVertical("box");
+            // 添加日志开关控制
+            bool newEnableLog = EditorGUILayout.Toggle("启用日志输出", UnityMcp.EnableLog);
+            if (newEnableLog != UnityMcp.EnableLog)
+            {
+                UnityMcp.EnableLog = newEnableLog;
+                EditorPrefs.SetBool("mcp_enable_log", newEnableLog);
+            }
+            EditorGUILayout.Space();
+            EditorGUILayout.EndVertical();
         }
     }
 }

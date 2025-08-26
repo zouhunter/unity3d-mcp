@@ -6,10 +6,11 @@ using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
-using UnityMcpBridge.Editor.Helpers; // For Response class
-using UnityMcpBridge.Editor.Tools; // 添加这个引用
+using UnityMcp.Helpers; // For Response class
+using UnityMcp.Tools; // 添加这个引用
+using UnityMcp;
 
-namespace UnityMcpBridge.Editor.Tools
+namespace UnityMcp.Tools
 {
     /// <summary>
     /// Handles executing Unity Editor menu items by path.
@@ -32,7 +33,7 @@ namespace UnityMcpBridge.Editor.Tools
         {
             // 从args中提取action，默认为execute
             string action = args["action"]?.ToString()?.ToLower() ?? "execute";
-            
+
             switch (action)
             {
                 case "execute":
@@ -84,14 +85,14 @@ namespace UnityMcpBridge.Editor.Tools
                         // Log potential failure inside the delayed call.
                         if (!executed)
                         {
-                            Debug.LogError(
+                            if (UnityMcp.EnableLog) Debug.LogError(
                                 $"[ExecuteMenuItem] Failed to find or execute menu item via delayCall: '{menuPath}'. It might be invalid, disabled, or context-dependent."
                             );
                         }
                     }
                     catch (Exception delayEx)
                     {
-                        Debug.LogError(
+                        if (UnityMcp.EnableLog) Debug.LogError(
                             $"[ExecuteMenuItem] Exception during delayed execution of '{menuPath}': {delayEx}"
                         );
                     }
@@ -105,7 +106,7 @@ namespace UnityMcpBridge.Editor.Tools
             catch (Exception e)
             {
                 // Catch errors during setup phase.
-                Debug.LogError(
+                if (UnityMcp.EnableLog) Debug.LogError(
                     $"[ExecuteMenuItem] Failed to setup execution for '{menuPath}': {e}"
                 );
                 return Response.Error(
@@ -119,7 +120,7 @@ namespace UnityMcpBridge.Editor.Tools
             // Getting a comprehensive list of *all* menu items dynamically is very difficult
             // and often requires complex reflection or maintaining a manual list.
             // Returning a placeholder/acknowledgement for now.
-            Debug.LogWarning(
+            if (UnityMcp.EnableLog) Debug.LogWarning(
                 "[ExecuteMenuItem] 'get_available_menus' action is not fully implemented. Dynamically listing all menu items is complex."
             );
             // Returning an empty list as per the refactor plan's requirements.

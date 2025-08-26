@@ -6,10 +6,10 @@ using System.Linq;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
-using UnityMcpBridge.Editor.Helpers; // For Response class
-using UnityMcpBridge.Editor.Tools; // 添加这个引用
+using UnityMcp.Helpers; // For Response class
+using UnityMcp.Tools; // 添加这个引用
 
-namespace UnityMcpBridge.Editor.Tools
+namespace UnityMcp.Tools
 {
     /// <summary>
     /// Handles Unity asset management operations.

@@ -8,9 +8,9 @@ using UnityEditor.SceneManagement;
 using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityMcpBridge.Editor.Helpers; // For Response class
+using UnityMcp.Helpers; // For Response class
 
-namespace UnityMcpBridge.Editor.Tools
+namespace UnityMcp.Tools
 {
     /// <summary>
     /// Handles GameObject manipulation within the current scene (CRUD, find, components).

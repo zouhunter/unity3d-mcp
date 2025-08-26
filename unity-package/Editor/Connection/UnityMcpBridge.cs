@@ -9,14 +9,14 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
-using UnityMcpBridge.Editor.Helpers;
-using UnityMcpBridge.Editor.Models;
-using UnityMcpBridge.Editor.Tools;
+using UnityMcp.Helpers;
+using UnityMcp.Models;
+using UnityMcp.Tools;
 
-namespace UnityMcpBridge.Editor
+namespace UnityMcp
 {
     [InitializeOnLoad]
-    public static partial class UnityMcpBridge
+    public static partial class UnityMcp
     {
         private static TcpListener listener;
         private static bool isRunning = false;
@@ -30,6 +30,24 @@ namespace UnityMcpBridge.Editor
 
         // 缓存McpTool类型和实例，静态工具类型
         private static readonly Dictionary<string, McpTool> mcpToolInstanceCache = new();
+        // 在 UnityMcp 类中添加日志开关
+        public static bool EnableLog = false;
+
+        // 统一的日志输出方法
+        private static void Log(string message)
+        {
+            if (EnableLog) Debug.Log(message);
+        }
+
+        private static void LogWarning(string message)
+        {
+            if (EnableLog) Debug.LogWarning(message);
+        }
+
+        private static void LogError(string message)
+        {
+            if (EnableLog) Debug.LogError(message);
+        }
 
         public static bool FolderExists(string path)
         {
@@ -50,21 +68,26 @@ namespace UnityMcpBridge.Editor
             return Directory.Exists(fullPath);
         }
 
-        static UnityMcpBridge()
+        static UnityMcp()
         {
-            Start();
             EditorApplication.quitting += Stop;
             AssemblyReloadEvents.beforeAssemblyReload += Stop;
+            if (EditorPrefs.HasKey("mcp_open_state") && EditorPrefs.GetBool("mcp_open_state"))
+            {
+                Start();
+            }
         }
 
         public static void Start()
         {
-            Debug.Log($"[UnityMcpBridge] 正在启动UnityMcpBridge...");
+            // 从EditorPrefs读取日志设置，默认为false
+            UnityMcp.EnableLog = EditorPrefs.GetBool("mcp_enable_log", false);
+            Log($"[UnityMcp] 正在启动UnityMcp...");
             Stop();
 
             if (isRunning)
             {
-                Debug.Log($"[UnityMcpBridge] 服务已在运行中");
+                Log($"[UnityMcp] 服务已在运行中");
                 return;
             }
 
@@ -73,23 +96,23 @@ namespace UnityMcpBridge.Editor
                 listener = new TcpListener(IPAddress.Loopback, unityPort);
                 listener.Start();
                 isRunning = true;
-                Debug.Log($"[UnityMcpBridge] TCP监听器已启动，端口: {unityPort}");
+                Log($"[UnityMcp] TCP监听器已启动，端口: {unityPort}");
                 // Assuming ListenerLoop and ProcessCommands are defined elsewhere
                 Task.Run(ListenerLoop);
                 EditorApplication.update += ProcessCommands;
-                Debug.Log($"[UnityMcpBridge] 启动完成，监听循环已开始，命令处理已注册");
+                Log($"[UnityMcp] 启动完成，监听循环已开始，命令处理已注册");
             }
             catch (SocketException ex)
             {
                 if (ex.SocketErrorCode == SocketError.AddressAlreadyInUse)
                 {
-                    Debug.LogError(
-                        $"[UnityMcpBridge] 端口 {unityPort} 已被占用。请确保没有其他实例正在运行或更改端口。"
+                    LogError(
+                        $"[UnityMcp] 端口 {unityPort} 已被占用。请确保没有其他实例正在运行或更改端口。"
                     );
                 }
                 else
                 {
-                    Debug.LogError($"[UnityMcpBridge] 启动TCP监听器失败: {ex.Message}");
+                    LogError($"[UnityMcp] 启动TCP监听器失败: {ex.Message}");
                 }
             }
         }
@@ -101,7 +124,7 @@ namespace UnityMcpBridge.Editor
                 return;
             }
 
-            Debug.Log($"[UnityMcpBridge] 正在停止UnityMcpBridge...");
+            Log($"[UnityMcp] 正在停止UnityMcp...");
 
             try
             {
@@ -109,25 +132,25 @@ namespace UnityMcpBridge.Editor
                 listener = null;
                 isRunning = false;
                 EditorApplication.update -= ProcessCommands;
-                Debug.Log($"[UnityMcpBridge] 服务已停止，TCP监听器已关闭，命令处理已注销");
+                Log($"[UnityMcp] 服务已停止，TCP监听器已关闭，命令处理已注销");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[UnityMcpBridge] 停止服务时发生错误: {ex.Message}");
+                LogError($"[UnityMcp] 停止服务时发生错误: {ex.Message}");
             }
         }
 
         private static async Task ListenerLoop()
         {
-            Debug.Log($"[UnityMcpBridge] 监听循环已启动");
-            
+            Log($"[UnityMcp] 监听循环已启动");
+
             while (isRunning)
             {
                 try
                 {
-                    Debug.Log($"[UnityMcpBridge] 等待客户端连接...");
+                    Log($"[UnityMcp] 等待客户端连接...");
                     TcpClient client = await listener.AcceptTcpClientAsync();
-                    
+
                     // Enable basic socket keepalive
                     client.Client.SetSocketOption(
                         SocketOptionLevel.Socket,
@@ -137,8 +160,8 @@ namespace UnityMcpBridge.Editor
 
                     // Set longer receive timeout to prevent quick disconnections
                     client.ReceiveTimeout = 60000; // 60 seconds
-                    
-                    Debug.Log($"[UnityMcpBridge] 客户端连接配置完成：KeepAlive=true, ReceiveTimeout=60s");
+
+                    Log($"[UnityMcp] 客户端连接配置完成：KeepAlive=true, ReceiveTimeout=60s");
 
                     // Fire and forget each client connection
                     _ = HandleClientAsync(client);
@@ -147,23 +170,23 @@ namespace UnityMcpBridge.Editor
                 {
                     if (isRunning)
                     {
-                        Debug.LogError($"[UnityMcpBridge] 监听器错误: {ex.Message}");
+                        LogError($"[UnityMcp] 监听器错误: {ex.Message}");
                     }
                     else
                     {
-                        Debug.Log($"[UnityMcpBridge] 监听器已停止");
+                        Log($"[UnityMcp] 监听器已停止");
                     }
                 }
             }
-            
-            Debug.Log($"[UnityMcpBridge] 监听循环已结束");
+
+            Log($"[UnityMcp] 监听循环已结束");
         }
 
         private static async Task HandleClientAsync(TcpClient client)
         {
             string clientEndpoint = client.Client.RemoteEndPoint?.ToString() ?? "Unknown";
-            Debug.Log($"[UnityMcpBridge] 客户端已连接: {clientEndpoint}");
-            
+            Log($"[UnityMcp] 客户端已连接: {clientEndpoint}");
+
             using (client)
             using (NetworkStream stream = client.GetStream())
             {
@@ -175,7 +198,7 @@ namespace UnityMcpBridge.Editor
                         int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
                         if (bytesRead == 0)
                         {
-                            Debug.Log($"[UnityMcpBridge] 客户端已断开连接: {clientEndpoint}");
+                            Log($"[UnityMcp] 客户端已断开连接: {clientEndpoint}");
                             break; // Client disconnected
                         }
 
@@ -184,44 +207,44 @@ namespace UnityMcpBridge.Editor
                             0,
                             bytesRead
                         );
-                        Debug.Log($"[UnityMcpBridge] 接收到命令 from {clientEndpoint}: {commandText}");
-                        
+                        Log($"[UnityMcp] 接收到命令 from {clientEndpoint}: {commandText}");
+
                         string commandId = Guid.NewGuid().ToString();
                         TaskCompletionSource<string> tcs = new();
 
                         // Special handling for ping command to avoid JSON parsing
                         if (commandText.Trim() == "ping")
                         {
-                            Debug.Log($"[UnityMcpBridge] 处理ping命令 from {clientEndpoint}");
+                            Log($"[UnityMcp] 处理ping命令 from {clientEndpoint}");
                             // Direct response to ping without going through JSON parsing
                             byte[] pingResponseBytes = System.Text.Encoding.UTF8.GetBytes(
                                 /*lang=json,strict*/
                                 "{\"status\":\"success\",\"result\":{\"message\":\"pong\"}}"
                             );
                             await stream.WriteAsync(pingResponseBytes, 0, pingResponseBytes.Length);
-                            Debug.Log($"[UnityMcpBridge] ping响应已发送 to {clientEndpoint}");
+                            Log($"[UnityMcp] ping响应已发送 to {clientEndpoint}");
                             continue;
                         }
 
                         lock (lockObj)
                         {
                             commandQueue[commandId] = (commandText, tcs);
-                            Debug.Log($"[UnityMcpBridge] 命令已加入队列 ID: {commandId}");
+                            Log($"[UnityMcp] 命令已加入队列 ID: {commandId}");
                         }
 
                         string response = await tcs.Task;
                         byte[] responseBytes = System.Text.Encoding.UTF8.GetBytes(response);
                         await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
-                        Debug.Log($"[UnityMcpBridge] 响应已发送 to {clientEndpoint}, ID: {commandId}, Response: {response}");
+                        Log($"[UnityMcp] 响应已发送 to {clientEndpoint}, ID: {commandId}, Response: {response}");
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError($"[UnityMcpBridge] 客户端处理错误 {clientEndpoint}: {ex.Message}");
+                        LogError($"[UnityMcp] 客户端处理错误 {clientEndpoint}: {ex.Message}");
                         break;
                     }
                 }
             }
-            Debug.Log($"[UnityMcpBridge] 客户端连接已关闭: {clientEndpoint}");
+            Log($"[UnityMcp] 客户端连接已关闭: {clientEndpoint}");
         }
 
         private static void ProcessCommands()
@@ -231,9 +254,9 @@ namespace UnityMcpBridge.Editor
             {
                 if (commandQueue.Count > 0)
                 {
-                    Debug.Log($"[UnityMcpBridge] 开始处理命令队列，队列长度: {commandQueue.Count}");
+                    Log($"[UnityMcp] 开始处理命令队列，队列长度: {commandQueue.Count}");
                 }
-                
+
                 foreach (
                     KeyValuePair<
                         string,
@@ -245,14 +268,14 @@ namespace UnityMcpBridge.Editor
                     string commandText = kvp.Value.commandJson;
                     TaskCompletionSource<string> tcs = kvp.Value.tcs;
 
-                    Debug.Log($"[UnityMcpBridge] 处理命令 ID: {id}");
+                    Log($"[UnityMcp] 处理命令 ID: {id}");
 
                     try
                     {
                         // Special case handling
                         if (string.IsNullOrEmpty(commandText))
                         {
-                            Debug.LogWarning($"[UnityMcpBridge] 接收到空命令 ID: {id}");
+                            LogWarning($"[UnityMcp] 接收到空命令 ID: {id}");
                             var emptyResponse = new
                             {
                                 status = "error",
@@ -269,7 +292,7 @@ namespace UnityMcpBridge.Editor
                         // Non-JSON direct commands handling (like ping)
                         if (commandText == "ping")
                         {
-                            Debug.Log($"[UnityMcpBridge] 处理ping命令 ID: {id}");
+                            Log($"[UnityMcp] 处理ping命令 ID: {id}");
                             var pingResponse = new
                             {
                                 status = "success",
@@ -277,7 +300,7 @@ namespace UnityMcpBridge.Editor
                             };
                             string pingResponseJson = JsonConvert.SerializeObject(pingResponse);
                             tcs.SetResult(pingResponseJson);
-                            Debug.Log($"[UnityMcpBridge] ping命令处理完成 ID: {id}");
+                            Log($"[UnityMcp] ping命令处理完成 ID: {id}");
                             processedIds.Add(id);
                             continue;
                         }
@@ -285,7 +308,7 @@ namespace UnityMcpBridge.Editor
                         // Check if the command is valid JSON before attempting to deserialize
                         if (!IsValidJson(commandText))
                         {
-                            Debug.LogError($"[UnityMcpBridge] 无效JSON格式 ID: {id}, Content: {commandText}");
+                            LogError($"[UnityMcp] 无效JSON格式 ID: {id}, Content: {commandText}");
                             var invalidJsonResponse = new
                             {
                                 status = "error",
@@ -300,11 +323,11 @@ namespace UnityMcpBridge.Editor
                         }
 
                         // Normal JSON command processing
-                        Debug.Log($"[UnityMcpBridge] 开始解析JSON命令 ID: {id}");
+                        Log($"[UnityMcp] 开始解析JSON命令 ID: {id}");
                         Command command = JsonConvert.DeserializeObject<Command>(commandText);
                         if (command == null)
                         {
-                            Debug.LogError($"[UnityMcpBridge] 命令反序列化为null ID: {id}");
+                            LogError($"[UnityMcp] 命令反序列化为null ID: {id}");
                             var nullCommandResponse = new
                             {
                                 status = "error",
@@ -315,15 +338,15 @@ namespace UnityMcpBridge.Editor
                         }
                         else
                         {
-                            Debug.Log($"[UnityMcpBridge] 执行命令 ID: {id}, Type: {command.type}");
+                            Log($"[UnityMcp] 执行命令 ID: {id}, Type: {command.type}");
                             string responseJson = ExecuteCommand(command);
                             tcs.SetResult(responseJson);
-                            Debug.Log($"[UnityMcpBridge] 命令执行完成 ID: {id}, Type: {command.type}");
+                            Log($"[UnityMcp] 命令执行完成 ID: {id}, Type: {command.type}");
                         }
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError($"[UnityMcpBridge] 处理命令时发生错误 ID: {id}: {ex.Message}\n{ex.StackTrace}");
+                        LogError($"[UnityMcp] 处理命令时发生错误 ID: {id}: {ex.Message}\n{ex.StackTrace}");
 
                         var response = new
                         {
@@ -336,7 +359,7 @@ namespace UnityMcpBridge.Editor
                         };
                         string responseJson = JsonConvert.SerializeObject(response);
                         tcs.SetResult(responseJson);
-                        Debug.Log($"[UnityMcpBridge] 错误响应已设置 ID: {id}");
+                        Log($"[UnityMcp] 错误响应已设置 ID: {id}");
                     }
 
                     processedIds.Add(id);
@@ -346,10 +369,10 @@ namespace UnityMcpBridge.Editor
                 {
                     commandQueue.Remove(id);
                 }
-                
+
                 if (processedIds.Count > 0)
                 {
-                    Debug.Log($"[UnityMcpBridge] 命令队列处理完成，已处理: {processedIds.Count} 个命令");
+                    Log($"[UnityMcp] 命令队列处理完成，已处理: {processedIds.Count} 个命令");
                 }
             }
         }
@@ -385,13 +408,13 @@ namespace UnityMcpBridge.Editor
 
         private static string ExecuteCommand(Command command)
         {
-            Debug.Log($"[UnityMcpBridge] 开始执行命令: Type={command.type}");
-            
+            Log($"[UnityMcp] 开始执行命令: Type={command.type}");
+
             try
             {
                 if (string.IsNullOrEmpty(command.type))
                 {
-                    Debug.LogError($"[UnityMcpBridge] 命令类型为空");
+                    LogError($"[UnityMcp] 命令类型为空");
                     var errorResponse = new
                     {
                         status = "error",
@@ -404,44 +427,44 @@ namespace UnityMcpBridge.Editor
                 // Handle ping command for connection verification
                 if (command.type.Equals("ping", StringComparison.OrdinalIgnoreCase))
                 {
-                    Debug.Log($"[UnityMcpBridge] 处理ping命令");
+                    Log($"[UnityMcp] 处理ping命令");
                     var pingResponse = new
                     {
                         status = "success",
                         result = new { message = "pong" },
                     };
                     string pingResult = JsonConvert.SerializeObject(pingResponse);
-                    Debug.Log($"[UnityMcpBridge] ping命令执行成功");
+                    Log($"[UnityMcp] ping命令执行成功");
                     return pingResult;
                 }
-                
+
                 // Use JObject for args as the new handlers likely expect this
                 JObject paramsObject = command.cmd ?? new JObject();
-                Debug.Log($"[UnityMcpBridge] 命令参数: {paramsObject}");
-                
-                Debug.Log($"[UnityMcpBridge] 获取McpTool实例: {command.type}");
+                Log($"[UnityMcp] 命令参数: {paramsObject}");
+
+                Log($"[UnityMcp] 获取McpTool实例: {command.type}");
                 var tool = GetMcpTool(command.type);
                 if (tool == null)
                 {
-                    Debug.LogError($"[UnityMcpBridge] 未找到工具: {command.type}");
+                    LogError($"[UnityMcp] 未找到工具: {command.type}");
                     throw new ArgumentException($"Unknown or unsupported command type: {command.type}");
                 }
-                
-                Debug.Log($"[UnityMcpBridge] 找到工具: {tool.GetType().Name}，开始处理命令");
+
+                Log($"[UnityMcp] 找到工具: {tool.GetType().Name}，开始处理命令");
                 object result = tool.HandleCommand(paramsObject);
-                Debug.Log($"[UnityMcpBridge] 工具执行完成，结果类型: {result?.GetType().Name ?? "null"}");
-                
+                Log($"[UnityMcp] 工具执行完成，结果类型: {result?.GetType().Name ?? "null"}");
+
                 // Standard success response format
                 var response = new { status = "success", result };
                 string responseJson = JsonConvert.SerializeObject(response);
-                Debug.Log($"[UnityMcpBridge] 命令执行成功: Type={command.type}");
+                Log($"[UnityMcp] 命令执行成功: Type={command.type}");
                 return responseJson;
             }
             catch (Exception ex)
             {
                 // Log the detailed error in Unity for debugging
-                Debug.LogError(
-                    $"[UnityMcpBridge] 执行命令时发生错误 '{command?.type ?? "Unknown"}': {ex.Message}\n{ex.StackTrace}"
+                LogError(
+                    $"[UnityMcp] 执行命令时发生错误 '{command?.type ?? "Unknown"}': {ex.Message}\n{ex.StackTrace}"
                 );
 
                 // Standard error response format
@@ -456,7 +479,7 @@ namespace UnityMcpBridge.Editor
                         : "No args", // Summarize args for context
                 };
                 string errorResult = JsonConvert.SerializeObject(response);
-                Debug.Log($"[UnityMcpBridge] 错误响应已生成: Type={command?.type ?? "Unknown"}");
+                Log($"[UnityMcp] 错误响应已生成: Type={command?.type ?? "Unknown"}");
                 return errorResult;
             }
         }
@@ -467,34 +490,34 @@ namespace UnityMcpBridge.Editor
         /// <returns></returns>
         private static McpTool GetMcpTool(string toolName)
         {
-            Debug.Log($"[UnityMcpBridge] 请求获取工具: {toolName}");
-            
+            Log($"[UnityMcp] 请求获取工具: {toolName}");
+
             if (mcpToolInstanceCache.Count == 0)
             {
-                Debug.Log($"[UnityMcpBridge] 工具缓存为空，开始反射查找工具实例");
+                Log($"[UnityMcp] 工具缓存为空，开始反射查找工具实例");
                 // 没有缓存则反射查找并缓存
                 var toolType = typeof(McpTool);
                 var toolInstances = AppDomain.CurrentDomain.GetAssemblies()
                     .SelectMany(a => a.GetTypes())
                     .Where(t => !t.IsAbstract && toolType.IsAssignableFrom(t)).Select(t => Activator.CreateInstance(t) as McpTool);
-                
+
                 int cacheCount = 0;
                 foreach (var toolInstance in toolInstances)
                 {
                     mcpToolInstanceCache[toolInstance.ToolName] = toolInstance;
                     cacheCount++;
-                    Debug.Log($"[UnityMcpBridge] 缓存工具: {toolInstance.ToolName} ({toolInstance.GetType().Name})");
+                    Log($"[UnityMcp] 缓存工具: {toolInstance.ToolName} ({toolInstance.GetType().Name})");
                 }
-                Debug.Log($"[UnityMcpBridge] 工具缓存完成，共缓存 {cacheCount} 个工具");
+                Log($"[UnityMcp] 工具缓存完成，共缓存 {cacheCount} 个工具");
             }
-            
+
             if (mcpToolInstanceCache.TryGetValue(toolName, out var tool))
             {
-                Debug.Log($"[UnityMcpBridge] 从缓存中获取到工具: {toolName} ({tool.GetType().Name})");
+                Log($"[UnityMcp] 从缓存中获取到工具: {toolName} ({tool.GetType().Name})");
                 return tool;
             }
-            
-            Debug.LogError($"[UnityMcpBridge] 未找到工具: {toolName}，可用工具: [{string.Join(", ", mcpToolInstanceCache.Keys)}]");
+
+            LogError($"[UnityMcp] 未找到工具: {toolName}，可用工具: [{string.Join(", ", mcpToolInstanceCache.Keys)}]");
             return null;
         }
         // Helper method to get a summary of args for error reporting

@@ -1,6 +1,6 @@
 using Newtonsoft.Json.Linq;
 
-namespace UnityMcpBridge.Editor.Tools
+namespace UnityMcp.Tools
 {
     /// <summary>
     /// 工具方法接口，所有具体工具类都应实现此接口

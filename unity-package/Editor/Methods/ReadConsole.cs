@@ -6,9 +6,10 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
-using UnityMcpBridge.Editor.Helpers; // For Response class
+using UnityMcp.Helpers; // For Response class
+using UnityMcp;
 
-namespace UnityMcpBridge.Editor.Tools
+namespace UnityMcp.Tools
 {
     /// <summary>
     /// Handles reading and clearing Unity Editor console log entries.
@@ -104,7 +105,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError(
+                if (UnityMcp.EnableLog) Debug.LogError(
                     $"[ReadConsole] Static Initialization Failed: Could not setup reflection for LogEntries/LogEntry. Console reading/clearing will likely fail. Specific Error: {e.Message}"
                 );
                 // Set members to null to prevent NullReferenceExceptions later, HandleCommand should check this.
@@ -135,7 +136,7 @@ namespace UnityMcpBridge.Editor.Tools
                 || _instanceIdField == null
             )
             {
-                Debug.LogError(
+                if (UnityMcp.EnableLog) Debug.LogError(
                     "[ReadConsole] ExecuteMethod called but reflection members are not initialized. Static constructor might have failed silently or there's an issue."
                 );
                 return Response.Error(
@@ -170,7 +171,7 @@ namespace UnityMcpBridge.Editor.Tools
 
                     if (!string.IsNullOrEmpty(sinceTimestampStr))
                     {
-                        Debug.LogWarning(
+                        if (UnityMcp.EnableLog) Debug.LogWarning(
                             "[ReadConsole] Filtering by 'since_timestamp' is not currently implemented."
                         );
                     }
@@ -186,7 +187,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ReadConsole] Action '{action}' failed: {e}");
+                if (UnityMcp.EnableLog) Debug.LogError($"[ReadConsole] Action '{action}' failed: {e}");
                 return Response.Error($"Internal error processing action '{action}': {e.Message}");
             }
         }
@@ -202,7 +203,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ReadConsole] Failed to clear console: {e}");
+                if (UnityMcp.EnableLog) Debug.LogError($"[ReadConsole] Failed to clear console: {e}");
                 return Response.Error($"Failed to clear console: {e.Message}");
             }
         }
@@ -313,7 +314,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ReadConsole] Error while retrieving log entries: {e}");
+                if (UnityMcp.EnableLog) Debug.LogError($"[ReadConsole] Error while retrieving log entries: {e}");
                 // Ensure EndGettingEntries is called even if there's an error during iteration
                 try
                 {
@@ -333,7 +334,7 @@ namespace UnityMcpBridge.Editor.Tools
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"[ReadConsole] Failed to call EndGettingEntries: {e}");
+                    if (UnityMcp.EnableLog) Debug.LogError($"[ReadConsole] Failed to call EndGettingEntries: {e}");
                     // Don't return error here as we might have valid data, but log it.
                 }
             }

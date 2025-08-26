@@ -5,9 +5,10 @@ using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
-using UnityMcpBridge.Editor.Helpers;
+using UnityMcp.Helpers;
+using UnityMcp;
 
-namespace UnityMcpBridge.Editor.Tools
+namespace UnityMcp.Tools
 {
     /// <summary>
     /// Handles CRUD operations for C# scripts within the Unity project.
@@ -160,7 +161,7 @@ namespace UnityMcpBridge.Editor.Tools
             {
                 // Optionally return a specific error or warning about syntax
                 // return Response.Error("Provided script content has potential syntax errors.");
-                Debug.LogWarning($"Potential syntax error in script being created: {name}");
+                if (UnityMcp.EnableLog) Debug.LogWarning($"Potential syntax error in script being created: {name}");
             }
 
             try
@@ -233,7 +234,7 @@ namespace UnityMcpBridge.Editor.Tools
             // Validate syntax (basic check)
             if (!ValidateScriptSyntax(contents))
             {
-                Debug.LogWarning($"Potential syntax error in script being updated: {name}");
+                if (UnityMcp.EnableLog) Debug.LogWarning($"Potential syntax error in script being updated: {name}");
                 // Consider if this should be a hard error or just a warning
             }
 

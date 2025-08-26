@@ -6,9 +6,10 @@ using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
-using UnityMcpBridge.Editor.Helpers;
+using UnityMcp.Helpers;
+using UnityMcp;
 
-namespace UnityMcpBridge.Editor.Tools
+namespace UnityMcp.Tools
 {
     /// <summary>
     /// Handles single function calls from MCP server.
@@ -41,7 +42,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError($"[FunctionCall] Command execution failed: {e}");
+                if (UnityMcp.EnableLog) Debug.LogError($"[FunctionCall] Command execution failed: {e}");
                 return Response.Error($"Internal error processing function call: {e.Message}");
             }
         }
@@ -51,7 +52,7 @@ namespace UnityMcpBridge.Editor.Tools
         /// </summary>
         private object ExecuteFunction(string functionName, string argsJson)
         {
-            Debug.Log($"[FunctionCall] Executing function: {functionName}->{argsJson}");
+            if (UnityMcp.EnableLog) Debug.Log($"[FunctionCall] Executing function: {functionName}->{argsJson}");
             try
             {
                 // 确保方法已注册
@@ -71,7 +72,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError($"[FunctionCall] Failed to execute function '{functionName}': {e}");
+                if (UnityMcp.EnableLog) Debug.LogError($"[FunctionCall] Failed to execute function '{functionName}': {e}");
                 return Response.Error($"Error executing function '{functionName}->{argsJson}': {e.Message}");
             }
         }
@@ -101,15 +102,15 @@ namespace UnityMcpBridge.Editor.Tools
                 {
                     // 通过反射查找所有程序集中实现IToolMethod接口的类
                     var methodTypes = new List<Type>();
-                    
+
                     // 遍历所有已加载的程序集
                     foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
                     {
                         try
                         {
                             var types = assembly.GetTypes()
-                                .Where(t => typeof(IToolMethod).IsAssignableFrom(t) && 
-                                           !t.IsInterface && 
+                                .Where(t => typeof(IToolMethod).IsAssignableFrom(t) &&
+                                           !t.IsInterface &&
                                            !t.IsAbstract)
                                 .ToList();
                             methodTypes.AddRange(types);
@@ -117,18 +118,18 @@ namespace UnityMcpBridge.Editor.Tools
                         catch (ReflectionTypeLoadException ex)
                         {
                             // 某些程序集可能无法完全加载，但我们可以获取成功加载的类型
-                            var loadedTypes = ex.Types.Where(t => t != null && 
-                                typeof(IToolMethod).IsAssignableFrom(t) && 
-                                !t.IsInterface && 
+                            var loadedTypes = ex.Types.Where(t => t != null &&
+                                typeof(IToolMethod).IsAssignableFrom(t) &&
+                                !t.IsInterface &&
                                 !t.IsAbstract).ToList();
                             methodTypes.AddRange(loadedTypes);
-                            
-                            Debug.LogWarning($"[FunctionCall] Partial load of assembly {assembly.FullName}: {ex.Message}");
+
+                            if (UnityMcp.EnableLog) Debug.LogWarning($"[FunctionCall] Partial load of assembly {assembly.FullName}: {ex.Message}");
                         }
                         catch (Exception ex)
                         {
                             // 跳过无法访问的程序集
-                            Debug.LogWarning($"[FunctionCall] Failed to load types from assembly {assembly.FullName}: {ex.Message}");
+                            if (UnityMcp.EnableLog) Debug.LogWarning($"[FunctionCall] Failed to load types from assembly {assembly.FullName}: {ex.Message}");
                             continue;
                         }
                     }
@@ -144,21 +145,21 @@ namespace UnityMcpBridge.Editor.Tools
                                 // 将类名转换为snake_case格式作为方法名
                                 string methodName = ConvertToSnakeCase(methodType.Name);
                                 _registeredMethods[methodName] = methodInstance;
-                                Debug.Log($"[FunctionCall] Registered method: {methodName} -> {methodType.FullName}");
+                                if (UnityMcp.EnableLog) Debug.Log($"[FunctionCall] Registered method: {methodName} -> {methodType.FullName}");
                             }
                         }
                         catch (Exception e)
                         {
-                            Debug.LogError($"[FunctionCall] Failed to register method {methodType.FullName}: {e}");
+                            if (UnityMcp.EnableLog) Debug.LogError($"[FunctionCall] Failed to register method {methodType.FullName}: {e}");
                         }
                     }
 
-                    Debug.Log($"[FunctionCall] Total registered methods: {_registeredMethods.Count}");
-                    Debug.Log($"[FunctionCall] Available methods: {string.Join(", ", _registeredMethods.Keys)}");
+                    if (UnityMcp.EnableLog) Debug.Log($"[FunctionCall] Total registered methods: {_registeredMethods.Count}");
+                    if (UnityMcp.EnableLog) Debug.Log($"[FunctionCall] Available methods: {string.Join(", ", _registeredMethods.Keys)}");
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"[FunctionCall] Failed to register methods: {e}");
+                    if (UnityMcp.EnableLog) Debug.LogError($"[FunctionCall] Failed to register methods: {e}");
                     _registeredMethods = new Dictionary<string, IToolMethod>(); // 确保不为null
                 }
             }
@@ -197,7 +198,7 @@ namespace UnityMcpBridge.Editor.Tools
             }
             catch (Exception e)
             {
-                Debug.LogError($"[FunctionCall] Failed to execute method '{methodName}': {e}");
+                if (UnityMcp.EnableLog) Debug.LogError($"[FunctionCall] Failed to execute method '{methodName}': {e}");
                 return Response.Error($"Error executing method '{methodName}': {e.Message}");
             }
         }
@@ -224,9 +225,9 @@ namespace UnityMcpBridge.Editor.Tools
             {
                 if (_registeredMethods == null)
                     _registeredMethods = new Dictionary<string, IToolMethod>();
-                    
+
                 _registeredMethods[methodName] = method;
-                Debug.Log($"[FunctionCall] Manually registered method: {methodName}");
+                if (UnityMcp.EnableLog) Debug.Log($"[FunctionCall] Manually registered method: {methodName}");
             }
         }
 
@@ -239,4 +240,4 @@ namespace UnityMcpBridge.Editor.Tools
             return _registeredMethods?.Keys.ToArray() ?? new string[0];
         }
     }
-} 
+}

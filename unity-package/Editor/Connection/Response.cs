@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnityMcpBridge.Editor.Helpers
+namespace UnityMcp.Helpers
 {
     /// <summary>
     /// Provides static methods for creating standardized success and error response objects.

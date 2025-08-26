@@ -18,109 +18,731 @@ namespace UnityMcp.Tools
     /// </summary>
     public class ManageGameObject : StateMethodBase
     {
-        // 实现IToolMethod接口
-        public override object ExecuteMethod(JObject args)
+
+        protected override StateTree CreateStateTree()
         {
-            string action = args["action"]?.ToString().ToLower();
-            if (string.IsNullOrEmpty(action))
+            return StateTreeBuilder
+                .Create()
+                .Key("action")
+                    .Branch("create")
+                        .OptionalLeaf("prefabPath", HandleCreateFromPrefab)
+                        .OptionalNode("primitiveType", "primitiveType")
+                            .Leaf("Cube", HandleCreateCube)
+                            .Leaf("Sphere", HandleCreateSphere)
+                            .Leaf("Cylinder", HandleCreateCylinder)
+                            .Leaf("Capsule", HandleCreateCapsule)
+                            .Leaf("Plane", HandleCreatePlane)
+                            .Leaf("Quad", HandleCreateQuad)
+                            .DefaultLeaf(HandleCreateFromPrimitive)
+                        .Up()
+                        .DefaultLeaf(HandleCreateEmpty)
+                    .Up()
+                    .Leaf("modify", HandleModifyAction)
+                    .Leaf("delete", HandleDeleteAction)
+                    .Leaf("find", HandleFindAction)
+                    .Leaf("get_components", HandleGetComponentsAction)
+                    .Leaf("add_component", HandleAddComponentAction)
+                    .Leaf("remove_component", HandleRemoveComponentAction)
+                    .Leaf("set_component_property", HandleSetComponentPropertyAction)
+                    .DefaultLeaf(HandleUnknownAction)
+                .Build();
+        }
+
+
+        // --- State Tree Action Handlers ---
+
+        /// <summary>
+        /// 处理从预制体创建GameObject的操作
+        /// </summary>
+        private object HandleCreateFromPrefab(JObject args)
+        {
+            string prefabPath = args["prefabPath"]?.ToString();
+            if (string.IsNullOrEmpty(prefabPath))
             {
-                return Response.Error("Action parameter is required.");
+                return Response.Error("'prefabPath' parameter is required for prefab instantiation.");
             }
 
-            // args used by various actions
+            LogInfo($"[ManageGameObject] Creating GameObject from prefab: '{prefabPath}'");
+            return CreateGameObjectFromPrefab(args, prefabPath);
+        }
+
+        /// <summary>
+        /// 处理从基元类型创建GameObject的操作
+        /// </summary>
+        private object HandleCreateFromPrimitive(JObject args)
+        {
+            string primitiveType = args["primitiveType"]?.ToString();
+            if (string.IsNullOrEmpty(primitiveType))
+            {
+                return Response.Error("'primitiveType' parameter is required for primitive creation.");
+            }
+
+            LogInfo($"[ManageGameObject] Creating GameObject from primitive: '{primitiveType}'");
+            return CreateGameObjectFromPrimitive(args, primitiveType);
+        }
+
+        /// <summary>
+        /// 处理创建空GameObject的操作
+        /// </summary>
+        private object HandleCreateEmpty(JObject args)
+        {
+            string name = args["name"]?.ToString();
+            if (string.IsNullOrEmpty(name))
+            {
+                return Response.Error("'name' parameter is required for creating empty GameObject.");
+            }
+
+            LogInfo($"[ManageGameObject] Creating empty GameObject: '{name}'");
+            return CreateEmptyGameObject(args, name);
+        }
+
+        /// <summary>
+        /// 处理创建Cube的操作
+        /// </summary>
+        private object HandleCreateCube(JObject args)
+        {
+            LogInfo("[ManageGameObject] Creating Cube primitive using specialized handler");
+            return CreateGameObjectFromPrimitive(args, "Cube");
+        }
+
+        /// <summary>
+        /// 处理创建Sphere的操作
+        /// </summary>
+        private object HandleCreateSphere(JObject args)
+        {
+            LogInfo("[ManageGameObject] Creating Sphere primitive using specialized handler");
+            return CreateGameObjectFromPrimitive(args, "Sphere");
+        }
+
+        /// <summary>
+        /// 处理创建Cylinder的操作
+        /// </summary>
+        private object HandleCreateCylinder(JObject args)
+        {
+            LogInfo("[ManageGameObject] Creating Cylinder primitive using specialized handler");
+            return CreateGameObjectFromPrimitive(args, "Cylinder");
+        }
+
+        /// <summary>
+        /// 处理创建Capsule的操作
+        /// </summary>
+        private object HandleCreateCapsule(JObject args)
+        {
+            LogInfo("[ManageGameObject] Creating Capsule primitive using specialized handler");
+            return CreateGameObjectFromPrimitive(args, "Capsule");
+        }
+
+        /// <summary>
+        /// 处理创建Plane的操作
+        /// </summary>
+        private object HandleCreatePlane(JObject args)
+        {
+            LogInfo("[ManageGameObject] Creating Plane primitive using specialized handler");
+            return CreateGameObjectFromPrimitive(args, "Plane");
+        }
+
+        /// <summary>
+        /// 处理创建Quad的操作
+        /// </summary>
+        private object HandleCreateQuad(JObject args)
+        {
+            LogInfo("[ManageGameObject] Creating Quad primitive using specialized handler");
+            return CreateGameObjectFromPrimitive(args, "Quad");
+        }
+
+        /// <summary>
+        /// 处理修改GameObject的操作
+        /// </summary>
+        private object HandleModifyAction(JObject args)
+        {
             JToken targetToken = args["target"];
-            string searchMethod = args["searchMethod"]?.ToString().ToLower();
+            string searchMethod = args["searchMethod"]?.ToString()?.ToLower();
 
-            // --- Prefab Redirection Check ---
+            // 检查预制体重定向
+            object redirectResult = CheckPrefabRedirection(args, "modify");
+            if (redirectResult != null)
+                return redirectResult;
+
+            return ModifyGameObject(args, targetToken, searchMethod);
+        }
+
+        /// <summary>
+        /// 处理删除GameObject的操作
+        /// </summary>
+        private object HandleDeleteAction(JObject args)
+        {
+            JToken targetToken = args["target"];
+            string searchMethod = args["searchMethod"]?.ToString()?.ToLower();
+
+            // 检查预制体重定向
+            object redirectResult = CheckPrefabRedirection(args, "delete");
+            if (redirectResult != null)
+                return redirectResult;
+
+            return DeleteGameObject(targetToken, searchMethod);
+        }
+
+        /// <summary>
+        /// 处理查找GameObject的操作
+        /// </summary>
+        private object HandleFindAction(JObject args)
+        {
+            JToken targetToken = args["target"];
+            string searchMethod = args["searchMethod"]?.ToString()?.ToLower();
+            return FindGameObjects(args, targetToken, searchMethod);
+        }
+
+        /// <summary>
+        /// 处理获取组件的操作
+        /// </summary>
+        private object HandleGetComponentsAction(JObject args)
+        {
+            JToken targetToken = args["target"];
+            string searchMethod = args["searchMethod"]?.ToString()?.ToLower();
+            string getCompTarget = targetToken?.ToString();
+
+            if (getCompTarget == null)
+                return Response.Error("'target' parameter required for get_components.");
+
+            // 检查预制体重定向
+            object redirectResult = CheckPrefabRedirection(args, "get_components");
+            if (redirectResult != null)
+                return redirectResult;
+
+            return GetComponentsFromTarget(getCompTarget, searchMethod);
+        }
+
+        /// <summary>
+        /// 处理添加组件的操作
+        /// </summary>
+        private object HandleAddComponentAction(JObject args)
+        {
+            JToken targetToken = args["target"];
+            string searchMethod = args["searchMethod"]?.ToString()?.ToLower();
+
+            // 检查预制体重定向
+            object redirectResult = CheckPrefabRedirection(args, "add_component");
+            if (redirectResult != null)
+                return redirectResult;
+
+            return AddComponentToTarget(args, targetToken, searchMethod);
+        }
+
+        /// <summary>
+        /// 处理移除组件的操作
+        /// </summary>
+        private object HandleRemoveComponentAction(JObject args)
+        {
+            JToken targetToken = args["target"];
+            string searchMethod = args["searchMethod"]?.ToString()?.ToLower();
+
+            // 检查预制体重定向
+            object redirectResult = CheckPrefabRedirection(args, "remove_component");
+            if (redirectResult != null)
+                return redirectResult;
+
+            return RemoveComponentFromTarget(args, targetToken, searchMethod);
+        }
+
+        /// <summary>
+        /// 处理设置组件属性的操作
+        /// </summary>
+        private object HandleSetComponentPropertyAction(JObject args)
+        {
+            JToken targetToken = args["target"];
+            string searchMethod = args["searchMethod"]?.ToString()?.ToLower();
+
+            // 检查预制体重定向
+            object redirectResult = CheckPrefabRedirection(args, "set_component_property");
+            if (redirectResult != null)
+                return redirectResult;
+
+            return SetComponentPropertyOnTarget(args, targetToken, searchMethod);
+        }
+
+        /// <summary>
+        /// 处理未知操作的回调方法
+        /// </summary>
+        private object HandleUnknownAction(JObject args)
+        {
+            string action = args["action"]?.ToString() ?? "null";
+            return Response.Error($"Unknown action: '{action}' for manage_game_object.");
+        }
+
+        /// <summary>
+        /// 检查预制体重定向逻辑
+        /// </summary>
+        private object CheckPrefabRedirection(JObject args, string action)
+        {
+            JToken targetToken = args["target"];
             string targetPath = targetToken?.Type == JTokenType.String ? targetToken.ToString() : null;
-            if (
-                !string.IsNullOrEmpty(targetPath)
-                && targetPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase)
-            )
+
+            if (string.IsNullOrEmpty(targetPath) || !targetPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+                return null; // 不是预制体，继续正常处理
+
+            // 允许某些操作，禁止其他操作
+            if (action == "modify" || action == "set_component_property")
             {
-                // Allow 'create' (instantiate), 'find' (?), 'get_components' (?)
-                if (action == "modify" || action == "set_component_property")
+                LogInfo($"[ManageGameObject->ManageAsset] Redirecting action '{action}' for prefab '{targetPath}' to ManageAsset.");
+
+                // 准备 ManageAsset 参数
+                JObject assetParams = new JObject();
+                assetParams["action"] = "modify"; // ManageAsset 使用 "modify"
+                assetParams["path"] = targetPath;
+
+                // 提取属性
+                JObject properties = null;
+                if (action == "set_component_property")
                 {
-                    Debug.Log(
-                        $"[ManageGameObject->ManageAsset] Redirecting action '{action}' for prefab '{targetPath}' to ManageAsset."
-                    );
-                    // Prepare params for ManageAsset.ModifyAsset
-                    JObject assetParams = new JObject();
-                    assetParams["action"] = "modify"; // ManageAsset uses "modify"
-                    assetParams["path"] = targetPath;
+                    string compName = args["componentName"]?.ToString();
+                    JObject compProps = args["componentProperties"]?[compName] as JObject;
+                    if (string.IsNullOrEmpty(compName))
+                        return Response.Error("Missing 'componentName' for 'set_component_property' on prefab.");
+                    if (compProps == null)
+                        return Response.Error($"Missing or invalid 'componentProperties' for component '{compName}' for 'set_component_property' on prefab.");
 
-                    // Extract properties.
-                    JObject properties = null;
-                    if (action == "set_component_property")
-                    {
-                        string compName = args["componentName"]?.ToString();
-                        JObject compProps = args["componentProperties"]?[compName] as JObject;
-                        if (string.IsNullOrEmpty(compName))
-                            return Response.Error("Missing 'componentName' for 'set_component_property' on prefab.");
-                        if (compProps == null)
-                            return Response.Error($"Missing or invalid 'componentProperties' for component '{compName}' for 'set_component_property' on prefab.");
-
-                        properties = new JObject();
-                        properties[compName] = compProps;
-                    }
-                    else // action == "modify"
-                    {
-                        properties = args["componentProperties"] as JObject;
-                        if (properties == null)
-                            return Response.Error("Missing 'componentProperties' for 'modify' action on prefab.");
-                    }
-
-                    assetParams["properties"] = properties;
-
-                    // Call ManageAsset handler
-                    return new ManageAsset().ExecuteMethod(assetParams);
+                    properties = new JObject();
+                    properties[compName] = compProps;
                 }
-                else if (
-                    action == "delete"
-                    || action == "add_component"
-                    || action == "remove_component"
-                    || action == "get_components"
-                )
+                else // action == "modify"
                 {
-                    return Response.Error(
-                        $"Action '{action}' on a prefab asset ('{targetPath}') should be performed using the 'manage_asset' command."
-                    );
+                    properties = args["componentProperties"] as JObject;
+                    if (properties == null)
+                        return Response.Error("Missing 'componentProperties' for 'modify' action on prefab.");
                 }
+
+                assetParams["properties"] = properties;
+
+                // 调用 ManageAsset 处理器
+                return new ManageAsset().ExecuteMethod(assetParams);
             }
-            // --- End Prefab Redirection Check ---
+            else if (action == "delete" || action == "add_component" || action == "remove_component" || action == "get_components")
+            {
+                return Response.Error($"Action '{action}' on a prefab asset ('{targetPath}') should be performed using the 'manage_asset' command.");
+            }
 
+            return null; // 其他操作可以继续
+        }
+
+        // --- New State Tree Implementation Methods ---
+
+        /// <summary>
+        /// 从预制体创建GameObject
+        /// </summary>
+        private object CreateGameObjectFromPrefab(JObject args, string prefabPath)
+        {
             try
             {
-                switch (action)
+                // 处理预制体路径查找逻辑
+                string resolvedPath = ResolvePrefabPath(prefabPath);
+                if (string.IsNullOrEmpty(resolvedPath))
                 {
-                    case "create":
-                        return CreateGameObject(args);
-                    case "modify":
-                        return ModifyGameObject(args, targetToken, searchMethod);
-                    case "delete":
-                        return DeleteGameObject(targetToken, searchMethod);
-                    case "find":
-                        return FindGameObjects(args, targetToken, searchMethod);
-                    case "get_components":
-                        string getCompTarget = targetToken?.ToString();
-                        if (getCompTarget == null)
-                            return Response.Error("'target' parameter required for get_components.");
-                        return GetComponentsFromTarget(getCompTarget, searchMethod);
-                    case "add_component":
-                        return AddComponentToTarget(args, targetToken, searchMethod);
-                    case "remove_component":
-                        return RemoveComponentFromTarget(args, targetToken, searchMethod);
-                    case "set_component_property":
-                        return SetComponentPropertyOnTarget(args, targetToken, searchMethod);
-
-                    default:
-                        return Response.Error($"Unknown action: '{action}'.");
+                    LogInfo($"[ManageGameObject] Prefab not found at path: '{prefabPath}'");
+                    return Response.Error($"Prefab not found at path: '{prefabPath}'");
                 }
+
+                GameObject prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(resolvedPath);
+                if (prefabAsset == null)
+                {
+                    LogInfo($"[ManageGameObject] Failed to load prefab asset at: '{resolvedPath}'");
+                    return Response.Error($"Failed to load prefab asset at: '{resolvedPath}'");
+                }
+
+                // 实例化预制体
+                GameObject newGo = PrefabUtility.InstantiatePrefab(prefabAsset) as GameObject;
+                if (newGo == null)
+                {
+                    LogInfo($"[ManageGameObject] Failed to instantiate prefab: '{resolvedPath}'");
+                    return Response.Error($"Failed to instantiate prefab: '{resolvedPath}'");
+                }
+
+                // 设置名称
+                string name = args["name"]?.ToString();
+                if (!string.IsNullOrEmpty(name))
+                {
+                    newGo.name = name;
+                }
+
+                // 注册撤销操作
+                Undo.RegisterCreatedObjectUndo(newGo, $"Instantiate Prefab '{prefabAsset.name}' as '{newGo.name}'");
+                LogInfo($"[ManageGameObject] Instantiated prefab '{prefabAsset.name}' from path '{resolvedPath}' as '{newGo.name}'");
+
+                return FinalizeGameObjectCreation(args, newGo, false);
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ManageGameObject] Action '{action}' failed: {e}");
-                return Response.Error($"Internal error processing action '{action}': {e.Message}");
+                LogInfo($"[ManageGameObject] Error instantiating prefab '{prefabPath}': {e.Message}");
+                return Response.Error($"Error instantiating prefab '{prefabPath}': {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 从基元类型创建GameObject
+        /// </summary>
+        private object CreateGameObjectFromPrimitive(JObject args, string primitiveType)
+        {
+            try
+            {
+                PrimitiveType type = (PrimitiveType)Enum.Parse(typeof(PrimitiveType), primitiveType, true);
+                GameObject newGo = GameObject.CreatePrimitive(type);
+
+                // 设置名称
+                string name = args["name"]?.ToString();
+                if (!string.IsNullOrEmpty(name))
+                {
+                    newGo.name = name;
+                }
+                else
+                {
+                    LogInfo("[ManageGameObject] 'name' parameter is recommended when creating a primitive.");
+                }
+
+                // 注册撤销操作
+                Undo.RegisterCreatedObjectUndo(newGo, $"Create GameObject '{newGo.name}'");
+                return FinalizeGameObjectCreation(args, newGo, true);
+            }
+            catch (ArgumentException)
+            {
+                LogInfo($"[ManageGameObject] Invalid primitive type: '{primitiveType}'. Valid types: {string.Join(", ", Enum.GetNames(typeof(PrimitiveType)))}");
+                return Response.Error($"Invalid primitive type: '{primitiveType}'. Valid types: {string.Join(", ", Enum.GetNames(typeof(PrimitiveType)))}");
+            }
+            catch (Exception e)
+            {
+                LogInfo($"[ManageGameObject] Failed to create primitive '{primitiveType}': {e.Message}");
+                return Response.Error($"Failed to create primitive '{primitiveType}': {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 创建空GameObject
+        /// </summary>
+        private object CreateEmptyGameObject(JObject args, string name)
+        {
+            try
+            {
+                GameObject newGo = new GameObject(name);
+                Undo.RegisterCreatedObjectUndo(newGo, $"Create GameObject '{newGo.name}'");
+
+                return FinalizeGameObjectCreation(args, newGo, true);
+            }
+            catch (Exception e)
+            {
+                LogInfo($"[ManageGameObject] Failed to create empty GameObject '{name}': {e.Message}");
+                return Response.Error($"Failed to create empty GameObject '{name}': {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 解析预制体路径
+        /// </summary>
+        private string ResolvePrefabPath(string prefabPath)
+        {
+            // 如果没有路径分隔符且没有.prefab扩展名，搜索预制体
+            if (!prefabPath.Contains("/") && !prefabPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+            {
+                string prefabNameOnly = prefabPath;
+                LogInfo($"[ManageGameObject] Searching for prefab named: '{prefabNameOnly}'");
+
+                string[] guids = AssetDatabase.FindAssets($"t:Prefab {prefabNameOnly}");
+                if (guids.Length == 0)
+                {
+                    return null; // 未找到
+                }
+                else if (guids.Length > 1)
+                {
+                    string foundPaths = string.Join(", ", guids.Select(g => AssetDatabase.GUIDToAssetPath(g)));
+                    LogInfo($"[ManageGameObject] Multiple prefabs found matching name '{prefabNameOnly}': {foundPaths}. Using first one.");
+                }
+
+                string resolvedPath = AssetDatabase.GUIDToAssetPath(guids[0]);
+                LogInfo($"[ManageGameObject] Found prefab at path: '{resolvedPath}'");
+                return resolvedPath;
+            }
+            else if (!prefabPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+            {
+                // 自动添加.prefab扩展名
+                LogInfo($"[ManageGameObject] Adding .prefab extension to path: '{prefabPath}'");
+                return prefabPath + ".prefab";
+            }
+
+            return prefabPath;
+        }
+
+        /// <summary>
+        /// 完成GameObject创建的通用设置
+        /// </summary>
+        private object FinalizeGameObjectCreation(JObject args, GameObject newGo, bool createdNewObject)
+        {
+            if (newGo == null)
+            {
+                return Response.Error("GameObject creation failed.");
+            }
+
+            try
+            {
+                // 记录变换和属性的变更
+                Undo.RecordObject(newGo.transform, "Set GameObject Transform");
+                Undo.RecordObject(newGo, "Set GameObject Properties");
+
+                // 应用通用设置
+                ApplyCommonGameObjectSettings(args, newGo);
+
+                // 处理预制体保存
+                GameObject finalInstance = newGo;
+                bool saveAsPrefab = args["saveAsPrefab"]?.ToObject<bool>() ?? false;
+
+                if (createdNewObject && saveAsPrefab)
+                {
+                    finalInstance = HandlePrefabSaving(args, newGo);
+                    if (finalInstance == null)
+                    {
+                        return Response.Error("Failed to save GameObject as prefab.");
+                    }
+                }
+
+                // 选择对象
+                Selection.activeGameObject = finalInstance;
+
+                // 生成成功消息
+                string successMessage = GenerateCreationSuccessMessage(args, finalInstance, createdNewObject, saveAsPrefab);
+                return Response.Success(successMessage, GetGameObjectData(finalInstance));
+            }
+            catch (Exception e)
+            {
+                // 清理失败的对象
+                if (newGo != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(newGo);
+                }
+                return Response.Error($"Error finalizing GameObject creation: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 应用通用GameObject设置
+        /// </summary>
+        private void ApplyCommonGameObjectSettings(JObject args, GameObject newGo)
+        {
+            // 设置父对象
+            ApplyParentSetting(args, newGo);
+
+            // 设置变换
+            ApplyTransformSettings(args, newGo);
+
+            // 设置标签
+            ApplyTagSetting(args, newGo);
+
+            // 设置层
+            ApplyLayerSetting(args, newGo);
+
+            // 添加组件
+            ApplyComponentsToAdd(args, newGo);
+        }
+
+        /// <summary>
+        /// 应用父对象设置
+        /// </summary>
+        private void ApplyParentSetting(JObject args, GameObject newGo)
+        {
+            JToken parentToken = args["parent"];
+            if (parentToken != null)
+            {
+                GameObject parentGo = FindObjectInternal(parentToken, "by_id_or_name_or_path");
+                if (parentGo == null)
+                {
+                    LogInfo($"[ManageGameObject] Parent specified ('{parentToken}') but not found.");
+                    return;
+                }
+                newGo.transform.SetParent(parentGo.transform, true);
+            }
+        }
+
+        /// <summary>
+        /// 应用变换设置
+        /// </summary>
+        private void ApplyTransformSettings(JObject args, GameObject newGo)
+        {
+            Vector3? position = ParseVector3(args["position"] as JArray);
+            Vector3? rotation = ParseVector3(args["rotation"] as JArray);
+            Vector3? scale = ParseVector3(args["scale"] as JArray);
+
+            if (position.HasValue)
+                newGo.transform.localPosition = position.Value;
+            if (rotation.HasValue)
+                newGo.transform.localEulerAngles = rotation.Value;
+            if (scale.HasValue)
+                newGo.transform.localScale = scale.Value;
+        }
+
+        /// <summary>
+        /// 应用标签设置
+        /// </summary>
+        private void ApplyTagSetting(JObject args, GameObject newGo)
+        {
+            string tag = args["tag"]?.ToString();
+            if (!string.IsNullOrEmpty(tag))
+            {
+                string tagToSet = string.IsNullOrEmpty(tag) ? "Untagged" : tag;
+                try
+                {
+                    newGo.tag = tagToSet;
+                }
+                catch (UnityException ex)
+                {
+                    if (ex.Message.Contains("is not defined"))
+                    {
+                        LogInfo($"[ManageGameObject] Tag '{tagToSet}' not found. Attempting to create it.");
+                        try
+                        {
+                            InternalEditorUtility.AddTag(tagToSet);
+                            newGo.tag = tagToSet;
+                            LogInfo($"[ManageGameObject] Tag '{tagToSet}' created and assigned successfully.");
+                        }
+                        catch (Exception innerEx)
+                        {
+                            LogInfo($"[ManageGameObject] Failed to create or assign tag '{tagToSet}': {innerEx.Message}");
+                        }
+                    }
+                    else
+                    {
+                        LogInfo($"[ManageGameObject] Failed to set tag to '{tagToSet}': {ex.Message}");
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 应用层设置
+        /// </summary>
+        private void ApplyLayerSetting(JObject args, GameObject newGo)
+        {
+            string layerName = args["layer"]?.ToString();
+            if (!string.IsNullOrEmpty(layerName))
+            {
+                int layerId = LayerMask.NameToLayer(layerName);
+                if (layerId != -1)
+                {
+                    newGo.layer = layerId;
+                }
+                else
+                {
+                    LogInfo($"[ManageGameObject] Layer '{layerName}' not found. Using default layer.");
+                }
+            }
+        }
+
+        /// <summary>
+        /// 应用组件添加
+        /// </summary>
+        private void ApplyComponentsToAdd(JObject args, GameObject newGo)
+        {
+            if (args["componentsToAdd"] is JArray componentsToAddArray)
+            {
+                foreach (var compToken in componentsToAddArray)
+                {
+                    string typeName = null;
+                    JObject properties = null;
+
+                    if (compToken.Type == JTokenType.String)
+                    {
+                        typeName = compToken.ToString();
+                    }
+                    else if (compToken is JObject compObj)
+                    {
+                        typeName = compObj["typeName"]?.ToString();
+                        properties = compObj["properties"] as JObject;
+                    }
+
+                    if (!string.IsNullOrEmpty(typeName))
+                    {
+                        var addResult = AddComponentInternal(newGo, typeName, properties);
+                        if (addResult != null)
+                        {
+                            LogInfo($"[ManageGameObject] Failed to add component '{typeName}': {addResult}");
+                        }
+                    }
+                    else
+                    {
+                        LogInfo($"[ManageGameObject] Invalid component format in componentsToAdd: {compToken}");
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 处理预制体保存
+        /// </summary>
+        private GameObject HandlePrefabSaving(JObject args, GameObject newGo)
+        {
+            string prefabPath = args["prefabPath"]?.ToString();
+            if (string.IsNullOrEmpty(prefabPath))
+            {
+                LogInfo("[ManageGameObject] 'prefabPath' is required when 'saveAsPrefab' is true.");
+                return null;
+            }
+
+            string finalPrefabPath = prefabPath;
+            if (!finalPrefabPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+            {
+                LogInfo($"[ManageGameObject] Adding .prefab extension to save path: '{finalPrefabPath}'");
+                finalPrefabPath += ".prefab";
+            }
+
+            try
+            {
+                // 确保目录存在
+                string directoryPath = System.IO.Path.GetDirectoryName(finalPrefabPath);
+                if (!string.IsNullOrEmpty(directoryPath) && !System.IO.Directory.Exists(directoryPath))
+                {
+                    System.IO.Directory.CreateDirectory(directoryPath);
+                    AssetDatabase.Refresh();
+                    LogInfo($"[ManageGameObject] Created directory for prefab: {directoryPath}");
+                }
+
+                // 保存为预制体
+                GameObject finalInstance = PrefabUtility.SaveAsPrefabAssetAndConnect(
+                    newGo,
+                    finalPrefabPath,
+                    InteractionMode.UserAction
+                );
+
+                if (finalInstance == null)
+                {
+                    UnityEngine.Object.DestroyImmediate(newGo);
+                    return null;
+                }
+
+                LogInfo($"[ManageGameObject] GameObject '{newGo.name}' saved as prefab to '{finalPrefabPath}' and instance connected.");
+                return finalInstance;
+            }
+            catch (Exception e)
+            {
+                LogInfo($"[ManageGameObject] Error saving prefab '{finalPrefabPath}': {e.Message}");
+                UnityEngine.Object.DestroyImmediate(newGo);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 生成创建成功消息
+        /// </summary>
+        private string GenerateCreationSuccessMessage(JObject args, GameObject finalInstance, bool createdNewObject, bool saveAsPrefab)
+        {
+            string messagePrefabPath = AssetDatabase.GetAssetPath(
+                PrefabUtility.GetCorrespondingObjectFromSource(finalInstance) ?? (UnityEngine.Object)finalInstance
+            );
+
+            if (!createdNewObject && !string.IsNullOrEmpty(messagePrefabPath))
+            {
+                return $"Prefab '{messagePrefabPath}' instantiated successfully as '{finalInstance.name}'.";
+            }
+            else if (createdNewObject && saveAsPrefab && !string.IsNullOrEmpty(messagePrefabPath))
+            {
+                return $"GameObject '{finalInstance.name}' created and saved as prefab to '{messagePrefabPath}'.";
+            }
+            else
+            {
+                return $"GameObject '{finalInstance.name}' created successfully in scene.";
             }
         }
 
@@ -152,9 +774,7 @@ namespace UnityMcp.Tools
                 )
                 {
                     string prefabNameOnly = prefabPath;
-                    Debug.Log(
-                        $"[ManageGameObject.Create] Searching for prefab named: '{prefabNameOnly}'"
-                    );
+                    LogInfo($"[ManageGameObject.Create] Searching for prefab named: '{prefabNameOnly}'");
                     string[] guids = AssetDatabase.FindAssets($"t:Prefab {prefabNameOnly}");
                     if (guids.Length == 0)
                     {
@@ -175,18 +795,14 @@ namespace UnityMcp.Tools
                     else // Exactly one found
                     {
                         prefabPath = AssetDatabase.GUIDToAssetPath(guids[0]); // Update prefabPath with the full path
-                        Debug.Log(
-                            $"[ManageGameObject.Create] Found unique prefab at path: '{prefabPath}'"
-                        );
+                        LogInfo($"[ManageGameObject.Create] Found unique prefab at path: '{prefabPath}'");
                     }
                 }
                 else if (!prefabPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
                 {
                     // If it looks like a path but doesn't end with .prefab, assume user forgot it and append it.
                     // We could also error here, but appending might be more user-friendly.
-                    Debug.LogWarning(
-                        $"[ManageGameObject.Create] Provided prefabPath '{prefabPath}' does not end with .prefab. Assuming it's missing and appending."
-                    );
+                    LogInfo($"[ManageGameObject.Create] Provided prefabPath '{prefabPath}' does not end with .prefab. Assuming it's missing and appending.");
                     prefabPath += ".prefab";
                     // Note: This path might still not exist, AssetDatabase.LoadAssetAtPath will handle that.
                 }
@@ -225,9 +841,7 @@ namespace UnityMcp.Tools
                             newGo,
                             $"Instantiate Prefab '{prefabAsset.name}' as '{newGo.name}'"
                         );
-                        Debug.Log(
-                            $"[ManageGameObject.Create] Instantiated prefab '{prefabAsset.name}' from path '{prefabPath}' as '{newGo.name}'."
-                        );
+                        LogInfo($"[ManageGameObject.Create] Instantiated prefab '{prefabAsset.name}' from path '{prefabPath}' as '{newGo.name}'.");
                     }
                     catch (Exception e)
                     {
@@ -240,9 +854,7 @@ namespace UnityMcp.Tools
                 {
                     // Only return error if prefabPath was specified but not found.
                     // If prefabPath was empty/null, we proceed to create primitive/empty.
-                    Debug.LogWarning(
-                        $"[ManageGameObject.Create] Prefab asset not found at path: '{prefabPath}'. Will proceed to create new object if specified."
-                    );
+                    LogInfo($"[ManageGameObject.Create] Prefab asset not found at path: '{prefabPath}'. Will proceed to create new object if specified.");
                     // Do not return error here, allow fallback to primitive/empty creation
                 }
             }
@@ -349,16 +961,12 @@ namespace UnityMcp.Tools
                 {
                     if (ex.Message.Contains("is not defined"))
                     {
-                        Debug.LogWarning(
-                            $"[ManageGameObject.Create] Tag '{tagToSet}' not found. Attempting to create it."
-                        );
+                        LogInfo($"[ManageGameObject.Create] Tag '{tagToSet}' not found. Attempting to create it.");
                         try
                         {
                             InternalEditorUtility.AddTag(tagToSet);
                             newGo.tag = tagToSet; // Retry
-                            Debug.Log(
-                                $"[ManageGameObject.Create] Tag '{tagToSet}' created and assigned successfully."
-                            );
+                            LogInfo($"[ManageGameObject.Create] Tag '{tagToSet}' created and assigned successfully.");
                         }
                         catch (Exception innerEx)
                         {
@@ -389,9 +997,7 @@ namespace UnityMcp.Tools
                 }
                 else
                 {
-                    Debug.LogWarning(
-                        $"[ManageGameObject.Create] Layer '{layerName}' not found. Using default layer."
-                    );
+                    LogInfo($"[ManageGameObject.Create] Layer '{layerName}' not found. Using default layer.");
                 }
             }
 
@@ -424,9 +1030,7 @@ namespace UnityMcp.Tools
                     }
                     else
                     {
-                        Debug.LogWarning(
-                            $"[ManageGameObject] Invalid component format in componentsToAdd: {compToken}"
-                        );
+                        LogInfo($"[ManageGameObject] Invalid component format in componentsToAdd: {compToken}");
                     }
                 }
             }
@@ -448,9 +1052,7 @@ namespace UnityMcp.Tools
                 // Ensure the *saving* path ends with .prefab
                 if (!finalPrefabPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
                 {
-                    Debug.Log(
-                        $"[ManageGameObject.Create] Appending .prefab extension to save path: '{finalPrefabPath}' -> '{finalPrefabPath}.prefab'"
-                    );
+                    LogInfo($"[ManageGameObject.Create] Appending .prefab extension to save path: '{finalPrefabPath}' -> '{finalPrefabPath}.prefab'");
                     finalPrefabPath += ".prefab";
                 }
 
@@ -472,9 +1074,7 @@ namespace UnityMcp.Tools
                     {
                         System.IO.Directory.CreateDirectory(directoryPath);
                         AssetDatabase.Refresh(); // Refresh asset database to recognize the new folder
-                        Debug.Log(
-                            $"[ManageGameObject.Create] Created directory for prefab: {directoryPath}"
-                        );
+                        LogInfo($"[ManageGameObject.Create] Created directory for prefab: {directoryPath}");
                     }
 
                     // Use SaveAsPrefabAssetAndConnect with the final saving path
@@ -492,9 +1092,7 @@ namespace UnityMcp.Tools
                             $"Failed to save GameObject '{name}' as prefab at '{finalPrefabPath}'. Check path and permissions."
                         );
                     }
-                    Debug.Log(
-                        $"[ManageGameObject.Create] GameObject '{name}' saved as prefab to '{finalPrefabPath}' and instance connected."
-                    );
+                    LogInfo($"[ManageGameObject.Create] GameObject '{name}' saved as prefab to '{finalPrefabPath}' and instance connected.");
                     // Mark the new prefab asset as dirty? Not usually necessary, SaveAsPrefabAsset handles it.
                     // EditorUtility.SetDirty(finalInstance); // Instance is handled by SaveAsPrefabAssetAndConnect
                 }
@@ -626,9 +1224,7 @@ namespace UnityMcp.Tools
                     // Check if the error is specifically because the tag doesn't exist
                     if (ex.Message.Contains("is not defined"))
                     {
-                        Debug.LogWarning(
-                            $"[ManageGameObject] Tag '{tagToSet}' not found. Attempting to create it."
-                        );
+                        LogInfo($"[ManageGameObject] Tag '{tagToSet}' not found. Attempting to create it.");
                         try
                         {
                             // Attempt to create the tag using internal utility
@@ -639,9 +1235,7 @@ namespace UnityMcp.Tools
                             // Retry setting the tag immediately after creation
                             targetGo.tag = tagToSet;
                             modified = true; // Mark as modified on successful retry
-                            Debug.Log(
-                                $"[ManageGameObject] Tag '{tagToSet}' created and assigned successfully."
-                            );
+                            LogInfo($"[ManageGameObject] Tag '{tagToSet}' created and assigned successfully.");
                         }
                         catch (Exception innerEx)
                         {
@@ -2196,13 +2790,6 @@ namespace UnityMcp.Tools
             return data;
         }
 
-        protected override StateTree CreateStateTree()
-        {
-            return StateTreeBuilder
-                .Create()
-                .DefaultLeaf((ctx) => Response.Error("State tree not implemented for manage_game_object. Use ExecuteMethod."))
-                .Build();
-        }
     }
 }
 

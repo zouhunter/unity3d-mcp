@@ -30,6 +30,12 @@ namespace UnityMcp.Tools
 
         public StateTreeBuilder Branch(object edgeKey)
         {
+            // 防止null key导致异常
+            if (edgeKey == null)
+            {
+                throw new ArgumentNullException(nameof(edgeKey), "edgeKey cannot be null in Branch method");
+            }
+
             if (!Current.select.TryGetValue(edgeKey, out var child))
             {
                 child = new StateTree();
@@ -46,6 +52,12 @@ namespace UnityMcp.Tools
 
         public StateTreeBuilder Leaf(object edgeKey, Func<JObject, object> action)
         {
+            // 防止null key导致异常
+            if (edgeKey == null)
+            {
+                throw new ArgumentNullException(nameof(edgeKey), "edgeKey cannot be null in Leaf method");
+            }
+
             Current.select[edgeKey] = (StateTree)action;
             return this;
         }
@@ -53,6 +65,40 @@ namespace UnityMcp.Tools
         public StateTreeBuilder DefaultLeaf(Func<JObject, object> action)
         {
             return Leaf(StateTree.Default, action);
+        }
+
+        /// <summary>
+        /// 添加可选参数分支：当指定的参数存在时执行对应的动作
+        /// </summary>
+        /// <param name="parameterName">要检查的参数名</param>
+        /// <param name="action">参数存在时执行的动作</param>
+        public StateTreeBuilder OptionalLeaf(string parameterName, Func<JObject, object> action)
+        {
+            // 使用特殊的键格式来标识这是一个可选参数检查
+            string optionalKey = $"__OPTIONAL_PARAM__{parameterName}";
+            Current.select[optionalKey] = (StateTree)action;
+            return this;
+        }
+
+        /// <summary>
+        /// 添加可选参数分支：当指定的参数存在时进入子分支
+        /// </summary>
+        /// <param name="parameterName">要检查的参数名</param>
+        public StateTreeBuilder OptionalBranch(string parameterName)
+        {
+            string optionalKey = $"__OPTIONAL_PARAM__{parameterName}";
+            return Branch(optionalKey);
+        }
+
+        /// <summary>
+        /// 添加可选参数节点：当指定的参数存在时进入子分支并设置key
+        /// 相当于 OptionalBranch + Key 的组合
+        /// </summary>
+        /// <param name="parameterName">要检查的参数名</param>
+        /// <param name="variableKey">子分支的变量key</param>
+        public StateTreeBuilder OptionalNode(string parameterName, string variableKey)
+        {
+            return OptionalBranch(parameterName).Key(variableKey);
         }
 
         public StateTreeBuilder Node(object edgeKey, string variableKey)

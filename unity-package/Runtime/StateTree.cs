@@ -25,19 +25,58 @@ namespace UnityMcp.Tools
             while (cur.func == null)
             {
                 object keyToLookup = Default;
+                StateTree next = null;
 
+                // 首先检查是否有常规的key匹配
                 if (!string.IsNullOrEmpty(cur.key) && ctx != null && ctx.TryGetValue(cur.key, out JToken token))
                 {
                     keyToLookup = ConvertTokenToKey(token);
+                    cur.select.TryGetValue(keyToLookup, out next);
                 }
 
-                if (!cur.select.TryGetValue(keyToLookup, out var next) &&
-                    !cur.select.TryGetValue(Default, out next))
+                // 如果没有找到常规匹配，检查可选参数
+                if (next == null && ctx != null)
+                {
+                    // 查找所有可选参数键
+                    foreach (var kvp in cur.select)
+                    {
+                        if (kvp.Key == null) continue; // 跳过null键
+
+                        string key = kvp.Key.ToString();
+                        if (!string.IsNullOrEmpty(key) && key.StartsWith("__OPTIONAL_PARAM__"))
+                        {
+                            // 提取参数名
+                            string paramName = key.Substring("__OPTIONAL_PARAM__".Length);
+
+                            // 检查参数是否存在且不为空
+                            if (!string.IsNullOrEmpty(paramName) &&
+                                ctx.TryGetValue(paramName, out JToken paramToken) &&
+                                paramToken != null &&
+                                paramToken.Type != JTokenType.Null &&
+                                !string.IsNullOrEmpty(paramToken.ToString()))
+                            {
+                                next = kvp.Value;
+                                break; // 找到第一个匹配的可选参数就使用它
+                            }
+                        }
+                    }
+                }
+
+                // 如果还是没有找到，尝试默认分支
+                if (next == null && !cur.select.TryGetValue(Default, out next))
                 {
                     var supportedKeys = cur.select.Keys
-                        .Where(k => k?.ToString() != Default)
+                        .Where(k => k?.ToString() != Default && !(bool)(k?.ToString()?.StartsWith("__OPTIONAL_PARAM__")))
                         .Select(k => k?.ToString() ?? "null")
                         .ToList();
+
+                    // 添加可选参数到支持的键列表
+                    var optionalParams = cur.select.Keys
+                        .Where(k => k != null && k.ToString().StartsWith("__OPTIONAL_PARAM__"))
+                        .Select(k => k.ToString().Substring("__OPTIONAL_PARAM__".Length) + " (optional)")
+                        .ToList();
+
+                    supportedKeys.AddRange(optionalParams);
 
                     string supportedKeysList = supportedKeys.Count > 0
                         ? string.Join(", ", supportedKeys)

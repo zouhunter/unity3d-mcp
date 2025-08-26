@@ -169,5 +169,15 @@ namespace UnityMcp.Tools
                 }
             }
         }
+        /// <summary>
+        /// 重写ToString方法，用于打印状态树
+        /// </summary>
+        /// <returns></returns>
+        public override string ToString()
+        {
+            var sb = new StringBuilder();
+            Print(sb);
+            return sb.ToString();
+        }
     }
 }

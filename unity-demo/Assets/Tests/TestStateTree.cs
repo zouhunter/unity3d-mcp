@@ -114,7 +114,7 @@ public class TestStateTree
         // 创建一个带有可选参数的树
         var optionalTree = StateTreeBuilder.Create()
             .Key("action")
-                .Node("create", "")
+                .NodeNext("create")
                     .OptionalLeaf("debug", HandleDebug)
                     .OptionalLeaf("verbose", HandleVerbose)
                     .DefaultLeaf(HandleCreate)
@@ -155,7 +155,7 @@ public class TestStateTree
         var result3 = optionalTree.Run(new JObject
         {
             ["action"] = "create",
-            ["debug"] = true
+            ["debug"] = false
         });
         Debug.Log($"测试3：创建操作带debug参数结果: {result3}, 错误消息: {optionalTree.ErrorMessage}");
         Assert.AreEqual("启用调试模式", result3);

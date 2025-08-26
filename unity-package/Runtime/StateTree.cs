@@ -9,16 +9,17 @@ namespace UnityMcp.Tools
 {
     public class StateTree
     {
-        public string key;                         // µ±Ç°²ã±äÁ¿
+        public string key;                         // å½“å‰å±‚å˜é‡
         public Dictionary<object, StateTree> select = new();
-        public Func<JObject, object> func;     // Ò¶×Óº¯Êı
-        public const string Default = "*";          // Í¨Åä±êÊ¶
-        public string ErrorMessage;//Ö´ĞĞ´íÎóĞÅÏ¢
+        public HashSet<string> optionalParams = new(); // å­˜å‚¨å¯é€‰å‚æ•°çš„key
+        public Func<JObject, object> func;     // å¶å­å‡½æ•°
+        public const string Default = "*";          // é€šé…æ ‡è¯†
+        public string ErrorMessage;//æ‰§è¡Œé”™è¯¯ä¿¡æ¯
 
-        /* ÒşÊ½×ª»»£ºAction ¡ú Ò¶×Ó½Úµã */
+        /* éšå¼è½¬æ¢ï¼šAction â†’ å¶å­èŠ‚ç‚¹ */
         public static implicit operator StateTree(Func<JObject, object> a) => new() { func = a };
 
-        /* ÔËĞĞ£ºÑØÊ÷Î¨Ò»Â·¾¶£¨JObject ÉÏÏÂÎÄ£© */
+        /* è¿è¡Œï¼šæ²¿æ ‘å”¯ä¸€è·¯å¾„ï¼ˆJObject ä¸Šä¸‹æ–‡ï¼‰ */
         public object Run(JObject ctx)
         {
             var cur = this;
@@ -27,56 +28,52 @@ namespace UnityMcp.Tools
                 object keyToLookup = Default;
                 StateTree next = null;
 
-                // Ê×ÏÈ¼ì²éÊÇ·ñÓĞ³£¹æµÄkeyÆ¥Åä
+                // é¦–å…ˆæ£€æŸ¥æ˜¯å¦æœ‰å¸¸è§„çš„keyåŒ¹é…
                 if (!string.IsNullOrEmpty(cur.key) && ctx != null && ctx.TryGetValue(cur.key, out JToken token))
                 {
                     keyToLookup = ConvertTokenToKey(token);
                     cur.select.TryGetValue(keyToLookup, out next);
                 }
 
-                // Èç¹ûÃ»ÓĞÕÒµ½³£¹æÆ¥Åä£¬¼ì²é¿ÉÑ¡²ÎÊı
+                // å¦‚æœæ²¡æœ‰æ‰¾åˆ°å¸¸è§„åŒ¹é…ï¼Œæ£€æŸ¥å¯é€‰å‚æ•°
                 if (next == null && ctx != null)
                 {
-                    // ²éÕÒËùÓĞ¿ÉÑ¡²ÎÊı¼ü
+                    // æŸ¥æ‰¾æ‰€æœ‰å¯é€‰å‚æ•°é”®
                     foreach (var kvp in cur.select)
                     {
-                        if (kvp.Key == null) continue; // Ìø¹ınull¼ü
+                        if (kvp.Key == null) continue; // è·³è¿‡nullé”®
 
                         string key = kvp.Key.ToString();
-                        if (!string.IsNullOrEmpty(key) && key.StartsWith("__OPTIONAL_PARAM__"))
+                        if (!string.IsNullOrEmpty(key) && cur.optionalParams.Contains(key))
                         {
-                            // ÌáÈ¡²ÎÊıÃû
-                            string paramName = key.Substring("__OPTIONAL_PARAM__".Length);
-
-                            // ¼ì²é²ÎÊıÊÇ·ñ´æÔÚÇÒ²»Îª¿Õ
-                            if (!string.IsNullOrEmpty(paramName) &&
-                                ctx.TryGetValue(paramName, out JToken paramToken) &&
+                            // æ£€æŸ¥å‚æ•°æ˜¯å¦å­˜åœ¨ä¸”ä¸ä¸ºç©º
+                            if (ctx.TryGetValue(key, out JToken paramToken) &&
                                 paramToken != null &&
                                 paramToken.Type != JTokenType.Null &&
                                 !string.IsNullOrEmpty(paramToken.ToString()))
                             {
                                 next = kvp.Value;
-                                break; // ÕÒµ½µÚÒ»¸öÆ¥ÅäµÄ¿ÉÑ¡²ÎÊı¾ÍÊ¹ÓÃËü
+                                break; // æ‰¾åˆ°ç¬¬ä¸€ä¸ªåŒ¹é…çš„å¯é€‰å‚æ•°å°±ä½¿ç”¨å®ƒ
                             }
                         }
                     }
                 }
 
-                // Èç¹û»¹ÊÇÃ»ÓĞÕÒµ½£¬³¢ÊÔÄ¬ÈÏ·ÖÖ§
+                // å¦‚æœè¿˜æ˜¯æ²¡æœ‰æ‰¾åˆ°ï¼Œå°è¯•é»˜è®¤åˆ†æ”¯
                 if (next == null && !cur.select.TryGetValue(Default, out next))
                 {
                     var supportedKeys = cur.select.Keys
-                        .Where(k => k?.ToString() != Default && !(bool)(k?.ToString()?.StartsWith("__OPTIONAL_PARAM__")))
+                        .Where(k => k?.ToString() != Default && !(cur.optionalParams.Contains(k?.ToString())))
                         .Select(k => k?.ToString() ?? "null")
                         .ToList();
 
-                    // Ìí¼Ó¿ÉÑ¡²ÎÊıµ½Ö§³ÖµÄ¼üÁĞ±í
-                    var optionalParams = cur.select.Keys
-                        .Where(k => k != null && k.ToString().StartsWith("__OPTIONAL_PARAM__"))
-                        .Select(k => k.ToString().Substring("__OPTIONAL_PARAM__".Length) + " (optional)")
+                    // æ·»åŠ å¯é€‰å‚æ•°åˆ°æ”¯æŒçš„é”®åˆ—è¡¨
+                    var optionalKeys = cur.select.Keys
+                        .Where(k => k != null && cur.optionalParams.Contains(k.ToString()))
+                        .Select(k => k.ToString() + " (optional)")
                         .ToList();
 
-                    supportedKeys.AddRange(optionalParams);
+                    supportedKeys.AddRange(optionalKeys);
 
                     string supportedKeysList = supportedKeys.Count > 0
                         ? string.Join(", ", supportedKeys)
@@ -128,49 +125,55 @@ namespace UnityMcp.Tools
             return token.ToString();
         }
 
-        /* ÃÀ»¯´òÓ¡£¨Unicode ¿òÏß£© */
+        /* ç¾åŒ–æ‰“å°ï¼ˆUnicode æ¡†çº¿ï¼‰ */
         public void Print(StringBuilder sb, string indent = "", bool last = true, string parentEdgeLabel = null)
         {
-            // ¸ù½Úµã£º´òÓ¡±êÌâ
+            // æ ¹èŠ‚ç‚¹ï¼šæ‰“å°æ ‡é¢˜
             if (string.IsNullOrEmpty(indent))
             {
                 sb.AppendLine($"{indent}StateTree");
             }
 
-            // Èôµ±Ç°½ÚµãÓĞ key£¬´òÓ¡Ò»´Î½Úµã key£¨±ÜÃâÓë¸¸±ß±êÇ©ÖØ¸´£©
+            // è‹¥å½“å‰èŠ‚ç‚¹æœ‰ keyï¼Œæ‰“å°ä¸€æ¬¡èŠ‚ç‚¹ keyï¼ˆé¿å…ä¸çˆ¶è¾¹æ ‡ç­¾é‡å¤ï¼‰
             string edgesIndent = indent;
             if (!string.IsNullOrEmpty(key) && key != parentEdgeLabel)
             {
-                sb.AppendLine($"{indent}©¸©¤ {key}:");
+                sb.AppendLine($"{indent}â””â”€ {key}:");
                 edgesIndent = indent + "   ";
             }
 
-            // Ã¶¾Ù²¢´òÓ¡µ±Ç°½ÚµãµÄ±ß£¨entry.Key Îª±ß±êÇ©£©
+            // æšä¸¾å¹¶æ‰“å°å½“å‰èŠ‚ç‚¹çš„è¾¹ï¼ˆentry.Key ä¸ºè¾¹æ ‡ç­¾ï¼‰
             var entries = select.ToList();
             for (int i = 0; i < entries.Count; i++)
             {
                 var entry = entries[i];
                 bool isLastChild = i == entries.Count - 1;
-                string connector = isLastChild ? "©¸©¤" : "©À©¤";
+                string connector = isLastChild ? "â””â”€" : "â”œâ”€";
                 string label = entry.Key?.ToString() == Default ? "*" : entry.Key?.ToString();
+                
+                // å¦‚æœæ˜¯å¯é€‰å‚æ•°ï¼Œæ·»åŠ (option)æ ‡è¯†
+                if (!string.IsNullOrEmpty(label) && optionalParams.Contains(label))
+                {
+                    label = label + "(option)";
+                }
 
                 if (entry.Value.func != null)
                 {
                     string actionName = entry.Value.func.Method?.Name ?? "Anonymous";
-                    sb.AppendLine($"{edgesIndent}{connector} {label} ¡ú {actionName}");
+                    sb.AppendLine($"{edgesIndent}{connector} {label} â†’ {actionName}");
                 }
                 else
                 {
-                    // ´òÓ¡±ß±êÇ©
+                    // æ‰“å°è¾¹æ ‡ç­¾
                     sb.AppendLine($"{edgesIndent}{connector} {label}");
-                    // µİ¹éµ½×Ó½Úµã£»Èç¹û×Ó½ÚµãµÄ key Óë±ß±êÇ©²»Í¬£¬ÔòÔÚ×Ó²ã¼¶´òÓ¡¸Ã key
-                    string nextIndent = edgesIndent + (isLastChild ? "   " : "©¦  ");
+                    // é€’å½’åˆ°å­èŠ‚ç‚¹ï¼›å¦‚æœå­èŠ‚ç‚¹çš„ key ä¸è¾¹æ ‡ç­¾ä¸åŒï¼Œåˆ™åœ¨å­å±‚çº§æ‰“å°è¯¥ key
+                    string nextIndent = edgesIndent + (isLastChild ? "   " : "â”‚  ");
                     entry.Value.Print(sb, nextIndent, isLastChild, label);
                 }
             }
         }
         /// <summary>
-        /// ÖØĞ´ToString·½·¨£¬ÓÃÓÚ´òÓ¡×´Ì¬Ê÷
+        /// é‡å†™ToStringæ–¹æ³•ï¼Œç”¨äºæ‰“å°çŠ¶æ€æ ‘
         /// </summary>
         /// <returns></returns>
         public override string ToString()

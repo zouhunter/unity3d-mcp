@@ -74,9 +74,9 @@ namespace UnityMcp.Tools
         /// <param name="action">参数存在时执行的动作</param>
         public StateTreeBuilder OptionalLeaf(string parameterName, Func<JObject, object> action)
         {
-            // 使用特殊的键格式来标识这是一个可选参数检查
-            string optionalKey = $"__OPTIONAL_PARAM__{parameterName}";
-            Current.select[optionalKey] = (StateTree)action;
+            // 直接使用参数名作为key，并添加到可选参数集合中
+            Current.select[parameterName] = (StateTree)action;
+            Current.optionalParams.Add(parameterName);
             return this;
         }
 
@@ -86,8 +86,9 @@ namespace UnityMcp.Tools
         /// <param name="parameterName">要检查的参数名</param>
         public StateTreeBuilder OptionalBranch(string parameterName)
         {
-            string optionalKey = $"__OPTIONAL_PARAM__{parameterName}";
-            return Branch(optionalKey);
+            // 直接使用参数名作为key，并添加到可选参数集合中
+            Current.optionalParams.Add(parameterName);
+            return Branch(parameterName);
         }
 
         /// <summary>
@@ -101,9 +102,24 @@ namespace UnityMcp.Tools
             return OptionalBranch(parameterName).Key(variableKey);
         }
 
+        /// <summary>
+        /// 添加可选参数分支：当指定的参数存在时进入子分支并设置key
+        /// </summary>
+        /// <param name="parameterName">要检查的参数名</param>
+        /// <param name="variableKey">子分支的变量key</param>
+        public StateTreeBuilder OptionalKey(string parameterName)
+        {
+            return OptionalBranch(parameterName).Key(parameterName);
+        }
+
         public StateTreeBuilder Node(object edgeKey, string variableKey)
         {
             return Branch(edgeKey).Key(variableKey);
+        }
+
+        public StateTreeBuilder NodeNext(string edgeKey)
+        {
+            return Branch(edgeKey).Key("");
         }
 
         public StateTreeBuilder Up()

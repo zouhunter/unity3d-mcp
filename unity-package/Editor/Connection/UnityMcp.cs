@@ -10,7 +10,6 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityMcp.Models;
-using UnityMcp.Models;
 using UnityMcp.Tools;
 
 namespace UnityMcp
@@ -25,8 +24,43 @@ namespace UnityMcp
             string,
             (string commandJson, TaskCompletionSource<string> tcs)
         > commandQueue = new();
-        public static readonly int unityPort = 6400; // Hardcoded port
+        public static readonly int unityPortStart = 6400; // Start of port range
+        public static readonly int unityPortEnd = 6405;   // End of port range
+        public static int currentPort = -1; // Currently used port
         public static bool IsRunning => isRunning;
+
+        // 客户端连接状态跟踪
+        private static readonly Dictionary<string, ClientInfo> connectedClients = new();
+        private static readonly object clientsLock = new();
+
+        public static int ConnectedClientCount
+        {
+            get
+            {
+                lock (clientsLock)
+                {
+                    return connectedClients.Count;
+                }
+            }
+        }
+
+        public static List<ClientInfo> GetConnectedClients()
+        {
+            lock (clientsLock)
+            {
+                return connectedClients.Values.ToList();
+            }
+        }
+
+        // 客户端信息类
+        public class ClientInfo
+        {
+            public string Id { get; set; }
+            public string EndPoint { get; set; }
+            public DateTime ConnectedAt { get; set; }
+            public DateTime LastActivity { get; set; }
+            public int CommandCount { get; set; }
+        }
 
         // 缓存McpTool类型和实例，静态工具类型
         private static readonly Dictionary<string, McpTool> mcpToolInstanceCache = new();
@@ -91,28 +125,56 @@ namespace UnityMcp
                 return;
             }
 
-            try
+            // Try to start listener on available port in range
+            bool started = false;
+            SocketException lastException = null;
+
+            for (int port = unityPortStart; port <= unityPortEnd; port++)
             {
-                listener = new TcpListener(IPAddress.Loopback, unityPort);
-                listener.Start();
-                isRunning = true;
-                Log($"[UnityMcp] TCP监听器已启动，端口: {unityPort}");
-                // Assuming ListenerLoop and ProcessCommands are defined elsewhere
-                Task.Run(ListenerLoop);
-                EditorApplication.update += ProcessCommands;
-                Log($"[UnityMcp] 启动完成，监听循环已开始，命令处理已注册");
-            }
-            catch (SocketException ex)
-            {
-                if (ex.SocketErrorCode == SocketError.AddressAlreadyInUse)
+                try
                 {
-                    LogError(
-                        $"[UnityMcp] 端口 {unityPort} 已被占用。请确保没有其他实例正在运行或更改端口。"
-                    );
+                    Log($"[UnityMcp] 尝试在端口 {port} 启动TCP监听器...");
+                    listener = new TcpListener(IPAddress.Loopback, port);
+                    listener.Start();
+                    currentPort = port;
+                    isRunning = true;
+                    started = true;
+                    Log($"[UnityMcp] TCP监听器已成功启动，端口: {port}");
+
+                    // Start the listener loop and command processing
+                    Task.Run(ListenerLoop);
+                    EditorApplication.update += ProcessCommands;
+                    Log($"[UnityMcp] 启动完成，监听循环已开始，命令处理已注册");
+                    break;
                 }
-                else
+                catch (SocketException ex)
                 {
-                    LogError($"[UnityMcp] 启动TCP监听器失败: {ex.Message}");
+                    lastException = ex;
+                    if (ex.SocketErrorCode == SocketError.AddressAlreadyInUse)
+                    {
+                        Log($"[UnityMcp] 端口 {port} 已被占用，尝试下一个端口...");
+                    }
+                    else
+                    {
+                        LogWarning($"[UnityMcp] 端口 {port} 启动失败: {ex.Message}，尝试下一个端口...");
+                    }
+
+                    // Clean up failed listener
+                    try
+                    {
+                        listener?.Stop();
+                    }
+                    catch { }
+                    listener = null;
+                }
+            }
+
+            if (!started)
+            {
+                LogError($"[UnityMcp] 无法在端口范围 {unityPortStart}-{unityPortEnd} 内启动TCP监听器。最后错误: {lastException?.Message}");
+                if (lastException?.SocketErrorCode == SocketError.AddressAlreadyInUse)
+                {
+                    LogError("[UnityMcp] 所有端口都被占用。请确保没有其他Unity MCP实例正在运行。");
                 }
             }
         }
@@ -131,6 +193,14 @@ namespace UnityMcp
                 listener?.Stop();
                 listener = null;
                 isRunning = false;
+                currentPort = -1; // Reset current port
+
+                // 清空客户端连接信息
+                lock (clientsLock)
+                {
+                    connectedClients.Clear();
+                }
+
                 EditorApplication.update -= ProcessCommands;
                 Log($"[UnityMcp] 服务已停止，TCP监听器已关闭，命令处理已注销");
             }
@@ -185,7 +255,23 @@ namespace UnityMcp
         private static async Task HandleClientAsync(TcpClient client)
         {
             string clientEndpoint = client.Client.RemoteEndPoint?.ToString() ?? "Unknown";
-            Log($"[UnityMcp] 客户端已连接: {clientEndpoint}");
+            string clientId = Guid.NewGuid().ToString();
+            Log($"[UnityMcp] 客户端已连接: {clientEndpoint} (ID: {clientId})");
+
+            // 添加客户端到连接列表
+            var clientInfo = new ClientInfo
+            {
+                Id = clientId,
+                EndPoint = clientEndpoint,
+                ConnectedAt = DateTime.Now,
+                LastActivity = DateTime.Now,
+                CommandCount = 0
+            };
+
+            lock (clientsLock)
+            {
+                connectedClients[clientId] = clientInfo;
+            }
 
             using (client)
             using (NetworkStream stream = client.GetStream())
@@ -208,6 +294,16 @@ namespace UnityMcp
                             bytesRead
                         );
                         Log($"[UnityMcp] 接收到命令 from {clientEndpoint}: {commandText}");
+
+                        // 更新客户端活动状态
+                        lock (clientsLock)
+                        {
+                            if (connectedClients.TryGetValue(clientId, out var existingClient))
+                            {
+                                existingClient.LastActivity = DateTime.Now;
+                                existingClient.CommandCount++;
+                            }
+                        }
 
                         string commandId = Guid.NewGuid().ToString();
                         TaskCompletionSource<string> tcs = new();
@@ -244,7 +340,14 @@ namespace UnityMcp
                     }
                 }
             }
-            Log($"[UnityMcp] 客户端连接已关闭: {clientEndpoint}");
+
+            // 从连接列表中移除客户端
+            lock (clientsLock)
+            {
+                connectedClients.Remove(clientId);
+            }
+
+            Log($"[UnityMcp] 客户端连接已关闭: {clientEndpoint} (ID: {clientId})");
         }
 
         private static void ProcessCommands()

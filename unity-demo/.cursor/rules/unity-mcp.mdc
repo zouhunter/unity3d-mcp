@@ -7,7 +7,7 @@ alwaysApply: true
 
 本文档将工具按两类划分：
 - Tools: `function_call`, `functions_call`（调用/批量调用 Methods）。
-- Methods: `execute_menu_item`, `manage_asset`, `manage_editor`, `manage_game_object`, `manage_scene`, `manage_script`, `read_console`（均作为 `func` 传给 Tools）。
+- Methods: `execute_menu_item`, `manage_asset`, `manage_editor`, `manage_gameobject`, `manage_scene`, `manage_script`, `read_console`（均作为 `func` 传给 Tools）。
 
 除 `function_call` 与 `functions_call` 外，其余均为 Methods 名称，不直接调用；请通过 Tools 调用，并把方法参数放入 `args`（JSON 字符串）。
 
@@ -17,9 +17,10 @@ alwaysApply: true
   - `functions_call`
 - Methods
   - `execute_menu_item`
+  - `gm_command`
   - `manage_asset`
   - `manage_editor`
-  - `manage_game_object`
+  - `manage_gameobject`
   - `manage_scene`
   - `manage_script`
   - `read_console`
@@ -49,7 +50,7 @@ alwaysApply: true
 示例：创建一个 Cube
 ```python
 function_call(
-  func="manage_game_object",
+  func="manage_gameobject",
   args="{\"action\":\"create\",\"name\":\"Cube\",\"primitive_type\":\"Cube\",\"position\":[0,0,0]}"
 )
 ```
@@ -65,8 +66,8 @@ function_call(
 参数格式
 ```json
 [
-  { "func": "manage_game_object", "args": "{\"action\":\"create\",\"name\":\"Enemy\",\"primitive_type\":\"Cube\"}" },
-  { "func": "manage_game_object", "args": "{\"action\":\"add_component\",\"target\":\"Enemy\",\"component_name\":\"Rigidbody\"}" }
+  { "func": "manage_gameobject", "args": "{\"action\":\"create\",\"name\":\"Enemy\",\"primitive_type\":\"Cube\"}" },
+  { "func": "manage_gameobject", "args": "{\"action\":\"add_component\",\"target\":\"Enemy\",\"component_name\":\"Rigidbody\"}" }
 ]
 ```
 
@@ -86,8 +87,8 @@ function_call(
 ```python
 functions_call(
   function_calls='[
-    {"func":"manage_game_object","args":"{\\"action\\":\\"create\\",\\"name\\":\\"Enemy\\",\\"primitive_type\\":\\"Cube\\"}"},
-    {"func":"manage_game_object","args":"{\\"action\\":\\"add_component\\",\\"target\\":\\"Enemy\\",\\"component_name\\":\\"Rigidbody\\"}"}
+    {"func":"manage_gameobject","args":"{\\"action\\":\\"create\\",\\"name\\":\\"Enemy\\",\\"primitive_type\\":\\"Cube\\"}"},
+    {"func":"manage_gameobject","args":"{\\"action\\":\\"add_component\\",\\"target\\":\\"Enemy\\",\\"component_name\\":\\"Rigidbody\\"}"}
   ]'
 )
 ```
@@ -120,6 +121,36 @@ function_call(
 - "GameObject/Create Empty" - 创建空GameObject
 - "Assets/Reimport All" - 重新导入所有资产
 - "Window/General/Console" - 打开控制台窗口
+
+---
+
+### gm_command - GM指令执行工具
+**功能**: 执行游戏管理员(GM)相关指令，用于游戏开发和调试。
+
+主要参数（放入 `args`）
+- `action` (string): 操作类型，默认执行主要功能
+
+支持的操作 (action)
+- 默认操作 - 执行GM指令并返回测试响应
+
+示例：执行默认GM指令
+```python
+function_call(
+  func="gm_command",
+  args="{\"action\":\"default\"}"
+)
+```
+
+返回值格式
+```json
+{
+  "success": true,
+  "message": "Test",
+  "data": {}
+}
+```
+
+注意：此工具当前处于测试阶段，主要用于验证GM指令系统的基础功能。
 
 ---
 
@@ -220,7 +251,7 @@ function_call(
 
 ---
 
-### manage_game_object - GameObject 管理
+### manage_gameobject - GameObject 管理
 **功能**: 管理Unity中的GameObject，包括创建、修改、删除、查找和组件操作。
 
 核心参数（放入 `args`）
@@ -245,7 +276,7 @@ function_call(
 示例：创建基础 GameObject
 ```python
 function_call(
-  func="manage_game_object",
+  func="manage_gameobject",
   args="{\"action\":\"create\",\"name\":\"Player\",\"tag\":\"Player\",\"position\":[0,1,0]}"
 )
 ```
@@ -253,7 +284,7 @@ function_call(
 示例：创建并保存为预制体
 ```python
 function_call(
-  func="manage_game_object",
+  func="manage_gameobject",
   args="{\"action\":\"create\",\"name\":\"Enemy\",\"primitive_type\":\"Cube\",\"save_as_prefab\":true,\"prefab_path\":\"Assets/Prefabs/Enemy.prefab\"}"
 )
 ```
@@ -261,7 +292,7 @@ function_call(
 示例：添加组件
 ```python
 function_call(
-  func="manage_game_object",
+  func="manage_gameobject",
   args="{\"action\":\"add_component\",\"target\":\"Player\",\"component_name\":\"Rigidbody\"}"
 )
 ```
@@ -269,7 +300,7 @@ function_call(
 示例：修改 GameObject 属性
 ```python
 function_call(
-  func="manage_game_object",
+  func="manage_gameobject",
   args="{\"action\":\"modify\",\"target\":\"Player\",\"position\":[10,0,0],\"set_active\":true}"
 )
 ```
@@ -277,7 +308,7 @@ function_call(
 示例：查找 GameObject
 ```python
 function_call(
-  func="manage_game_object",
+  func="manage_gameobject",
   args="{\"action\":\"find\",\"search_term\":\"Player\",\"find_all\":true}"
 )
 ```
@@ -285,7 +316,7 @@ function_call(
 组件属性设置
 ```python
 function_call(
-  func="manage_game_object",
+  func="manage_gameobject",
   args="{\"action\":\"modify\",\"target\":\"Player\",\"component_properties\":{\"Rigidbody\":{\"mass\":10.0,\"useGravity\":true},\"MeshRenderer\":{\"material\":\"Assets/Materials/PlayerMaterial.mat\"}}}"
 )
 ```

@@ -5,6 +5,12 @@ from dataclasses import dataclass
 from typing import Dict, Any
 from config import config
 
+# Import JSONDecodeError for older Python versions compatibility
+try:
+    from json import JSONDecodeError
+except ImportError:
+    JSONDecodeError = ValueError
+
 # Configure logging using settings from config
 logging.basicConfig(
     level=getattr(logging, config.log_level),
@@ -16,21 +22,84 @@ logger = logging.getLogger("unity-mcp-server")
 class UnityConnection:
     """Manages the socket connection to the Unity Editor."""
     host: str = config.unity_host
-    port: int = config.unity_port
+    port: int = None  # Will be set during successful connection
     sock: socket.socket = None  # Socket for Unity communication
 
     def connect(self) -> bool:
-        """Establish a connection to the Unity Editor."""
+        """Establish a connection to the Unity Editor by trying multiple ports."""
         if self.sock:
             return True
+        
+        # Use smart port discovery if enabled
+        if config.smart_port_discovery:
+            # First, scan for active Unity MCP servers on all ports
+            active_ports = []
+            logger.debug("Scanning for active Unity MCP servers...")
+            for port in range(config.unity_port_start, config.unity_port_end + 1):
+                if self._is_unity_mcp_server_on_port(port):
+                    active_ports.append(port)
+            
+            if active_ports:
+                logger.info(f"Found Unity MCP servers on ports: {active_ports}")
+                # Try to connect to active Unity MCP servers first
+                for port in active_ports:
+                    if self._try_connect_to_port(port):
+                        return True
+            
+            # If no active Unity MCP servers found, try all ports in order
+            logger.info("No active Unity MCP servers detected, trying all ports in range...")
+            for port in range(config.unity_port_start, config.unity_port_end + 1):
+                if port not in active_ports:  # Skip already tried ports
+                    if self._try_connect_to_port(port):
+                        return True
+        else:
+            # Traditional sequential port trying
+            logger.info("Using traditional sequential port connection...")
+            for port in range(config.unity_port_start, config.unity_port_end + 1):
+                if self._try_connect_to_port(port):
+                    return True
+        
+        logger.error(f"Failed to connect to Unity on any port in range {config.unity_port_start}-{config.unity_port_end}")
+        return False
+    
+    def _is_unity_mcp_server_on_port(self, port: int) -> bool:
+        """Check if there's an active Unity MCP server on the given port."""
         try:
+            test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            test_sock.settimeout(0.5)  # Short timeout for scanning
+            test_sock.connect((self.host, port))
+            
+            # Send ping to verify it's a Unity MCP server
+            test_sock.sendall(b"ping")
+            
+            # Try to receive response
+            response_data = test_sock.recv(1024)
+            response = response_data.decode('utf-8')
+            
+            test_sock.close()
+            
+            # Check if response looks like Unity MCP ping response
+            return 'pong' in response and 'success' in response
+        except:
+            return False
+    
+    def _try_connect_to_port(self, port: int) -> bool:
+        """Try to connect to a specific port."""
+        try:
+            logger.debug(f"Attempting to connect to Unity at {self.host}:{port}")
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.connect((self.host, self.port))
-            logger.info(f"Connected to Unity at {self.host}:{self.port}")
+            self.sock.connect((self.host, port))
+            self.port = port  # Store the successful port
+            logger.info(f"Successfully connected to Unity at {self.host}:{port}")
             return True
         except Exception as e:
-            logger.error(f"Failed to connect to Unity: {str(e)}")
-            self.sock = None
+            logger.debug(f"Failed to connect to Unity on port {port}: {str(e)}")
+            if self.sock:
+                try:
+                    self.sock.close()
+                except:
+                    pass
+                self.sock = None
             return False
 
     def disconnect(self):
@@ -84,7 +153,7 @@ class UnityConnection:
                     # If we get here, we have valid JSON
                     logger.info(f"Received complete response ({len(data)} bytes)")
                     return data
-                except json.JSONDecodeError:
+                except JSONDecodeError:
                     # We haven't received a complete valid JSON response yet
                     continue
                 except Exception as e:
@@ -140,7 +209,7 @@ class UnityConnection:
             response_data = self.receive_full_response(self.sock)
             try:
                 response = json.loads(response_data.decode('utf-8'))
-            except json.JSONDecodeError as je:
+            except JSONDecodeError as je:
                 logger.error(f"JSON decode error: {str(je)}")
                 # Log partial response for debugging
                 partial_response = response_data.decode('utf-8')[:500] + "..." if len(response_data) > 500 else response_data.decode('utf-8')

@@ -16,6 +16,7 @@ namespace UnityMcp.Tools
     /// Handles GameObject manipulation within the current scene (CRUD, find, components).
     /// 对应方法名: manage_game_object
     /// </summary>
+    [ToolName("manage_gameobject")]
     public class ManageGameObject : StateMethodBase
     {
 

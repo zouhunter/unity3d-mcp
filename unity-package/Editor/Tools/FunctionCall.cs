@@ -142,8 +142,8 @@ namespace UnityMcp.Tools
                             var methodInstance = Activator.CreateInstance(methodType) as IToolMethod;
                             if (methodInstance != null)
                             {
-                                // 将类名转换为snake_case格式作为方法名
-                                string methodName = ConvertToSnakeCase(methodType.Name);
+                                // 优先使用ToolNameAttribute指定的名称，否则转换类名为snake_case格式
+                                string methodName = GetMethodName(methodType);
                                 _registeredMethods[methodName] = methodInstance;
                                 if (UnityMcp.EnableLog) Debug.Log($"[FunctionCall] Registered method: {methodName} -> {methodType.FullName}");
                             }
@@ -201,6 +201,24 @@ namespace UnityMcp.Tools
                 if (UnityMcp.EnableLog) Debug.LogError($"[FunctionCall] Failed to execute method '{methodName}': {e}");
                 return Response.Error($"Error executing method '{methodName}': {e.Message}");
             }
+        }
+
+        /// <summary>
+        /// 获取方法名称，优先使用ToolNameAttribute指定的名称，否则转换类名为snake_case格式
+        /// </summary>
+        /// <param name="methodType">方法类型</param>
+        /// <returns>方法名称</returns>
+        private static string GetMethodName(Type methodType)
+        {
+            // 检查是否有ToolNameAttribute
+            var toolNameAttribute = methodType.GetCustomAttribute<ToolNameAttribute>();
+            if (toolNameAttribute != null)
+            {
+                return toolNameAttribute.ToolName;
+            }
+
+            // 回退到类名转换为snake_case格式
+            return ConvertToSnakeCase(methodType.Name);
         }
 
         /// <summary>

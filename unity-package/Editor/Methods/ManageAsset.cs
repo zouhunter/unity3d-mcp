@@ -902,7 +902,85 @@ namespace UnityMcp.Tools
                 }
             }
 
-            // TODO: Add handlers for other property types (Vectors, Ints, Keywords, RenderQueue, etc.)
+            // Handle direct material properties (e.g., "_Color", "_MainTex", etc.)
+            foreach (var prop in properties.Properties())
+            {
+                string propName = prop.Name;
+                JToken propValue = prop.Value;
+
+                // Skip properties already handled above
+                if (propName == "shader" || propName == "color" || propName == "float" || propName == "texture")
+                    continue;
+
+                try
+                {
+                    if (mat.HasProperty(propName))
+                    {
+                        // Handle Color properties (like "_Color")
+                        if (propValue is JObject colorObj &&
+                            colorObj["r"] != null && colorObj["g"] != null && colorObj["b"] != null)
+                        {
+                            Color newColor = new Color(
+                                colorObj["r"].ToObject<float>(),
+                                colorObj["g"].ToObject<float>(),
+                                colorObj["b"].ToObject<float>(),
+                                colorObj["a"]?.ToObject<float>() ?? 1.0f
+                            );
+                            if (mat.GetColor(propName) != newColor)
+                            {
+                                mat.SetColor(propName, newColor);
+                                modified = true;
+                                Debug.Log($"[ApplyMaterialProperties] Set {propName} to {newColor}");
+                            }
+                        }
+                        // Handle Vector4 properties
+                        else if (propValue is JArray vecArray && vecArray.Count >= 4)
+                        {
+                            Vector4 newVector = new Vector4(
+                                vecArray[0].ToObject<float>(),
+                                vecArray[1].ToObject<float>(),
+                                vecArray[2].ToObject<float>(),
+                                vecArray[3].ToObject<float>()
+                            );
+                            if (mat.GetVector(propName) != newVector)
+                            {
+                                mat.SetVector(propName, newVector);
+                                modified = true;
+                            }
+                        }
+                        // Handle Float properties
+                        else if (propValue.Type == JTokenType.Float || propValue.Type == JTokenType.Integer)
+                        {
+                            float newVal = propValue.ToObject<float>();
+                            if (Math.Abs(mat.GetFloat(propName) - newVal) > 0.001f)
+                            {
+                                mat.SetFloat(propName, newVal);
+                                modified = true;
+                            }
+                        }
+                        // Handle Texture properties (string paths)
+                        else if (propValue.Type == JTokenType.String)
+                        {
+                            string texPath = propValue.ToString();
+                            if (!string.IsNullOrEmpty(texPath))
+                            {
+                                Texture newTex = AssetDatabase.LoadAssetAtPath<Texture>(SanitizeAssetPath(texPath));
+                                if (newTex != null && mat.GetTexture(propName) != newTex)
+                                {
+                                    mat.SetTexture(propName, newTex);
+                                    modified = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[ApplyMaterialProperties] Error setting property '{propName}': {ex.Message}");
+                }
+            }
+
+            // TODO: Add handlers for other property types (Keywords, RenderQueue, etc.)
             return modified;
         }
 

@@ -419,16 +419,15 @@ function_call(
 **功能**: 读取或清空Unity编辑器控制台消息。
 
 主要参数（放入 `args`）
-- `action` (string): 操作类型，默认 `get`
+- `action` (string): 操作类型，必需
 - `types` (list): 消息类型列表，默认 ['error','warning','log']
-- `count` (int): 最大返回消息数
-- `filter_text` (string): 文本过滤器
-- `since_timestamp` (string): 时间戳过滤器(ISO 8601)
+- `count` (int): 最大返回消息数（可选，不设置则获取全部）
+- `filterText` (string): 文本过滤器（可选）
 - `format` (string): 输出格式，默认 `detailed`
-- `include_stacktrace` (bool): 是否包含堆栈跟踪，默认 true
 
 支持的操作 (action)
-- `get` - 获取控制台消息
+- `get` - 获取控制台消息（不包含堆栈跟踪）
+- `get_full` - 获取控制台消息（包含完整堆栈跟踪）
 - `clear` - 清空控制台
 
 输出格式 (format)
@@ -436,19 +435,41 @@ function_call(
 - `detailed` - 详细格式
 - `json` - JSON格式
 
-示例：获取所有类型的最新 10 条
+参数组合逻辑
+- **count + filterText**: 获取指定数量的过滤后日志
+- **count 无 filterText**: 获取指定数量的所有日志
+- **无 count + filterText**: 获取所有过滤后的日志
+- **无 count 无 filterText**: 获取所有日志
+
+示例：获取最新 1 条日志（无堆栈跟踪）
 ```python
 function_call(
   func="read_console",
-  args="{\"action\":\"get\",\"types\":[\"error\",\"warning\",\"log\"],\"count\":10}"
+  args="{\"action\":\"get\",\"count\":1}"
 )
 ```
 
-示例：只获取错误并带堆栈
+示例：获取最新 5 条错误日志（包含完整堆栈跟踪）
 ```python
 function_call(
   func="read_console",
-  args="{\"action\":\"get\",\"types\":[\"error\"],\"include_stacktrace\":true}"
+  args="{\"action\":\"get_full\",\"types\":[\"error\"],\"count\":5}"
+)
+```
+
+示例：获取所有包含 "FunctionCall" 的日志（无堆栈跟踪）
+```python
+function_call(
+  func="read_console",
+  args="{\"action\":\"get\",\"filterText\":\"FunctionCall\"}"
+)
+```
+
+示例：获取所有警告日志（包含堆栈跟踪）
+```python
+function_call(
+  func="read_console",
+  args="{\"action\":\"get_full\",\"types\":[\"warning\"]}"
 )
 ```
 
@@ -460,11 +481,11 @@ function_call(
 )
 ```
 
-示例：按时间过滤并以 JSON 返回
+示例：获取最新 10 条包含 "Error" 的日志（包含堆栈跟踪）
 ```python
 function_call(
   func="read_console",
-  args="{\"action\":\"get\",\"since_timestamp\":\"2024-01-01T10:00:00Z\",\"format\":\"json\"}"
+  args="{\"action\":\"get_full\",\"count\":10,\"filterText\":\"Error\"}"
 )
 ```
 

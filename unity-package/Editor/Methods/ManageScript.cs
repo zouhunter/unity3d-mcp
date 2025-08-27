@@ -15,11 +15,144 @@ namespace UnityMcp.Tools
     /// </summary>
     public class ManageScript : StateMethodBase
     {
-        // 实现IToolMethod接口
-        public override object ExecuteMethod(JObject args)
+        protected override StateTree CreateStateTree()
         {
-            // Extract args
-            string action = args["action"]?.ToString().ToLower();
+            return StateTreeBuilder
+                .Create()
+                .Key("action")
+                    .Leaf("create", HandleCreateAction)
+                    .Leaf("read", HandleReadAction)
+                    .Leaf("update", HandleUpdateAction)
+                    .Leaf("delete", HandleDeleteAction)
+                    .DefaultLeaf(HandleUnknownAction)
+                .Build();
+        }
+
+        // --- State Tree Action Handlers ---
+
+        /// <summary>
+        /// 处理创建脚本的操作
+        /// </summary>
+        private object HandleCreateAction(JObject args)
+        {
+            try
+            {
+                var scriptInfo = ParseScriptArguments(args);
+                if (scriptInfo.ErrorResponse != null)
+                    return scriptInfo.ErrorResponse;
+
+                // Ensure the target directory exists
+                var dirResult = EnsureDirectoryExists(scriptInfo.FullPathDir);
+                if (dirResult != null)
+                    return dirResult;
+
+                LogInfo($"[ManageScript] Creating script '{scriptInfo.Name}.cs' at '{scriptInfo.RelativePath}'");
+                return CreateScript(scriptInfo.FullPath, scriptInfo.RelativePath, scriptInfo.Name, scriptInfo.Contents, scriptInfo.ScriptType, scriptInfo.NamespaceName);
+            }
+            catch (Exception e)
+            {
+                if (UnityMcp.EnableLog) Debug.LogError($"[ManageScript] Create action failed: {e}");
+                return Response.Error($"Internal error processing create action: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 处理读取脚本的操作
+        /// </summary>
+        private object HandleReadAction(JObject args)
+        {
+            try
+            {
+                var scriptInfo = ParseScriptArguments(args);
+                if (scriptInfo.ErrorResponse != null)
+                    return scriptInfo.ErrorResponse;
+
+                LogInfo($"[ManageScript] Reading script at '{scriptInfo.RelativePath}'");
+                return ReadScript(scriptInfo.FullPath, scriptInfo.RelativePath);
+            }
+            catch (Exception e)
+            {
+                if (UnityMcp.EnableLog) Debug.LogError($"[ManageScript] Read action failed: {e}");
+                return Response.Error($"Internal error processing read action: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 处理更新脚本的操作
+        /// </summary>
+        private object HandleUpdateAction(JObject args)
+        {
+            try
+            {
+                var scriptInfo = ParseScriptArguments(args);
+                if (scriptInfo.ErrorResponse != null)
+                    return scriptInfo.ErrorResponse;
+
+                LogInfo($"[ManageScript] Updating script '{scriptInfo.Name}.cs' at '{scriptInfo.RelativePath}'");
+                return UpdateScript(scriptInfo.FullPath, scriptInfo.RelativePath, scriptInfo.Name, scriptInfo.Contents);
+            }
+            catch (Exception e)
+            {
+                if (UnityMcp.EnableLog) Debug.LogError($"[ManageScript] Update action failed: {e}");
+                return Response.Error($"Internal error processing update action: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 处理删除脚本的操作
+        /// </summary>
+        private object HandleDeleteAction(JObject args)
+        {
+            try
+            {
+                var scriptInfo = ParseScriptArguments(args);
+                if (scriptInfo.ErrorResponse != null)
+                    return scriptInfo.ErrorResponse;
+
+                LogInfo($"[ManageScript] Deleting script at '{scriptInfo.RelativePath}'");
+                return DeleteScript(scriptInfo.FullPath, scriptInfo.RelativePath);
+            }
+            catch (Exception e)
+            {
+                if (UnityMcp.EnableLog) Debug.LogError($"[ManageScript] Delete action failed: {e}");
+                return Response.Error($"Internal error processing delete action: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 处理未知操作的回调方法
+        /// </summary>
+        private object HandleUnknownAction(JObject args)
+        {
+            string action = args["action"]?.ToString() ?? "null";
+            return Response.Error($"Unknown action: '{action}' for manage_script. Valid actions are: create, read, update, delete.");
+        }
+
+        // --- Internal Helper Methods ---
+
+        /// <summary>
+        /// 脚本信息结构
+        /// </summary>
+        private struct ScriptInfo
+        {
+            public string Name;
+            public string Contents;
+            public string ScriptType;
+            public string NamespaceName;
+            public string FullPath;
+            public string RelativePath;
+            public string FullPathDir;
+            public object ErrorResponse;
+        }
+
+        /// <summary>
+        /// 解析脚本相关参数
+        /// </summary>
+        private ScriptInfo ParseScriptArguments(JObject args)
+        {
+            var info = new ScriptInfo();
+
+            // Extract basic args
             string name = args["name"]?.ToString();
             string path = args["path"]?.ToString(); // Relative to Assets/
             string contents = null;
@@ -34,7 +167,8 @@ namespace UnityMcp.Tools
                 }
                 catch (Exception e)
                 {
-                    return Response.Error($"Failed to decode script contents: {e.Message}");
+                    info.ErrorResponse = Response.Error($"Failed to decode script contents: {e.Message}");
+                    return info;
                 }
             }
             else
@@ -46,20 +180,19 @@ namespace UnityMcp.Tools
             string namespaceName = args["namespace"]?.ToString();
 
             // Validate required args
-            if (string.IsNullOrEmpty(action))
-            {
-                return Response.Error("Action parameter is required.");
-            }
             if (string.IsNullOrEmpty(name))
             {
-                return Response.Error("Name parameter is required.");
+                info.ErrorResponse = Response.Error("Name parameter is required.");
+                return info;
             }
+
             // Basic name validation
             if (!Regex.IsMatch(name, @"^[a-zA-Z_][a-zA-Z0-9_]*$"))
             {
-                return Response.Error(
+                info.ErrorResponse = Response.Error(
                     $"Invalid script name: '{name}'. Use only letters, numbers, underscores, and don't start with a number."
                 );
+                return info;
             }
 
             // Process path
@@ -83,36 +216,35 @@ namespace UnityMcp.Tools
             string fullPath = Path.Combine(fullPathDir, scriptFileName);
             string relativePath = Path.Combine("Assets", relativeDir, scriptFileName).Replace('\\', '/');
 
-            // Ensure the target directory exists for create/update
-            if (action == "create" || action == "update")
-            {
-                try
-                {
-                    Directory.CreateDirectory(fullPathDir);
-                }
-                catch (Exception e)
-                {
-                    return Response.Error($"Could not create directory '{fullPathDir}': {e.Message}");
-                }
-            }
+            // Populate info
+            info.Name = name;
+            info.Contents = contents;
+            info.ScriptType = scriptType;
+            info.NamespaceName = namespaceName;
+            info.FullPath = fullPath;
+            info.RelativePath = relativePath;
+            info.FullPathDir = fullPathDir;
 
-            // Route to specific action handlers
-            switch (action)
+            return info;
+        }
+
+        /// <summary>
+        /// 确保目录存在
+        /// </summary>
+        private object EnsureDirectoryExists(string fullPathDir)
+        {
+            try
             {
-                case "create":
-                    return CreateScript(fullPath, relativePath, name, contents, scriptType, namespaceName);
-                case "read":
-                    return ReadScript(fullPath, relativePath);
-                case "update":
-                    return UpdateScript(fullPath, relativePath, name, contents);
-                case "delete":
-                    return DeleteScript(fullPath, relativePath);
-                default:
-                    return Response.Error(
-                        $"Unknown action: '{action}'. Valid actions are: create, read, update, delete."
-                    );
+                Directory.CreateDirectory(fullPathDir);
+                return null; // Success
+            }
+            catch (Exception e)
+            {
+                return Response.Error($"Could not create directory '{fullPathDir}': {e.Message}");
             }
         }
+
+        // --- Action Implementations ---
 
         /// <summary>
         /// Decode base64 string to normal text
@@ -132,7 +264,7 @@ namespace UnityMcp.Tools
             return Convert.ToBase64String(data);
         }
 
-        private static object CreateScript(
+        private object CreateScript(
             string fullPath,
             string relativePath,
             string name,
@@ -179,7 +311,7 @@ namespace UnityMcp.Tools
             }
         }
 
-        private static object ReadScript(string fullPath, string relativePath)
+        private object ReadScript(string fullPath, string relativePath)
         {
             if (!File.Exists(fullPath))
             {
@@ -212,7 +344,7 @@ namespace UnityMcp.Tools
             }
         }
 
-        private static object UpdateScript(
+        private object UpdateScript(
             string fullPath,
             string relativePath,
             string name,
@@ -253,7 +385,7 @@ namespace UnityMcp.Tools
             }
         }
 
-        private static object DeleteScript(string fullPath, string relativePath)
+        private object DeleteScript(string fullPath, string relativePath)
         {
             if (!File.Exists(fullPath))
             {
@@ -370,13 +502,7 @@ namespace UnityMcp.Tools
             // but is complex to implement directly here.
         }
 
-        protected override StateTree CreateStateTree()
-        {
-            return StateTreeBuilder
-                .Create()
-                .DefaultLeaf((ctx) => Response.Error("State tree not implemented for manage_script. Use ExecuteMethod."))
-                .Build();
-        }
+
     }
 }
 

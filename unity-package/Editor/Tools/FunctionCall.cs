@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
-using UnityMcp.Helpers;
+using UnityMcp.Models;
 using UnityMcp;
 
 namespace UnityMcp.Tools

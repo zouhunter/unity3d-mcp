@@ -7,7 +7,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityMcp.Helpers; // For Response class
+using UnityMcp.Models; // For Response class
 using UnityMcp;
 
 namespace UnityMcp.Tools
@@ -18,14 +18,136 @@ namespace UnityMcp.Tools
     /// </summary>
     public class ManageScene : StateMethodBase
     {
-        // 实现IToolMethod接口
-        public override object ExecuteMethod(JObject args)
+        protected override StateTree CreateStateTree()
         {
-            string action = args["action"]?.ToString().ToLower();
+            return StateTreeBuilder
+                .Create()
+                .Key("action")
+                    .Leaf("create", HandleCreateAction)
+                    .Branch("load")
+                        .OptionalKey("buildIndex")
+                            .DefaultLeaf(HandleLoadByBuildIndex)
+                        .Up()
+                        .DefaultLeaf(HandleLoadByPath)
+                    .Up()
+                    .Leaf("save", HandleSaveAction)
+                    .Leaf("get_hierarchy", HandleGetHierarchyAction)
+                    .Leaf("get_active", HandleGetActiveAction)
+                    .Leaf("get_build_settings", HandleGetBuildSettingsAction)
+                .Build();
+        }
+
+        // --- State Tree Action Handlers ---
+
+        /// <summary>
+        /// 处理创建场景的操作
+        /// </summary>
+        private object HandleCreateAction(JObject args)
+        {
             string name = args["name"]?.ToString();
-            string path = args["path"]?.ToString(); // Relative to Assets/
+            string path = args["path"]?.ToString();
+
+            if (string.IsNullOrEmpty(name))
+            {
+                return Response.Error("'name' parameter is required for 'create' action.");
+            }
+
+            // 准备路径参数
+            var pathInfo = PrepareScenePaths(name, path, "create");
+            if (pathInfo.error != null)
+                return pathInfo.error;
+
+            LogInfo($"[ManageScene] Creating scene: '{name}' at path: '{pathInfo.relativePath}'");
+            return CreateScene(pathInfo.fullPath, pathInfo.relativePath);
+        }
+
+        /// <summary>
+        /// 处理通过路径加载场景的操作
+        /// </summary>
+        private object HandleLoadByPath(JObject args)
+        {
+            string name = args["name"]?.ToString();
+            string path = args["path"]?.ToString();
+
+            if (string.IsNullOrEmpty(name) && string.IsNullOrEmpty(path))
+            {
+                return Response.Error("Either 'name' or 'path' parameter is required for 'load' action.");
+            }
+
+            // 准备路径参数
+            var pathInfo = PrepareScenePaths(name, path, "load");
+            if (pathInfo.error != null)
+                return pathInfo.error;
+
+            LogInfo($"[ManageScene] Loading scene by path: '{pathInfo.relativePath}'");
+            return LoadScene(pathInfo.relativePath);
+        }
+
+        /// <summary>
+        /// 处理通过构建索引加载场景的操作
+        /// </summary>
+        private object HandleLoadByBuildIndex(JObject args)
+        {
             int? buildIndex = args["buildIndex"]?.ToObject<int?>();
 
+            if (!buildIndex.HasValue)
+            {
+                return Response.Error("'buildIndex' parameter is required when loading by build index.");
+            }
+
+            LogInfo($"[ManageScene] Loading scene by build index: {buildIndex.Value}");
+            return LoadScene(buildIndex.Value);
+        }
+
+        /// <summary>
+        /// 处理保存场景的操作
+        /// </summary>
+        private object HandleSaveAction(JObject args)
+        {
+            string name = args["name"]?.ToString();
+            string path = args["path"]?.ToString();
+
+            // 对于保存操作，路径是可选的
+            var pathInfo = PrepareScenePaths(name, path, "save");
+            if (pathInfo.error != null)
+                return pathInfo.error;
+
+            LogInfo($"[ManageScene] Saving scene to path: '{pathInfo.relativePath}'");
+            return SaveScene(pathInfo.fullPath, pathInfo.relativePath);
+        }
+
+        /// <summary>
+        /// 处理获取场景层次结构的操作
+        /// </summary>
+        private object HandleGetHierarchyAction(JObject args)
+        {
+            LogInfo("[ManageScene] Getting scene hierarchy");
+            return GetSceneHierarchy();
+        }
+
+        /// <summary>
+        /// 处理获取当前激活场景信息的操作
+        /// </summary>
+        private object HandleGetActiveAction(JObject args)
+        {
+            LogInfo("[ManageScene] Getting active scene info");
+            return GetActiveSceneInfo();
+        }
+
+        /// <summary>
+        /// 处理获取构建设置中场景列表的操作
+        /// </summary>
+        private object HandleGetBuildSettingsAction(JObject args)
+        {
+            LogInfo("[ManageScene] Getting build settings scenes");
+            return GetBuildSettingsScenes();
+        }
+
+        /// <summary>
+        /// 准备场景路径信息的辅助方法
+        /// </summary>
+        private (string fullPath, string relativePath, string fullPathDir, object error) PrepareScenePaths(string name, string path, string action)
+        {
             // Ensure path is relative to Assets/, removing any leading "Assets/"
             string relativeDir = path ?? string.Empty;
             if (!string.IsNullOrEmpty(relativeDir))
@@ -41,11 +163,6 @@ namespace UnityMcp.Tools
             if (string.IsNullOrEmpty(path) && action == "create")
             {
                 relativeDir = "Scenes"; // Default relative directory
-            }
-
-            if (string.IsNullOrEmpty(action))
-            {
-                return Response.Error("Action parameter is required.");
             }
 
             string sceneFileName = string.IsNullOrEmpty(name) ? null : $"{name}.unity";
@@ -66,37 +183,11 @@ namespace UnityMcp.Tools
                 }
                 catch (Exception e)
                 {
-                    return Response.Error($"Could not create directory '{fullPathDir}': {e.Message}");
+                    return (null, null, null, Response.Error($"Could not create directory '{fullPathDir}': {e.Message}"));
                 }
             }
 
-            // Route action
-            switch (action)
-            {
-                case "create":
-                    if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(relativePath))
-                        return Response.Error("'name' and 'path' args are required for 'create' action.");
-                    return CreateScene(fullPath, relativePath);
-                case "load":
-                    if (!string.IsNullOrEmpty(relativePath))
-                        return LoadScene(relativePath);
-                    else if (buildIndex.HasValue)
-                        return LoadScene(buildIndex.Value);
-                    else
-                        return Response.Error("Either 'name'/'path' or 'buildIndex' must be provided for 'load' action.");
-                case "save":
-                    return SaveScene(fullPath, relativePath);
-                case "get_hierarchy":
-                    return GetSceneHierarchy();
-                case "get_active":
-                    return GetActiveSceneInfo();
-                case "get_build_settings":
-                    return GetBuildSettingsScenes();
-                default:
-                    return Response.Error(
-                        $"Unknown action: '{action}'. Valid actions: create, load, save, get_hierarchy, get_active, get_build_settings."
-                    );
-            }
+            return (fullPath, relativePath, fullPathDir, null);
         }
 
         private object CreateScene(string fullPath, string relativePath)
@@ -411,13 +502,7 @@ namespace UnityMcp.Tools
             return gameObjectData;
         }
 
-        protected override StateTree CreateStateTree()
-        {
-            return StateTreeBuilder
-                .Create()
-                .DefaultLeaf((ctx) => Response.Error("State tree not implemented for manage_scene. Use ExecuteMethod."))
-                .Build();
-        }
+
     }
 }
 

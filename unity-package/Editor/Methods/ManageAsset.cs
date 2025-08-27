@@ -6,7 +6,7 @@ using System.Linq;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
-using UnityMcp.Helpers; // For Response class
+using UnityMcp.Models; // For Response class
 using UnityMcp.Tools; // 添加这个引用
 
 namespace UnityMcp.Tools
@@ -28,15 +28,15 @@ namespace UnityMcp.Tools
                 .Key("action")
                     .Leaf("import", ReimportAsset)
                     .Leaf("create", CreateAsset)
-                    .Leaf("modify", (args) => ModifyAsset(args["path"]?.ToString(), args["properties"] as JObject))
-                    .Leaf("delete", (args) => DeleteAsset(args["path"]?.ToString()))
-                    .Leaf("duplicate", (args) => DuplicateAsset(args["path"]?.ToString(), args["destination"]?.ToString()))
-                    .Leaf("move", (args) => MoveOrRenameAsset(args["path"]?.ToString(), args["destination"]?.ToString()))
-                    .Leaf("rename", (args) => MoveOrRenameAsset(args["path"]?.ToString(), args["destination"]?.ToString()))
+                    .Leaf("modify", ModifyAsset)
+                    .Leaf("delete", DeleteAsset)
+                    .Leaf("duplicate", DuplicateAsset)
+                    .Leaf("move", MoveOrRenameAsset)
+                    .Leaf("rename", MoveOrRenameAsset)
                     .Leaf("search", SearchAssets)
-                    .Leaf("get_info", (args) => GetAssetInfo(args["path"]?.ToString(), args["generatePreview"]?.ToObject<bool>() ?? false))
-                    .Leaf("create_folder", (args) => CreateFolder(args["path"]?.ToString()))
-                    .Leaf("get_components", (args) => GetComponentsFromAsset(args["path"]?.ToString()))
+                    .Leaf("get_info", GetAssetInfo)
+                    .Leaf("create_folder", CreateFolder)
+                    .Leaf("get_components", GetComponentsFromAsset)
                 .Build();
         }
 
@@ -74,11 +74,11 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object CreateAsset(JObject cmd)
+        private object CreateAsset(JObject args)
         {
-            string path = cmd["path"]?.ToString();
-            string assetType = cmd["assetType"]?.ToString();
-            JObject properties = cmd["properties"] as JObject;
+            string path = args["path"]?.ToString();
+            string assetType = args["assetType"]?.ToString();
+            JObject properties = args["properties"] as JObject;
 
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for create.");
@@ -106,7 +106,7 @@ namespace UnityMcp.Tools
                 // Handle common asset types
                 if (lowerAssetType == "folder")
                 {
-                    return CreateFolder(path); // Use dedicated method
+                    return CreateFolder(args); // Use dedicated method
                 }
                 else if (lowerAssetType == "material")
                 {
@@ -188,8 +188,10 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object CreateFolder(string path)
+        private object CreateFolder(JObject args)
         {
+            string path = args["path"]?.ToString();
+
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for create_folder.");
             string fullPath = SanitizeAssetPath(path);
@@ -243,8 +245,11 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object ModifyAsset(string path, JObject properties)
+        private object ModifyAsset(JObject args)
         {
+            string path = args["path"]?.ToString();
+            JObject properties = args["properties"] as JObject;
+
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for modify.");
             if (properties == null || !properties.HasValues)
@@ -392,8 +397,10 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object DeleteAsset(string path)
+        private object DeleteAsset(JObject args)
         {
+            string path = args["path"]?.ToString();
+
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for delete.");
             string fullPath = SanitizeAssetPath(path);
@@ -422,8 +429,11 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object DuplicateAsset(string path, string destinationPath)
+        private object DuplicateAsset(JObject args)
         {
+            string path = args["path"]?.ToString();
+            string destinationPath = args["destination"]?.ToString();
+
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for duplicate.");
 
@@ -470,8 +480,11 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object MoveOrRenameAsset(string path, string destinationPath)
+        private object MoveOrRenameAsset(JObject args)
         {
+            string path = args["path"]?.ToString();
+            string destinationPath = args["destination"]?.ToString();
+
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for move/rename.");
             if (string.IsNullOrEmpty(destinationPath))
@@ -524,15 +537,15 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object SearchAssets(JObject cmd)
+        private object SearchAssets(JObject args)
         {
-            string searchPattern = cmd["searchPattern"]?.ToString();
-            string filterType = cmd["filterType"]?.ToString();
-            string pathScope = cmd["path"]?.ToString(); // Use path as folder scope
-            string filterDateAfterStr = cmd["filterDateAfter"]?.ToString();
-            int pageSize = cmd["pageSize"]?.ToObject<int?>() ?? 50; // Default page size
-            int pageNumber = cmd["pageNumber"]?.ToObject<int?>() ?? 1; // Default page number (1-based)
-            bool generatePreview = cmd["generatePreview"]?.ToObject<bool>() ?? false;
+            string searchPattern = args["searchPattern"]?.ToString();
+            string filterType = args["filterType"]?.ToString();
+            string pathScope = args["path"]?.ToString(); // Use path as folder scope
+            string filterDateAfterStr = args["filterDateAfter"]?.ToString();
+            int pageSize = args["pageSize"]?.ToObject<int?>() ?? 50; // Default page size
+            int pageNumber = args["pageNumber"]?.ToObject<int?>() ?? 1; // Default page number (1-based)
+            bool generatePreview = args["generatePreview"]?.ToObject<bool>() ?? false;
 
             List<string> searchFilters = new List<string>();
             if (!string.IsNullOrEmpty(searchPattern))
@@ -629,8 +642,11 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object GetAssetInfo(string path, bool generatePreview)
+        private object GetAssetInfo(JObject args)
         {
+            string path = args["path"]?.ToString();
+            bool generatePreview = args["generatePreview"]?.ToObject<bool>() ?? false;
+
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for get_info.");
             string fullPath = SanitizeAssetPath(path);
@@ -653,11 +669,13 @@ namespace UnityMcp.Tools
         /// <summary>
         /// Retrieves components attached to a GameObject asset (like a Prefab).
         /// </summary>
-        /// <param name="path">The asset path of the GameObject or Prefab.</param>
+        /// <param name="args">JObject containing the 'path' parameter.</param>
         /// <returns>A response object containing a list of component type names or an error.</returns>
-        private object GetComponentsFromAsset(string path)
+        private object GetComponentsFromAsset(JObject args)
         {
             // 1. Validate input path
+            string path = args["path"]?.ToString();
+
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for get_components.");
 

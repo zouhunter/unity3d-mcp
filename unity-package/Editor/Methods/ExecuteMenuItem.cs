@@ -4,7 +4,7 @@ using System.Linq;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
-using UnityMcp.Helpers;
+using UnityMcp.Models;
 using UnityMcp;
 
 namespace UnityMcp.Tools
@@ -20,7 +20,6 @@ namespace UnityMcp.Tools
             return StateTreeBuilder.Create()
                 .Key("action")
                     .Leaf("execute", ExecuteItem)
-                    .DefaultLeaf(Fallback)
                 .Build();
         }
         /// <summary>
@@ -46,14 +45,5 @@ namespace UnityMcp.Tools
                 $"Attempted to execute menu item: '{menuPath}'. Check Unity logs for confirmation or errors."
             );
         }
-
-        /// <summary>
-        /// Fallback method for unknown actions.
-        /// </summary>
-        private object Fallback(JObject cmd)
-        {
-            return Response.Error($"Unknown action: '{cmd["action"]?.ToString() ?? "null"}' for execute_menu_item");
-        }
-
     }
 }

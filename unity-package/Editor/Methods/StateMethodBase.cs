@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityMcp.Models;
 using Newtonsoft.Json.Linq;
 using System.Text;
-using UnityMcp.Helpers;
+using UnityMcp.Models;
 
 namespace UnityMcp.Tools
 {

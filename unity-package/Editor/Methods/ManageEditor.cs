@@ -5,7 +5,7 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditorInternal; // Required for tag management
 using UnityEngine;
-using UnityMcp.Helpers; // For Response class
+using UnityMcp.Models; // For Response class
 using UnityMcp;
 
 namespace UnityMcp.Tools
@@ -23,113 +23,231 @@ namespace UnityMcp.Tools
         // Constant for total layer count
         private const int TotalLayerCount = 32;
 
-        // 实现IToolMethod接口
-        public override object ExecuteMethod(JObject args)
+        protected override StateTree CreateStateTree()
         {
-            string action = args["action"]?.ToString().ToLower();
-            // args for specific actions
+            return StateTreeBuilder
+                .Create()
+                .Key("action")
+                    // Play Mode Control
+                    .Leaf("play", HandlePlayAction)
+                    .Leaf("pause", HandlePauseAction)
+                    .Leaf("stop", HandleStopAction)
+
+                    // Editor State/Info
+                    .Leaf("get_state", HandleGetStateAction)
+                    .Leaf("get_windows", HandleGetWindowsAction)
+                    .Leaf("get_active_tool", HandleGetActiveToolAction)
+                    .Leaf("get_selection", HandleGetSelectionAction)
+                    .Leaf("set_active_tool", HandleSetActiveToolAction)
+
+                    // Tag Management
+                    .Leaf("add_tag", HandleAddTagAction)
+                    .Leaf("remove_tag", HandleRemoveTagAction)
+                    .Leaf("get_tags", HandleGetTagsAction)
+
+                    // Layer Management
+                    .Leaf("add_layer", HandleAddLayerAction)
+                    .Leaf("remove_layer", HandleRemoveLayerAction)
+                    .Leaf("get_layers", HandleGetLayersAction)
+                .Build();
+        }
+
+        // --- State Tree Action Handlers ---
+
+        /// <summary>
+        /// 处理进入播放模式的操作
+        /// </summary>
+        private object HandlePlayAction(JObject args)
+        {
+            try
+            {
+                if (!EditorApplication.isPlaying)
+                {
+                    LogInfo("[ManageEditor] Entering play mode");
+                    EditorApplication.isPlaying = true;
+                    return Response.Success("Entered play mode.");
+                }
+                return Response.Success("Already in play mode.");
+            }
+            catch (Exception e)
+            {
+                LogInfo($"[ManageEditor] Error entering play mode: {e.Message}");
+                return Response.Error($"Error entering play mode: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 处理暂停/恢复播放模式的操作
+        /// </summary>
+        private object HandlePauseAction(JObject args)
+        {
+            try
+            {
+                if (EditorApplication.isPlaying)
+                {
+                    EditorApplication.isPaused = !EditorApplication.isPaused;
+                    string statusMessage = EditorApplication.isPaused ? "Game paused." : "Game resumed.";
+                    LogInfo($"[ManageEditor] {statusMessage}");
+                    return Response.Success(statusMessage);
+                }
+                return Response.Error("Cannot pause/resume: Not in play mode.");
+            }
+            catch (Exception e)
+            {
+                LogInfo($"[ManageEditor] Error pausing/resuming game: {e.Message}");
+                return Response.Error($"Error pausing/resuming game: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 处理停止播放模式的操作
+        /// </summary>
+        private object HandleStopAction(JObject args)
+        {
+            try
+            {
+                if (EditorApplication.isPlaying)
+                {
+                    LogInfo("[ManageEditor] Exiting play mode");
+                    EditorApplication.isPlaying = false;
+                    return Response.Success("Exited play mode.");
+                }
+                return Response.Success("Already stopped (not in play mode).");
+            }
+            catch (Exception e)
+            {
+                LogInfo($"[ManageEditor] Error stopping play mode: {e.Message}");
+                return Response.Error($"Error stopping play mode: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 处理获取编辑器状态的操作
+        /// </summary>
+        private object HandleGetStateAction(JObject args)
+        {
+            LogInfo("[ManageEditor] Getting editor state");
+            return GetEditorState();
+        }
+
+        /// <summary>
+        /// 处理获取编辑器窗口的操作
+        /// </summary>
+        private object HandleGetWindowsAction(JObject args)
+        {
+            LogInfo("[ManageEditor] Getting editor windows");
+            return GetEditorWindows();
+        }
+
+        /// <summary>
+        /// 处理获取当前工具的操作
+        /// </summary>
+        private object HandleGetActiveToolAction(JObject args)
+        {
+            LogInfo("[ManageEditor] Getting active tool");
+            return GetActiveTool();
+        }
+
+        /// <summary>
+        /// 处理获取选择对象的操作
+        /// </summary>
+        private object HandleGetSelectionAction(JObject args)
+        {
+            LogInfo("[ManageEditor] Getting selection");
+            return GetSelection();
+        }
+
+        /// <summary>
+        /// 处理设置激活工具的操作
+        /// </summary>
+        private object HandleSetActiveToolAction(JObject args)
+        {
+            string toolName = args["toolName"]?.ToString();
+            if (string.IsNullOrEmpty(toolName))
+            {
+                return Response.Error("'toolName' parameter required for set_active_tool.");
+            }
+
+            LogInfo($"[ManageEditor] Setting active tool to: {toolName}");
+            return SetActiveTool(toolName);
+        }
+
+        /// <summary>
+        /// 处理添加标签的操作
+        /// </summary>
+        private object HandleAddTagAction(JObject args)
+        {
             string tagName = args["tagName"]?.ToString();
+            if (string.IsNullOrEmpty(tagName))
+            {
+                return Response.Error("'tagName' parameter required for add_tag.");
+            }
+
+            LogInfo($"[ManageEditor] Adding tag: {tagName}");
+            return AddTag(tagName);
+        }
+
+        /// <summary>
+        /// 处理移除标签的操作
+        /// </summary>
+        private object HandleRemoveTagAction(JObject args)
+        {
+            string tagName = args["tagName"]?.ToString();
+            if (string.IsNullOrEmpty(tagName))
+            {
+                return Response.Error("'tagName' parameter required for remove_tag.");
+            }
+
+            LogInfo($"[ManageEditor] Removing tag: {tagName}");
+            return RemoveTag(tagName);
+        }
+
+        /// <summary>
+        /// 处理获取标签列表的操作
+        /// </summary>
+        private object HandleGetTagsAction(JObject args)
+        {
+            LogInfo("[ManageEditor] Getting tags");
+            return GetTags();
+        }
+
+        /// <summary>
+        /// 处理添加层的操作
+        /// </summary>
+        private object HandleAddLayerAction(JObject args)
+        {
             string layerName = args["layerName"]?.ToString();
-            bool waitForCompletion = args["waitForCompletion"]?.ToObject<bool>() ?? false;
-
-            if (string.IsNullOrEmpty(action))
+            if (string.IsNullOrEmpty(layerName))
             {
-                return Response.Error("Action parameter is required.");
+                return Response.Error("'layerName' parameter required for add_layer.");
             }
 
-            // Route action
-            switch (action)
+            LogInfo($"[ManageEditor] Adding layer: {layerName}");
+            return AddLayer(layerName);
+        }
+
+        /// <summary>
+        /// 处理移除层的操作
+        /// </summary>
+        private object HandleRemoveLayerAction(JObject args)
+        {
+            string layerName = args["layerName"]?.ToString();
+            if (string.IsNullOrEmpty(layerName))
             {
-                // Play Mode Control
-                case "play":
-                    try
-                    {
-                        if (!EditorApplication.isPlaying)
-                        {
-                            EditorApplication.isPlaying = true;
-                            return Response.Success("Entered play mode.");
-                        }
-                        return Response.Success("Already in play mode.");
-                    }
-                    catch (Exception e)
-                    {
-                        return Response.Error($"Error entering play mode: {e.Message}");
-                    }
-                case "pause":
-                    try
-                    {
-                        if (EditorApplication.isPlaying)
-                        {
-                            EditorApplication.isPaused = !EditorApplication.isPaused;
-                            return Response.Success(
-                                EditorApplication.isPaused ? "Game paused." : "Game resumed."
-                            );
-                        }
-                        return Response.Error("Cannot pause/resume: Not in play mode.");
-                    }
-                    catch (Exception e)
-                    {
-                        return Response.Error($"Error pausing/resuming game: {e.Message}");
-                    }
-                case "stop":
-                    try
-                    {
-                        if (EditorApplication.isPlaying)
-                        {
-                            EditorApplication.isPlaying = false;
-                            return Response.Success("Exited play mode.");
-                        }
-                        return Response.Success("Already stopped (not in play mode).");
-                    }
-                    catch (Exception e)
-                    {
-                        return Response.Error($"Error stopping play mode: {e.Message}");
-                    }
-
-                // Editor State/Info
-                case "get_state":
-                    return GetEditorState();
-                case "get_windows":
-                    return GetEditorWindows();
-                case "get_active_tool":
-                    return GetActiveTool();
-                case "get_selection":
-                    return GetSelection();
-                case "set_active_tool":
-                    string toolName = args["toolName"]?.ToString();
-                    if (string.IsNullOrEmpty(toolName))
-                        return Response.Error("'toolName' parameter required for set_active_tool.");
-                    return SetActiveTool(toolName);
-
-                // Tag Management
-                case "add_tag":
-                    if (string.IsNullOrEmpty(tagName))
-                        return Response.Error("'tagName' parameter required for add_tag.");
-                    return AddTag(tagName);
-                case "remove_tag":
-                    if (string.IsNullOrEmpty(tagName))
-                        return Response.Error("'tagName' parameter required for remove_tag.");
-                    return RemoveTag(tagName);
-                case "get_tags":
-                    return GetTags();
-
-                // Layer Management
-                case "add_layer":
-                    if (string.IsNullOrEmpty(layerName))
-                        return Response.Error("'layerName' parameter required for add_layer.");
-                    return AddLayer(layerName);
-                case "remove_layer":
-                    if (string.IsNullOrEmpty(layerName))
-                        return Response.Error("'layerName' parameter required for remove_layer.");
-                    return RemoveLayer(layerName);
-                case "get_layers":
-                    return GetLayers();
-
-                default:
-                    return Response.Error(
-                        $"Unknown action: '{action}'. Supported actions include play, pause, stop, get_state, get_windows, get_active_tool, get_selection, set_active_tool, add_tag, remove_tag, get_tags, add_layer, remove_layer, get_layers."
-                    );
+                return Response.Error("'layerName' parameter required for remove_layer.");
             }
+
+            LogInfo($"[ManageEditor] Removing layer: {layerName}");
+            return RemoveLayer(layerName);
+        }
+
+        /// <summary>
+        /// 处理获取层列表的操作
+        /// </summary>
+        private object HandleGetLayersAction(JObject args)
+        {
+            LogInfo("[ManageEditor] Getting layers");
+            return GetLayers();
         }
 
         // --- Editor State/Info Methods ---
@@ -552,13 +670,7 @@ namespace UnityMcp.Tools
                 return null;
             }
         }
-        protected override StateTree CreateStateTree()
-        {
-            return StateTreeBuilder
-                .Create()
-                .DefaultLeaf((ctx) => Response.Error("State tree not implemented for manage_editor. Use ExecuteMethod."))
-                .Build();
-        }
+
 
         // --- Example Implementations for Settings ---
         /*

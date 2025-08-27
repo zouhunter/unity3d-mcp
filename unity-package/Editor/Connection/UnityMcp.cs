@@ -9,7 +9,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
-using UnityMcp.Helpers;
+using UnityMcp.Models;
 using UnityMcp.Models;
 using UnityMcp.Tools;
 

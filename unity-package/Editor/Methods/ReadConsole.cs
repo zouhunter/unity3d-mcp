@@ -6,7 +6,7 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
-using UnityMcp.Helpers; // For Response class
+using UnityMcp.Models; // For Response class
 using UnityMcp;
 
 namespace UnityMcp.Tools
@@ -126,10 +126,8 @@ namespace UnityMcp.Tools
                 .Key("action")
                     .Leaf("get", HandleGetAction)
                     .Leaf("clear", HandleClearAction)
-                    .DefaultLeaf(HandleUnknownAction)
                 .Build();
         }
-
         // --- State Tree Action Handlers ---
 
         /// <summary>

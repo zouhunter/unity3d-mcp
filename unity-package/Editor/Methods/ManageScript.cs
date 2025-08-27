@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
-using UnityMcp.Helpers;
+using UnityMcp.Models;
 
 namespace UnityMcp.Tools
 {
@@ -24,7 +24,6 @@ namespace UnityMcp.Tools
                     .Leaf("read", HandleReadAction)
                     .Leaf("update", HandleUpdateAction)
                     .Leaf("delete", HandleDeleteAction)
-                    .DefaultLeaf(HandleUnknownAction)
                 .Build();
         }
 
@@ -117,15 +116,6 @@ namespace UnityMcp.Tools
                 if (UnityMcp.EnableLog) Debug.LogError($"[ManageScript] Delete action failed: {e}");
                 return Response.Error($"Internal error processing delete action: {e.Message}");
             }
-        }
-
-        /// <summary>
-        /// 处理未知操作的回调方法
-        /// </summary>
-        private object HandleUnknownAction(JObject args)
-        {
-            string action = args["action"]?.ToString() ?? "null";
-            return Response.Error($"Unknown action: '{action}' for manage_script. Valid actions are: create, read, update, delete.");
         }
 
         // --- Internal Helper Methods ---

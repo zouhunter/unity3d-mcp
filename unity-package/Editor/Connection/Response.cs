@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace UnityMcp.Helpers
+namespace UnityMcp.Models
 {
     /// <summary>
     /// Provides static methods for creating standardized success and error response objects.

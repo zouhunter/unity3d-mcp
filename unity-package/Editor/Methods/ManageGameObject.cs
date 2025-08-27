@@ -8,7 +8,7 @@ using UnityEditor.SceneManagement;
 using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityMcp.Helpers; // For Response class
+using UnityMcp.Models; // For Response class
 
 namespace UnityMcp.Tools
 {
@@ -44,7 +44,6 @@ namespace UnityMcp.Tools
                     .Leaf("add_component", HandleAddComponentAction)
                     .Leaf("remove_component", HandleRemoveComponentAction)
                     .Leaf("set_component_property", HandleSetComponentPropertyAction)
-                    .DefaultLeaf(HandleUnknownAction)
                 .Build();
         }
 
@@ -258,15 +257,6 @@ namespace UnityMcp.Tools
                 return redirectResult;
 
             return SetComponentPropertyOnTarget(args, targetToken, searchMethod);
-        }
-
-        /// <summary>
-        /// 处理未知操作的回调方法
-        /// </summary>
-        private object HandleUnknownAction(JObject args)
-        {
-            string action = args["action"]?.ToString() ?? "null";
-            return Response.Error($"Unknown action: '{action}' for manage_game_object.");
         }
 
         /// <summary>

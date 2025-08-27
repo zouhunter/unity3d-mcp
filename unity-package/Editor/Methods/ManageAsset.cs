@@ -12,11 +12,30 @@ using UnityMcp.Tools; // 添加这个引用
 namespace UnityMcp.Tools
 {
     /// <summary>
-    /// Handles Unity asset management operations.
+    /// Handles Unity asset management operations including create, import, move, etc.
     /// 对应方法名: manage_asset
     /// </summary>
+    [ToolName("manage_asset")]
     public class ManageAsset : StateMethodBase
     {
+        /// <summary>
+        /// 创建当前方法支持的参数键列表
+        /// </summary>
+        protected override MethodKey[] CreateKeys()
+        {
+            return new[]
+            {
+                new MethodKey("action", "操作类型：create, import, move, copy, delete, get_info, search, create_folder等", false),
+                new MethodKey("path", "资产路径，Unity标准格式：Assets/Folder/File.extension", false),
+                new MethodKey("asset_type", "资产类型：Material, Texture2D, AudioClip等（创建时需要）", true),
+                new MethodKey("properties", "资产属性字典，用于设置资产的各种属性", true),
+                new MethodKey("destination", "目标路径（移动/复制时使用）", true),
+                new MethodKey("search_pattern", "搜索模式，如*.prefab, *.cs等（搜索时使用）", true),
+                new MethodKey("recursive", "是否递归搜索子文件夹", true),
+                new MethodKey("force", "是否强制执行操作（覆盖现有文件等）", true)
+            };
+        }
+
         /// <summary>
         /// 创建状态树
         /// </summary>

@@ -8,6 +8,17 @@ using UnityMcp.Models;
 [ToolName("gm_command")]
 public class GMCommandMethod : StateMethodBase
 {
+    /// <summary>
+    /// 创建当前方法支持的参数键列表
+    /// </summary>
+    protected override MethodKey[] CreateKeys()
+    {
+        return new[]
+        {
+            new MethodKey("action", "操作类型，默认执行主要功能", true)
+        };
+    }
+
     protected override StateTree CreateStateTree()
     {
         return StateTreeBuilder.Create()

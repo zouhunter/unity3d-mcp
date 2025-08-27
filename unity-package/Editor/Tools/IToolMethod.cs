@@ -7,6 +7,7 @@ namespace UnityMcp.Tools
     /// </summary>
     public interface IToolMethod
     {
+        MethodKey[] Keys{ get; }
         /// <summary>
         /// 执行工具方法
         /// </summary>

@@ -20,6 +20,33 @@ namespace UnityMcp.Tools
         private StateTree _stateTree;
 
         /// <summary>
+        /// Keys的缓存字段，避免重复创建
+        /// </summary>
+        private MethodKey[] _keys;
+
+        /// <summary>
+        /// 当前方法支持的参数键列表，用于API文档生成和参数验证。
+        /// 子类必须实现此属性，定义该方法接受的所有可能参数键。
+        /// </summary>
+        public MethodKey[] Keys
+        {
+            get
+            {
+                if (_keys == null)
+                {
+                    _keys = CreateKeys();
+                }
+                return _keys;
+            }
+        }
+
+        /// <summary>
+        /// 创建参数键列表的抽象方法，子类必须实现此方法来定义参数键。
+        /// </summary>
+        /// <returns>MethodKey数组</returns>
+        protected abstract MethodKey[] CreateKeys();
+
+        /// <summary>
         /// 创建状态树的抽象方法，子类必须实现此方法来定义状态路由逻辑。
         /// </summary>
         /// <returns>配置好的状态树实例</returns>

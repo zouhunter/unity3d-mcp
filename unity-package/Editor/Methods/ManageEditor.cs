@@ -11,12 +11,27 @@ using UnityMcp;
 namespace UnityMcp.Tools
 {
     /// <summary>
-    /// Handles operations related to controlling and querying the Unity Editor state,
-    /// including managing Tags and Layers.
+    /// Handles Unity Editor state management and controls.
     /// 对应方法名: manage_editor
     /// </summary>
+    [ToolName("manage_editor")]
     public class ManageEditor : StateMethodBase
     {
+        /// <summary>
+        /// 创建当前方法支持的参数键列表
+        /// </summary>
+        protected override MethodKey[] CreateKeys()
+        {
+            return new[]
+            {
+                new MethodKey("action", "操作类型：play, pause, stop, get_state, set_active_tool, add_tag, add_layer", false),
+                new MethodKey("wait_for_completion", "是否等待操作完成", true),
+                new MethodKey("tool_name", "工具名称（设置活动工具时使用）", true),
+                new MethodKey("tag_name", "标签名称（添加标签时使用）", true),
+                new MethodKey("layer_name", "层名称（添加层时使用）", true)
+            };
+        }
+
         // Constant for starting user layer index
         private const int FirstUserLayerIndex = 8;
 

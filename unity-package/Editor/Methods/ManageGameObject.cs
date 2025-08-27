@@ -19,6 +19,37 @@ namespace UnityMcp.Tools
     [ToolName("manage_gameobject")]
     public class ManageGameObject : StateMethodBase
     {
+        /// <summary>
+        /// 创建当前方法支持的参数键列表
+        /// </summary>
+        protected override MethodKey[] CreateKeys()
+        {
+            return new[]
+            {
+                new MethodKey("action", "操作类型：create, modify, delete, find, add_component, remove_component, set_component_property", false),
+                new MethodKey("target", "目标GameObject标识符（名称、ID或路径）", true),
+                new MethodKey("name", "GameObject名称", true),
+                new MethodKey("tag", "GameObject标签", true),
+                new MethodKey("layer", "GameObject所在层", true),
+                new MethodKey("parent", "父对象标识符", true),
+                new MethodKey("position", "位置坐标 [x, y, z]", true),
+                new MethodKey("rotation", "旋转角度 [x, y, z]", true),
+                new MethodKey("scale", "缩放比例 [x, y, z]", true),
+                new MethodKey("primitive_type", "基元类型：Cube, Sphere, Cylinder, Capsule, Plane, Quad", true),
+                new MethodKey("prefab_path", "预制体路径", true),
+                new MethodKey("save_as_prefab", "是否保存为预制体", true),
+                new MethodKey("set_active", "设置激活状态", true),
+                new MethodKey("search_method", "搜索方法：by_name, by_id, by_tag, by_layer等", true),
+                new MethodKey("search_term", "搜索条件", true),
+                new MethodKey("search_in_children", "是否在子对象中搜索", true),
+                new MethodKey("search_in_inactive", "是否搜索非激活对象", true),
+                new MethodKey("find_all", "是否查找所有匹配项", true),
+                new MethodKey("component_name", "组件名称", true),
+                new MethodKey("components_to_add", "要添加的组件列表", true),
+                new MethodKey("components_to_remove", "要移除的组件列表", true),
+                new MethodKey("component_properties", "组件属性字典", true)
+            };
+        }
 
         protected override StateTree CreateStateTree()
         {
@@ -955,24 +986,30 @@ namespace UnityMcp.Tools
                         LogInfo($"[ManageGameObject.Create] Tag '{tagToSet}' not found. Attempting to create it.");
                         try
                         {
+                            // Attempt to create the tag using internal utility
                             InternalEditorUtility.AddTag(tagToSet);
-                            newGo.tag = tagToSet; // Retry
+                            // Wait a frame maybe? Not strictly necessary but sometimes helps editor updates.
+                            // yield return null; // Cannot yield here, editor script limitation
+
+                            // Retry setting the tag immediately after creation
+                            newGo.tag = tagToSet;
                             LogInfo($"[ManageGameObject.Create] Tag '{tagToSet}' created and assigned successfully.");
                         }
                         catch (Exception innerEx)
                         {
-                            UnityEngine.Object.DestroyImmediate(newGo); // Clean up
+                            // Handle failure during tag creation or the second assignment attempt
+                            Debug.LogError(
+                                $"[ManageGameObject] Failed to create or assign tag '{tagToSet}' after attempting creation: {innerEx.Message}"
+                            );
                             return Response.Error(
-                                $"Failed to create or assign tag '{tagToSet}' during creation: {innerEx.Message}."
+                                $"Failed to create or assign tag '{tagToSet}': {innerEx.Message}. Check Tag Manager and permissions."
                             );
                         }
                     }
                     else
                     {
-                        UnityEngine.Object.DestroyImmediate(newGo); // Clean up
-                        return Response.Error(
-                            $"Failed to set tag to '{tagToSet}' during creation: {ex.Message}."
-                        );
+                        // If the exception was for a different reason, return the original error
+                        return Response.Error($"Failed to set tag to '{tagToSet}': {ex.Message}.");
                     }
                 }
             }

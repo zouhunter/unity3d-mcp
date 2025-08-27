@@ -13,11 +13,26 @@ using UnityMcp;
 namespace UnityMcp.Tools
 {
     /// <summary>
-    /// Handles scene management operations like loading, saving, creating, and querying hierarchy.
+    /// Handles Unity scene management operations.
     /// 对应方法名: manage_scene
     /// </summary>
+    [ToolName("manage_scene")]
     public class ManageScene : StateMethodBase
     {
+        /// <summary>
+        /// 创建当前方法支持的参数键列表
+        /// </summary>
+        protected override MethodKey[] CreateKeys()
+        {
+            return new[]
+            {
+                new MethodKey("action", "操作类型：load, save, create, get_hierarchy", false),
+                new MethodKey("name", "场景名称", true),
+                new MethodKey("path", "场景资产路径", true),
+                new MethodKey("build_index", "构建索引", true)
+            };
+        }
+
         protected override StateTree CreateStateTree()
         {
             return StateTreeBuilder

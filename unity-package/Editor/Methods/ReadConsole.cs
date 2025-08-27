@@ -20,6 +20,21 @@ namespace UnityMcp.Tools
     {
         // 注意：实际的控制台操作功能已移至 ConsoleController
 
+        /// <summary>
+        /// 创建当前方法支持的参数键列表
+        /// </summary>
+        protected override MethodKey[] CreateKeys()
+        {
+            return new[]
+            {
+                new MethodKey("action", "操作类型：get(无堆栈跟踪), get_full(包含堆栈跟踪), clear(清空控制台)", false),
+                new MethodKey("types", "消息类型列表：error, warning, log，默认全部类型", true),
+                new MethodKey("count", "最大返回消息数，不设置则获取全部", true),
+                new MethodKey("filterText", "文本过滤器，过滤包含指定文本的日志", true),
+                new MethodKey("format", "输出格式：plain, detailed, json，默认detailed", true)
+            };
+        }
+
         protected override StateTree CreateStateTree()
         {
             return StateTreeBuilder

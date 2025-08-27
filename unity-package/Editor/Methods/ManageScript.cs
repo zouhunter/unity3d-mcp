@@ -10,11 +10,28 @@ using UnityMcp.Models;
 namespace UnityMcp.Tools
 {
     /// <summary>
-    /// Handles CRUD operations for C# scripts within the Unity project.
+    /// Handles C# script management operations in Unity.
     /// 对应方法名: manage_script
     /// </summary>
+    [ToolName("manage_script")]
     public class ManageScript : StateMethodBase
     {
+        /// <summary>
+        /// 创建当前方法支持的参数键列表
+        /// </summary>
+        protected override MethodKey[] CreateKeys()
+        {
+            return new[]
+            {
+                new MethodKey("action", "操作类型：create, read, update, delete", false),
+                new MethodKey("name", "脚本名称（不含.cs扩展名）", false),
+                new MethodKey("path", "脚本资产路径", false),
+                new MethodKey("contents", "C#代码内容", true),
+                new MethodKey("script_type", "脚本类型：MonoBehaviour, ScriptableObject等", true),
+                new MethodKey("namespace", "命名空间", true)
+            };
+        }
+
         protected override StateTree CreateStateTree()
         {
             return StateTreeBuilder

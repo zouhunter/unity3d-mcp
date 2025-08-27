@@ -15,6 +15,18 @@ namespace UnityMcp.Tools
     /// </summary>
     public class ExecuteMenuItem : StateMethodBase
     {
+        /// <summary>
+        /// 创建当前方法支持的参数键列表
+        /// </summary>
+        protected override MethodKey[] CreateKeys()
+        {
+            return new[]
+            {
+                new MethodKey("action", "操作类型，默认execute", false),
+                new MethodKey("menu_path", "菜单项完整路径，如'File/Save Project'", false)
+            };
+        }
+
         protected override StateTree CreateStateTree()
         {
             return StateTreeBuilder.Create()

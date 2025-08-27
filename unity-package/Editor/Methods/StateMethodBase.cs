@@ -1,9 +1,11 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEditor;
 using UnityMcp.Models;
 using Newtonsoft.Json.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace UnityMcp.Tools
 {
@@ -66,7 +68,7 @@ namespace UnityMcp.Tools
         }
 
         /// <summary>
-        /// 执行工具方法，实现 IToolMethod 接口。
+        /// 执行工具方法，实现 IToolMethod 接口（同步版本）。
         /// 通过状态树路由到对应的处理方法。
         /// </summary>
         /// <param name="args">方法调用的参数对象</param>
@@ -85,13 +87,13 @@ namespace UnityMcp.Tools
         }
 
         /// <summary>
-        /// 记录信息日志，仅在 UnityMcp.EnableLog 为 true 时输出。
+        /// 记录信息日志，仅在 McpConnect.EnableLog 为 true 时输出。
         /// 子类可用此方法记录执行过程中的信息。
         /// </summary>
         /// <param name="message">要记录的日志消息</param>
         public virtual void LogInfo(string message)
         {
-            if (UnityMcp.EnableLog) Debug.Log(message);
+            if (McpConnect.EnableLog) Debug.Log(message);
         }
 
         public virtual void LogWarning(string message)

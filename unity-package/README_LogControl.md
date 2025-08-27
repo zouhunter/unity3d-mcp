@@ -32,10 +32,10 @@ Unity MCP 现在支持全局日志控制功能，可以通过 `EnableLog` 开关
 
 ```csharp
 // 启用日志输出
-UnityMcp.EnableLog = true;
+McpConnect.EnableLog = true;
 
 // 禁用日志输出
-UnityMcp.EnableLog = false;
+McpConnect.EnableLog = false;
 
 // 保存设置到 EditorPrefs
 EditorPrefs.SetBool("mcp_enable_log", true);
@@ -83,7 +83,7 @@ EditorPrefs.SetBool("mcp_enable_log", true);
 
 2. **条件检查**：在其他文件中使用条件检查来控制日志输出
    ```csharp
-   if (UnityMcp.EnableLog) Debug.Log("日志消息");
+   if (McpConnect.EnableLog) Debug.Log("日志消息");
    ```
 
 3. **设置持久化**：通过 EditorPrefs 保存设置
@@ -108,7 +108,7 @@ EditorPrefs.SetBool("mcp_enable_log", true);
 
 ### 日志仍然显示
 - 检查是否还有其他地方直接使用 `Debug.Log` 而没有通过条件检查
-- 确认 `UnityMcp.EnableLog` 的值是否正确设置
+- 确认 `McpConnect.EnableLog` 的值是否正确设置
 
 ### 设置不保存
 - 确认 EditorPrefs 的键名是否正确：`"mcp_enable_log"`
@@ -127,7 +127,7 @@ EditorPrefs.SetBool("mcp_enable_log", true);
 using UnityMcp;
 
 // 在日志输出前添加条件检查
-if (UnityMcp.EnableLog) Debug.Log("你的日志消息");
+if (McpConnect.EnableLog) Debug.Log("你的日志消息");
 ```
 
 这样可以确保新的日志输出也受到统一控制。

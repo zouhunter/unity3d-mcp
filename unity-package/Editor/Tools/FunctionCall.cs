@@ -1,8 +1,10 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -24,7 +26,7 @@ namespace UnityMcp.Tools
         private static readonly object _registrationLock = new object();
 
         /// <summary>
-        /// Main handler for function calls.
+        /// Main handler for function calls (同步版本).
         /// </summary>
         public override object HandleCommand(JObject cmd)
         {
@@ -42,17 +44,41 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                if (UnityMcp.EnableLog) Debug.LogError($"[FunctionCall] Command execution failed: {e}");
+                if (McpConnect.EnableLog) Debug.LogError($"[FunctionCall] Command execution failed: {e}");
                 return Response.Error($"Internal error processing function call: {e.Message}");
             }
         }
 
         /// <summary>
-        /// Executes a specific function by routing to the appropriate method.
+        /// Main handler for function calls (异步版本).
+        /// </summary>
+        public override async Task<object> HandleCommandAsync(JObject cmd)
+        {
+            try
+            {
+                string functionName = cmd["func"]?.ToString();
+                string argsJson = cmd["args"]?.ToString() ?? "{}";
+
+                if (string.IsNullOrWhiteSpace(functionName))
+                {
+                    return Response.Error("Required parameter 'func' is missing or empty.");
+                }
+
+                return await ExecuteFunctionAsync(functionName, argsJson);
+            }
+            catch (Exception e)
+            {
+                if (McpConnect.EnableLog) Debug.LogError($"[FunctionCall] Async command execution failed: {e}");
+                return Response.Error($"Internal error processing async function call: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Executes a specific function by routing to the appropriate method (同步版本).
         /// </summary>
         private object ExecuteFunction(string functionName, string argsJson)
         {
-            if (UnityMcp.EnableLog) Debug.Log($"[FunctionCall] Executing function: {functionName}->{argsJson}");
+            if (McpConnect.EnableLog) Debug.Log($"[FunctionCall] Executing function: {functionName}->{argsJson}");
             try
             {
                 // 确保方法已注册
@@ -72,10 +98,48 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                if (UnityMcp.EnableLog) Debug.LogError($"[FunctionCall] Failed to execute function '{functionName}': {e}");
+                if (McpConnect.EnableLog) Debug.LogError($"[FunctionCall] Failed to execute function '{functionName}': {e}");
                 return Response.Error($"Error executing function '{functionName}->{argsJson}': {e.Message}");
             }
         }
+
+        /// <summary>
+        /// Executes a specific function by routing to the appropriate method (异步版本).
+        /// </summary>
+        private async Task<object> ExecuteFunctionAsync(string functionName, string argsJson)
+        {
+            if (McpConnect.EnableLog) Debug.Log($"[FunctionCall] Executing async function: {functionName}->{argsJson}");
+            
+            // 使用主线程执行来确保Unity API正常工作
+            object result = null;
+            bool completed = false;
+            
+            // 在主线程执行
+            EditorApplication.delayCall += () => {
+                try
+                {
+                    result = ExecuteFunction(functionName, argsJson);
+                }
+                catch (Exception e)
+                {
+                    if (McpConnect.EnableLog) Debug.LogError($"[FunctionCall] Failed to execute function on main thread '{functionName}': {e}");
+                    result = Response.Error($"Error executing function on main thread '{functionName}->{argsJson}': {e.Message}");
+                }
+                finally
+                {
+                    completed = true;
+                }
+            };
+            
+            // 等待主线程执行完成
+            while (!completed)
+            {
+                await Task.Delay(10); // 短暂延迟以避免占用过多CPU
+            }
+            
+            return result;
+        }
+
 
         /// <summary>
         /// 确保所有方法已通过反射注册 (内部方法)
@@ -124,12 +188,12 @@ namespace UnityMcp.Tools
                                 !t.IsAbstract).ToList();
                             methodTypes.AddRange(loadedTypes);
 
-                            if (UnityMcp.EnableLog) Debug.LogWarning($"[FunctionCall] Partial load of assembly {assembly.FullName}: {ex.Message}");
+                            if (McpConnect.EnableLog) Debug.LogWarning($"[FunctionCall] Partial load of assembly {assembly.FullName}: {ex.Message}");
                         }
                         catch (Exception ex)
                         {
                             // 跳过无法访问的程序集
-                            if (UnityMcp.EnableLog) Debug.LogWarning($"[FunctionCall] Failed to load types from assembly {assembly.FullName}: {ex.Message}");
+                            if (McpConnect.EnableLog) Debug.LogWarning($"[FunctionCall] Failed to load types from assembly {assembly.FullName}: {ex.Message}");
                             continue;
                         }
                     }
@@ -145,21 +209,21 @@ namespace UnityMcp.Tools
                                 // 优先使用ToolNameAttribute指定的名称，否则转换类名为snake_case格式
                                 string methodName = GetMethodName(methodType);
                                 _registeredMethods[methodName] = methodInstance;
-                                if (UnityMcp.EnableLog) Debug.Log($"[FunctionCall] Registered method: {methodName} -> {methodType.FullName}");
+                                if (McpConnect.EnableLog) Debug.Log($"[FunctionCall] Registered method: {methodName} -> {methodType.FullName}");
                             }
                         }
                         catch (Exception e)
                         {
-                            if (UnityMcp.EnableLog) Debug.LogError($"[FunctionCall] Failed to register method {methodType.FullName}: {e}");
+                            if (McpConnect.EnableLog) Debug.LogError($"[FunctionCall] Failed to register method {methodType.FullName}: {e}");
                         }
                     }
 
-                    if (UnityMcp.EnableLog) Debug.Log($"[FunctionCall] Total registered methods: {_registeredMethods.Count}");
-                    if (UnityMcp.EnableLog) Debug.Log($"[FunctionCall] Available methods: {string.Join(", ", _registeredMethods.Keys)}");
+                    if (McpConnect.EnableLog) Debug.Log($"[FunctionCall] Total registered methods: {_registeredMethods.Count}");
+                    if (McpConnect.EnableLog) Debug.Log($"[FunctionCall] Available methods: {string.Join(", ", _registeredMethods.Keys)}");
                 }
                 catch (Exception e)
                 {
-                    if (UnityMcp.EnableLog) Debug.LogError($"[FunctionCall] Failed to register methods: {e}");
+                    if (McpConnect.EnableLog) Debug.LogError($"[FunctionCall] Failed to register methods: {e}");
                     _registeredMethods = new Dictionary<string, IToolMethod>(); // 确保不为null
                 }
             }
@@ -175,32 +239,6 @@ namespace UnityMcp.Tools
             EnsureMethodsRegisteredStatic();
             _registeredMethods.TryGetValue(methodName, out IToolMethod method);
             return method;
-        }
-
-        /// <summary>
-        /// 执行指定方法 (静态方法，供其他类使用)
-        /// </summary>
-        /// <param name="methodName">方法名称</param>
-        /// <param name="args">参数对象</param>
-        /// <returns>执行结果</returns>
-        public static object ExecuteMethodStatic(string methodName, JObject args)
-        {
-            try
-            {
-                EnsureMethodsRegisteredStatic();
-
-                if (!_registeredMethods.TryGetValue(methodName, out IToolMethod method))
-                {
-                    return Response.Error($"Unknown method: '{methodName}'. Available methods: {string.Join(", ", _registeredMethods.Keys)}");
-                }
-
-                return method.ExecuteMethod(args);
-            }
-            catch (Exception e)
-            {
-                if (UnityMcp.EnableLog) Debug.LogError($"[FunctionCall] Failed to execute method '{methodName}': {e}");
-                return Response.Error($"Error executing method '{methodName}': {e.Message}");
-            }
         }
 
         /// <summary>
@@ -245,7 +283,7 @@ namespace UnityMcp.Tools
                     _registeredMethods = new Dictionary<string, IToolMethod>();
 
                 _registeredMethods[methodName] = method;
-                if (UnityMcp.EnableLog) Debug.Log($"[FunctionCall] Manually registered method: {methodName}");
+                if (McpConnect.EnableLog) Debug.Log($"[FunctionCall] Manually registered method: {methodName}");
             }
         }
 

@@ -143,7 +143,7 @@ namespace UnityMcp.Tools
             // 检查 ConsoleController 是否已正确初始化
             if (!ConsoleUtils.AreReflectionMembersInitialized())
             {
-                if (UnityMcp.EnableLog) Debug.LogError(
+                if (McpConnect.EnableLog) Debug.LogError(
                     "[ReadConsole] GetConsoleEntriesInternal called but ConsoleController reflection members are not initialized."
                 );
                 return Response.Error(
@@ -168,7 +168,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                if (UnityMcp.EnableLog) Debug.LogError($"[ReadConsole] GetConsoleEntriesInternal failed: {e}");
+                if (McpConnect.EnableLog) Debug.LogError($"[ReadConsole] GetConsoleEntriesInternal failed: {e}");
                 return Response.Error($"Internal error processing console entries: {e.Message}");
             }
         }
@@ -181,7 +181,7 @@ namespace UnityMcp.Tools
             // 检查 ConsoleController 是否已正确初始化
             if (!ConsoleUtils.AreReflectionMembersInitialized())
             {
-                if (UnityMcp.EnableLog) Debug.LogError(
+                if (McpConnect.EnableLog) Debug.LogError(
                     "[ReadConsole] HandleClearAction called but ConsoleController reflection members are not initialized."
                 );
                 return Response.Error(
@@ -197,7 +197,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                if (UnityMcp.EnableLog) Debug.LogError($"[ReadConsole] Clear action failed: {e}");
+                if (McpConnect.EnableLog) Debug.LogError($"[ReadConsole] Clear action failed: {e}");
                 return Response.Error($"Internal error processing clear action: {e.Message}");
             }
         }

@@ -67,7 +67,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                if (UnityMcp.EnableLog) Debug.LogError($"[ManageScript] Create action failed: {e}");
+                if (McpConnect.EnableLog) Debug.LogError($"[ManageScript] Create action failed: {e}");
                 return Response.Error($"Internal error processing create action: {e.Message}");
             }
         }
@@ -88,7 +88,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                if (UnityMcp.EnableLog) Debug.LogError($"[ManageScript] Read action failed: {e}");
+                if (McpConnect.EnableLog) Debug.LogError($"[ManageScript] Read action failed: {e}");
                 return Response.Error($"Internal error processing read action: {e.Message}");
             }
         }
@@ -109,7 +109,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                if (UnityMcp.EnableLog) Debug.LogError($"[ManageScript] Update action failed: {e}");
+                if (McpConnect.EnableLog) Debug.LogError($"[ManageScript] Update action failed: {e}");
                 return Response.Error($"Internal error processing update action: {e.Message}");
             }
         }
@@ -130,7 +130,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                if (UnityMcp.EnableLog) Debug.LogError($"[ManageScript] Delete action failed: {e}");
+                if (McpConnect.EnableLog) Debug.LogError($"[ManageScript] Delete action failed: {e}");
                 return Response.Error($"Internal error processing delete action: {e.Message}");
             }
         }
@@ -299,7 +299,7 @@ namespace UnityMcp.Tools
             {
                 // Optionally return a specific error or warning about syntax
                 // return Response.Error("Provided script content has potential syntax errors.");
-                if (UnityMcp.EnableLog) Debug.LogWarning($"Potential syntax error in script being created: {name}");
+                if (McpConnect.EnableLog) Debug.LogWarning($"Potential syntax error in script being created: {name}");
             }
 
             try
@@ -372,7 +372,7 @@ namespace UnityMcp.Tools
             // Validate syntax (basic check)
             if (!ValidateScriptSyntax(contents))
             {
-                if (UnityMcp.EnableLog) Debug.LogWarning($"Potential syntax error in script being updated: {name}");
+                if (McpConnect.EnableLog) Debug.LogWarning($"Potential syntax error in script being updated: {name}");
                 // Consider if this should be a hard error or just a warning
             }
 

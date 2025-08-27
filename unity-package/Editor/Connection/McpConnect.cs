@@ -15,7 +15,7 @@ using UnityMcp.Tools;
 namespace UnityMcp
 {
     [InitializeOnLoad]
-    public static partial class UnityMcp
+    public static partial class McpConnect
     {
         private static TcpListener listener;
         private static bool isRunning = false;
@@ -102,7 +102,7 @@ namespace UnityMcp
             return Directory.Exists(fullPath);
         }
 
-        static UnityMcp()
+        static McpConnect()
         {
             EditorApplication.quitting += Stop;
             AssemblyReloadEvents.beforeAssemblyReload += Stop;
@@ -115,7 +115,7 @@ namespace UnityMcp
         public static void Start()
         {
             // 从EditorPrefs读取日志设置，默认为false
-            UnityMcp.EnableLog = EditorPrefs.GetBool("mcp_enable_log", false);
+            McpConnect.EnableLog = EditorPrefs.GetBool("mcp_enable_log", false);
             Log($"[UnityMcp] 正在启动UnityMcp...");
             Stop();
 
@@ -442,9 +442,29 @@ namespace UnityMcp
                         else
                         {
                             Log($"[UnityMcp] 执行命令 ID: {id}, Type: {command.type}");
-                            string responseJson = ExecuteCommand(command);
-                            tcs.SetResult(responseJson);
-                            Log($"[UnityMcp] 命令执行完成 ID: {id}, Type: {command.type}");
+                            // 异步执行命令，但不等待结果，让它在后台执行
+                            _ = Task.Run(async () => 
+                            {
+                                try
+                                {
+                                    string responseJson = await ExecuteCommand(command);
+                                    tcs.SetResult(responseJson);
+                                    Log($"[UnityMcp] 命令执行完成 ID: {id}, Type: {command.type}");
+                                }
+                                catch (Exception asyncEx)
+                                {
+                                    LogError($"[UnityMcp] 异步执行命令时发生错误 ID: {id}: {asyncEx.Message}\n{asyncEx.StackTrace}");
+                                    var response = new
+                                    {
+                                        status = "error",
+                                        error = asyncEx.Message,
+                                        commandType = command?.type ?? "Unknown",
+                                        details = "Error occurred during async command execution"
+                                    };
+                                    string responseJson = JsonConvert.SerializeObject(response);
+                                    tcs.SetResult(responseJson);
+                                }
+                            });
                         }
                     }
                     catch (Exception ex)
@@ -509,7 +529,7 @@ namespace UnityMcp
             return false;
         }
 
-        private static string ExecuteCommand(Command command)
+        private static async Task<string> ExecuteCommand(Command command)
         {
             Log($"[UnityMcp] 开始执行命令: Type={command.type}");
 
@@ -553,8 +573,8 @@ namespace UnityMcp
                     throw new ArgumentException($"Unknown or unsupported command type: {command.type}");
                 }
 
-                Log($"[UnityMcp] 找到工具: {tool.GetType().Name}，开始处理命令");
-                object result = tool.HandleCommand(paramsObject);
+                Log($"[UnityMcp] 找到工具: {tool.GetType().Name}，开始异步处理命令");
+                object result = await tool.HandleCommandAsync(paramsObject);
                 Log($"[UnityMcp] 工具执行完成，结果类型: {result?.GetType().Name ?? "null"}");
 
                 // Standard success response format

@@ -15,12 +15,12 @@ using UnityMcp;
 
 namespace UnityMcp.Windows
 {
-    public class UnityMcpEditorWindow : EditorWindow
+    public class McpConnectEditorWindow : EditorWindow
     {
         private bool isUnityBridgeRunning = false;
-        private int unityPortStart => UnityMcp.unityPortStart;
-        private int unityPortEnd => UnityMcp.unityPortEnd;
-        private int currentPort => UnityMcp.currentPort;
+        private int unityPortStart => McpConnect.unityPortStart;
+        private int unityPortEnd => McpConnect.unityPortEnd;
+        private int currentPort => McpConnect.currentPort;
 
         // 工具方法列表相关变量
         private Dictionary<string, bool> methodFoldouts = new Dictionary<string, bool>();
@@ -35,7 +35,7 @@ namespace UnityMcp.Windows
         [MenuItem("Window/Unity MCP")]
         public static void ShowWindow()
         {
-            GetWindow<UnityMcpEditorWindow>("MCP服务管理");
+            GetWindow<McpConnectEditorWindow>("MCP服务管理");
         }
 
         private async Task<bool> IsPortInUseAsync(int port)
@@ -84,7 +84,7 @@ namespace UnityMcp.Windows
 
             // 异步检测 - 检查是否有任何端口在使用，并且是否是当前Unity进程
             bool anyPortInUse = await IsAnyPortInRangeInUse();
-            isUnityBridgeRunning = anyPortInUse && UnityMcp.IsRunning;
+            isUnityBridgeRunning = anyPortInUse && McpConnect.IsRunning;
             Repaint();
         }
 
@@ -122,10 +122,10 @@ namespace UnityMcp.Windows
             EditorGUILayout.LabelField("Unity MCP Bridge", EditorStyles.boldLabel, GUILayout.ExpandWidth(true));
 
             // 日志开关
-            bool newEnableLog = EditorGUILayout.ToggleLeft("日志", UnityMcp.EnableLog, GUILayout.Width(60));
-            if (newEnableLog != UnityMcp.EnableLog)
+            bool newEnableLog = EditorGUILayout.ToggleLeft("日志", McpConnect.EnableLog, GUILayout.Width(60));
+            if (newEnableLog != McpConnect.EnableLog)
             {
-                UnityMcp.EnableLog = newEnableLog;
+                McpConnect.EnableLog = newEnableLog;
                 EditorPrefs.SetBool("mcp_enable_log", newEnableLog);
             }
             EditorGUILayout.EndHorizontal();
@@ -169,7 +169,7 @@ namespace UnityMcp.Windows
         {
             if (isUnityBridgeRunning)
             {
-                UnityMcp.Stop();
+                McpConnect.Stop();
                 isUnityBridgeRunning = false;
             }
             else
@@ -209,13 +209,13 @@ namespace UnityMcp.Windows
                 }
 
                 // 尝试启动Unity MCP，它会自动选择可用端口
-                UnityMcp.Start();
+                McpConnect.Start();
 
                 // 检查启动是否成功
-                if (UnityMcp.IsRunning)
+                if (McpConnect.IsRunning)
                 {
                     isUnityBridgeRunning = true;
-                    Debug.Log($"Unity MCP Bridge 已启动，使用端口: {UnityMcp.currentPort}");
+                    Debug.Log($"Unity MCP Bridge 已启动，使用端口: {McpConnect.currentPort}");
                 }
                 else
                 {
@@ -679,7 +679,7 @@ namespace UnityMcp.Windows
             EditorGUILayout.LabelField("客户端连接状态", EditorStyles.boldLabel, GUILayout.ExpandWidth(true));
 
             // 显示连接数量
-            int clientCount = UnityMcp.ConnectedClientCount;
+            int clientCount = McpConnect.ConnectedClientCount;
             Color countColor = clientCount > 0 ? Color.green : Color.gray;
             GUIStyle countStyle = new GUIStyle(EditorStyles.label);
             countStyle.normal.textColor = countColor;
@@ -701,7 +701,7 @@ namespace UnityMcp.Windows
                     clientsScrollPosition = EditorGUILayout.BeginScrollView(clientsScrollPosition,
                         GUILayout.MinHeight(80), GUILayout.MaxHeight(220));
 
-                    var clients = UnityMcp.GetConnectedClients();
+                    var clients = McpConnect.GetConnectedClients();
                     foreach (var client in clients)
                     {
                         EditorGUILayout.BeginVertical("box");

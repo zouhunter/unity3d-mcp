@@ -1,4 +1,6 @@
 using Newtonsoft.Json.Linq;
+using System.Collections;
+using System.Threading.Tasks;
 
 namespace UnityMcp.Tools
 {
@@ -9,7 +11,7 @@ namespace UnityMcp.Tools
     {
         MethodKey[] Keys{ get; }
         /// <summary>
-        /// 执行工具方法
+        /// 执行工具方法（同步版本，保持向后兼容）
         /// </summary>
         /// <param name="args">参数对象</param>
         /// <returns>执行结果</returns>

@@ -7,7 +7,7 @@ alwaysApply: true
 
 本文档将工具按两类划分：
 - Tools: `function_call`, `functions_call`（调用/批量调用 Methods）。
-- Methods: `hierarchy_create`, `hierarchy_link`, `hierarchy_search`, `manage_asset`, `manage_component`, `manage_editor`, `manage_gameobject`, `manage_http`, `manage_scene`, `manage_script`, `manage_shader`, `manage_texture`, `console_read`（均作为 `func` 传给 Tools）。
+- Methods: `hierarchy_create`, `hierarchy_link`, `hierarchy_search`, `manage_asset`, `manage_component`, `manage_editor`, `manage_gameobject`, `request_http`, `manage_scene`, `manage_script`, `manage_shader`, `manage_texture`, `console_read`（均作为 `func` 传给 Tools）。
 
 除 `function_call` 与 `functions_call` 外，其余均为 Methods 名称，不直接调用；请通过 Tools 调用，并把方法参数放入 `args`（JSON 字符串）。
 
@@ -24,7 +24,7 @@ alwaysApply: true
   - `manage_component`
   - `manage_editor`
   - `manage_gameobject`
-  - `manage_http`
+  - `request_http`
   - `manage_scene`
   - `manage_script`
   - `manage_shader`
@@ -595,7 +595,7 @@ function_call(
 
 ---
 
-### manage_http - 网络资源管理
+### request_http - 网络资源管理
 **功能**: 执行网络请求和文件下载上传操作，支持HTTP/HTTPS协议。
 
 主要参数（放入 `args`）
@@ -626,7 +626,7 @@ function_call(
 示例：GET请求获取数据
 ```python
 function_call(
-  func="manage_http",
+  func="request_http",
   args="{\"action\":\"get\",\"url\":\"https://api.github.com/repos/microsoft/vscode\",\"timeout\":30}"
 )
 ```
@@ -634,7 +634,7 @@ function_call(
 示例：POST请求发送数据
 ```python
 function_call(
-  func="manage_http",
+  func="request_http",
   args="{\"action\":\"post\",\"url\":\"https://httpbin.org/post\",\"data\":{\"message\":\"Hello from Unity\",\"timestamp\":\"2024-01-01T12:00:00Z\"},\"content_type\":\"application/json\"}"
 )
 ```
@@ -642,7 +642,7 @@ function_call(
 示例：下载文件
 ```python
 function_call(
-  func="manage_http",
+  func="request_http",
   args="{\"action\":\"download\",\"url\":\"https://httpbin.org/image/png\",\"save_path\":\"Assets/Downloaded/test_image.png\",\"timeout\":60}"
 )
 ```
@@ -650,7 +650,7 @@ function_call(
 示例：带认证的请求
 ```python
 function_call(
-  func="manage_http",
+  func="request_http",
   args="{\"action\":\"get\",\"url\":\"https://api.example.com/data\",\"auth_token\":\"your_bearer_token_here\",\"headers\":{\"User-Agent\":\"Unity-MCP/1.0\"}}"
 )
 ```
@@ -658,7 +658,7 @@ function_call(
 示例：上传文件
 ```python
 function_call(
-  func="manage_http",
+  func="request_http",
   args="{\"action\":\"upload\",\"url\":\"https://httpbin.org/post\",\"file_path\":\"Assets/Screenshots/screenshot.png\",\"form_data\":{\"description\":\"Unity screenshot\"}}"
 )
 ```
@@ -666,7 +666,7 @@ function_call(
 示例：Ping测试连通性
 ```python
 function_call(
-  func="manage_http",
+  func="request_http",
   args="{\"action\":\"ping\",\"url\":\"https://httpbin.org/status/200\",\"timeout\":10}"
 )
 ```
@@ -674,7 +674,7 @@ function_call(
 示例：带查询参数的GET请求
 ```python
 function_call(
-  func="manage_http",
+  func="request_http",
   args="{\"action\":\"get\",\"url\":\"https://httpbin.org/get\",\"query_params\":{\"param1\":\"value1\",\"param2\":\"value2\"}}"
 )
 ```
@@ -682,7 +682,7 @@ function_call(
 示例：带重试机制的请求
 ```python
 function_call(
-  func="manage_http",
+  func="request_http",
   args="{\"action\":\"get\",\"url\":\"https://httpbin.org/status/500\",\"retry_count\":3,\"retry_delay\":1.5}"
 )
 ```

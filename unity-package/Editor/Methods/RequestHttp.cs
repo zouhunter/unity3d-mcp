@@ -15,10 +15,10 @@ namespace UnityMcp.Tools
 {
     /// <summary>
     /// Handles network operations including HTTP requests, file downloads, and API calls.
-    /// 对应方法名: manage_network
+    /// 对应方法名: request_http
     /// </summary>
-    [ToolName("manage_http")]
-    public class ManageHttp : StateMethodBase
+    [ToolName("request_http")]
+    public class RequestHttp : StateMethodBase
     {
         /// <summary>
         /// 创建当前方法支持的参数键列表
@@ -76,7 +76,7 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleGetRequest(JObject args)
         {
-            LogInfo("[ManageNetwork] Executing GET request");
+            LogInfo("[RequestHttp] Executing GET request");
             return ExecuteHttpRequest(args, "GET");
         }
 
@@ -85,7 +85,7 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandlePostRequest(JObject args)
         {
-            LogInfo("[ManageNetwork] Executing POST request");
+            LogInfo("[RequestHttp] Executing POST request");
             return ExecuteHttpRequest(args, "POST");
         }
 
@@ -94,7 +94,7 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandlePutRequest(JObject args)
         {
-            LogInfo("[ManageNetwork] Executing PUT request");
+            LogInfo("[RequestHttp] Executing PUT request");
             return ExecuteHttpRequest(args, "PUT");
         }
 
@@ -103,7 +103,7 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleDeleteRequest(JObject args)
         {
-            LogInfo("[ManageNetwork] Executing DELETE request");
+            LogInfo("[RequestHttp] Executing DELETE request");
             return ExecuteHttpRequest(args, "DELETE");
         }
 
@@ -112,7 +112,7 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleDownloadFile(JObject args)
         {
-            LogInfo("[ManageNetwork] Starting file download");
+            LogInfo("[RequestHttp] Starting file download");
             return DownloadFile(args);
         }
 
@@ -121,7 +121,7 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleUploadFile(JObject args)
         {
-            LogInfo("[ManageNetwork] Starting file upload");
+            LogInfo("[RequestHttp] Starting file upload");
             return UploadFile(args);
         }
 
@@ -130,7 +130,7 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandlePingRequest(JObject args)
         {
-            LogInfo("[ManageNetwork] Executing PING request");
+            LogInfo("[RequestHttp] Executing PING request");
             return PingHost(args);
         }
 
@@ -139,7 +139,7 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleBatchDownload(JObject args)
         {
-            LogInfo("[ManageHttp] Starting batch download");
+            LogInfo("[RequestHttp] Starting batch download");
             return BatchDownload(args);
         }
 
@@ -176,7 +176,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                LogError($"[ManageNetwork] HTTP请求执行失败: {e.Message}");
+                LogError($"[RequestHttp] HTTP请求执行失败: {e.Message}");
                 return Response.Error($"HTTP请求执行失败: {e.Message}");
             }
         }
@@ -236,7 +236,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                LogError($"[ManageNetwork] 请求执行错误: {e.Message}");
+                LogError($"[RequestHttp] 请求执行错误: {e.Message}");
                 return Response.Error($"请求执行错误: {e.Message}");
             }
             finally
@@ -523,7 +523,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                LogError($"[ManageNetwork] 文件下载失败: {e.Message}");
+                LogError($"[RequestHttp] 文件下载失败: {e.Message}");
                 return Response.Error($"文件下载失败: {e.Message}");
             }
         }
@@ -596,7 +596,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                LogError($"[ManageNetwork] 文件上传失败: {e.Message}");
+                LogError($"[RequestHttp] 文件上传失败: {e.Message}");
                 return Response.Error($"文件上传失败: {e.Message}");
             }
         }
@@ -649,7 +649,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                LogError($"[ManageNetwork] Ping失败: {e.Message}");
+                LogError($"[RequestHttp] Ping失败: {e.Message}");
                 return Response.Error($"Ping失败: {e.Message}");
             }
         }
@@ -775,7 +775,7 @@ namespace UnityMcp.Tools
                 var downloadResults = new List<object>();
                 var errors = new List<string>();
 
-                LogInfo($"[ManageHttp] 开始批量下载 {urls.Length} 个文件到 {fullSaveDirectory}");
+                LogInfo($"[RequestHttp] 开始批量下载 {urls.Length} 个文件到 {fullSaveDirectory}");
 
                 // 逐个下载文件
                 for (int i = 0; i < urls.Length; i++)
@@ -806,7 +806,7 @@ namespace UnityMcp.Tools
                         if (args["basic_auth"] != null) downloadArgs["basic_auth"] = args["basic_auth"];
                         if (args["user_agent"] != null) downloadArgs["user_agent"] = args["user_agent"];
 
-                        LogInfo($"[ManageHttp] 下载文件 {i + 1}/{urls.Length}: {url}");
+                        LogInfo($"[RequestHttp] 下载文件 {i + 1}/{urls.Length}: {url}");
 
                         // 调用单个文件下载方法
                         var result = DownloadFile(downloadArgs);
@@ -824,7 +824,7 @@ namespace UnityMcp.Tools
                     {
                         string error = $"下载失败 {url}: {e.Message}";
                         errors.Add(error);
-                        LogError($"[ManageHttp] {error}");
+                        LogError($"[RequestHttp] {error}");
 
                         downloadResults.Add(new
                         {
@@ -856,7 +856,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                LogError($"[ManageHttp] 批量下载失败: {e.Message}");
+                LogError($"[RequestHttp] 批量下载失败: {e.Message}");
                 return Response.Error($"批量下载失败: {e.Message}");
             }
         }

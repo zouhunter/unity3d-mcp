@@ -24,6 +24,7 @@ namespace UnityMcp.Windows
 
         // 工具方法列表相关变量
         private Dictionary<string, bool> methodFoldouts = new Dictionary<string, bool>();
+        private Dictionary<string, bool> assemblyFoldouts = new Dictionary<string, bool>(); // 程序集折叠状态
         private Vector2 methodsScrollPosition;
         private Dictionary<string, double> methodClickTimes = new Dictionary<string, double>();
         private const double doubleClickTime = 0.3; // 双击判定时间（秒）
@@ -388,7 +389,7 @@ namespace UnityMcp.Windows
         }
 
         /// <summary>
-        /// 绘制工具方法列表，支持折叠展开
+        /// 绘制工具方法列表，支持折叠展开，按程序集分类显示
         /// </summary>
         private void DrawMethodsList()
         {
@@ -399,145 +400,236 @@ namespace UnityMcp.Windows
             FunctionCall.EnsureMethodsRegisteredStatic();
             var methodNames = FunctionCall.GetRegisteredMethodNames();
 
+            // 按程序集分组方法
+            var methodsByAssembly = new Dictionary<string, List<(string methodName, IToolMethod method)>>();
+
+            foreach (var methodName in methodNames)
+            {
+                var method = FunctionCall.GetRegisteredMethod(methodName);
+                if (method == null) continue;
+
+                // 获取程序集名称
+                string assemblyName = GetAssemblyDisplayName(method.GetType().Assembly);
+
+                if (!methodsByAssembly.ContainsKey(assemblyName))
+                {
+                    methodsByAssembly[assemblyName] = new List<(string, IToolMethod)>();
+                }
+
+                methodsByAssembly[assemblyName].Add((methodName, method));
+            }
+
             // 滚动视图
             methodsScrollPosition = EditorGUILayout.BeginScrollView(methodsScrollPosition,
                 GUILayout.MinHeight(200), GUILayout.MaxHeight(400));
 
-            // 绘制每个方法
-            foreach (var methodName in methodNames.OrderBy(m => m))
+            // 按程序集名称排序并绘制
+            foreach (var assemblyGroup in methodsByAssembly.OrderBy(kvp => kvp.Key))
             {
-                // 获取方法实例
-                var method = FunctionCall.GetRegisteredMethod(methodName);
-                if (method == null) continue;
+                string assemblyName = assemblyGroup.Key;
+                var methods = assemblyGroup.Value.OrderBy(m => m.methodName).ToList();
 
-                // 确保该方法在字典中有一个条目
-                if (!methodFoldouts.ContainsKey(methodName))
+                // 确保程序集在折叠字典中有条目
+                if (!assemblyFoldouts.ContainsKey(assemblyName))
                 {
-                    methodFoldouts[methodName] = false;
+                    assemblyFoldouts[assemblyName] = false;
                 }
 
-                // 绘制折叠标题
+                // 绘制程序集折叠标题
                 EditorGUILayout.BeginVertical("box");
 
-                // 折叠标题栏样式
-                GUIStyle foldoutStyle = new GUIStyle(EditorStyles.foldout)
+                GUIStyle assemblyFoldoutStyle = new GUIStyle(EditorStyles.foldout)
                 {
-                    fontStyle = FontStyle.Bold
+                    fontStyle = FontStyle.Bold,
+                    fontSize = 12
                 };
 
-                // 在一行中显示折叠标题和问号按钮
                 EditorGUILayout.BeginHorizontal();
-
-                // 绘制折叠标题
-                Rect foldoutRect = EditorGUILayout.GetControlRect(true, EditorGUIUtility.singleLineHeight, GUILayout.ExpandWidth(true));
-
-                // 计算问号按钮的位置
-                float helpButtonWidth = 20f;
-                float helpButtonHeight = 18f;
-                float padding = 2f;
-
-                // 分离出问号按钮的区域
-                Rect helpButtonRect = new Rect(
-                    foldoutRect.xMax - helpButtonWidth - padding,
-                    foldoutRect.y + (foldoutRect.height - helpButtonHeight) / 2,
-                    helpButtonWidth,
-                    helpButtonHeight
-                );
-
-                // 留给折叠标题的区域
-                Rect actualFoldoutRect = new Rect(
-                    foldoutRect.x,
-                    foldoutRect.y,
-                    foldoutRect.width - helpButtonWidth - padding * 2,
-                    foldoutRect.height
-                );
-
-                // 绘制折叠标题
-                methodFoldouts[methodName] = EditorGUI.Foldout(
-                    actualFoldoutRect,
-                    methodFoldouts[methodName],
-                    methodName,
+                assemblyFoldouts[assemblyName] = EditorGUILayout.Foldout(
+                    assemblyFoldouts[assemblyName],
+                    $"{assemblyName} ({methods.Count})",
                     true,
-                    foldoutStyle);
-
-                // 绘制问号按钮
-                GUIStyle helpButtonStyle = new GUIStyle(EditorStyles.miniButton);
-
-                if (GUI.Button(helpButtonRect, "?", helpButtonStyle))
-                {
-                    // 处理按钮点击事件
-                    HandleMethodHelpClick(methodName, method);
-                }
-
+                    assemblyFoldoutStyle
+                );
                 EditorGUILayout.EndHorizontal();
 
-                // 如果展开，显示预览信息
-                if (methodFoldouts[methodName])
+                // 如果程序集展开，显示其中的方法
+                if (assemblyFoldouts[assemblyName])
                 {
-                    EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+                    EditorGUILayout.BeginVertical();
+                    EditorGUI.indentLevel++;
 
-                    // === 参数Keys信息部分 ===
-                    EditorGUILayout.BeginVertical("box");
-
-                    var keys = method.Keys;
-                    if (keys != null && keys.Length > 0)
+                    foreach (var (methodName, method) in methods)
                     {
-                        foreach (var key in keys)
+                        // 确保该方法在字典中有一个条目
+                        if (!methodFoldouts.ContainsKey(methodName))
                         {
-                            // 创建参数行的样式
-                            EditorGUILayout.BeginHorizontal();
-                            // 参数名称 - 必需参数用粗体，可选参数用普通字体
-                            GUIStyle keyStyle = EditorStyles.miniBoldLabel;
-                            Color originalColor = GUI.color;
-
-                            // 必需参数用红色标记，可选参数用灰色标记
-                            GUI.color = key.Optional ? Color.green : Color.red;
-                            // 参数名称
-                            EditorGUILayout.SelectableLabel(key.Key, keyStyle, GUILayout.Width(120), GUILayout.Height(EditorGUIUtility.singleLineHeight));
-                            GUI.color = originalColor;
-
-                            // 参数描述
-                            EditorGUILayout.SelectableLabel(key.Desc, keyStyle, GUILayout.Height(EditorGUIUtility.singleLineHeight));
-                            EditorGUILayout.EndHorizontal();
+                            methodFoldouts[methodName] = false;
                         }
+
+                        // 绘制方法折叠标题
+                        EditorGUILayout.BeginVertical("box");
+
+                        // 折叠标题栏样式
+                        GUIStyle foldoutStyle = new GUIStyle(EditorStyles.foldout)
+                        {
+                            fontStyle = FontStyle.Bold
+                        };
+
+                        // 在一行中显示折叠标题和问号按钮
+                        EditorGUILayout.BeginHorizontal();
+
+                        // 绘制折叠标题
+                        Rect foldoutRect = EditorGUILayout.GetControlRect(true, EditorGUIUtility.singleLineHeight, GUILayout.ExpandWidth(true));
+
+                        // 计算问号按钮的位置
+                        float helpButtonWidth = 20f;
+                        float helpButtonHeight = 18f;
+                        float padding = 2f;
+
+                        // 分离出问号按钮的区域
+                        Rect helpButtonRect = new Rect(
+                            foldoutRect.xMax - helpButtonWidth - padding,
+                            foldoutRect.y + (foldoutRect.height - helpButtonHeight) / 2,
+                            helpButtonWidth,
+                            helpButtonHeight
+                        );
+
+                        // 留给折叠标题的区域
+                        Rect actualFoldoutRect = new Rect(
+                            foldoutRect.x,
+                            foldoutRect.y,
+                            foldoutRect.width - helpButtonWidth - padding * 2,
+                            foldoutRect.height
+                        );
+
+                        // 绘制折叠标题
+                        methodFoldouts[methodName] = EditorGUI.Foldout(
+                            actualFoldoutRect,
+                            methodFoldouts[methodName],
+                            methodName,
+                            true,
+                            foldoutStyle);
+
+                        // 绘制问号按钮
+                        GUIStyle helpButtonStyle = new GUIStyle(EditorStyles.miniButton);
+
+                        if (GUI.Button(helpButtonRect, "?", helpButtonStyle))
+                        {
+                            // 处理按钮点击事件
+                            HandleMethodHelpClick(methodName, method);
+                        }
+
+                        EditorGUILayout.EndHorizontal();
+
+                        // 如果展开，显示预览信息
+                        if (methodFoldouts[methodName])
+                        {
+                            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+                            // === 参数Keys信息部分 ===
+                            EditorGUILayout.BeginVertical("box");
+
+                            var keys = method.Keys;
+                            if (keys != null && keys.Length > 0)
+                            {
+                                foreach (var key in keys)
+                                {
+                                    // 创建参数行的样式
+                                    EditorGUILayout.BeginHorizontal();
+                                    // 参数名称 - 必需参数用粗体，可选参数用普通字体
+                                    GUIStyle keyStyle = EditorStyles.miniBoldLabel;
+                                    Color originalColor = GUI.color;
+
+                                    // 必需参数用红色标记，可选参数用灰色标记
+                                    GUI.color = key.Optional ? Color.red : Color.green;
+                                    // 参数名称
+                                    EditorGUILayout.SelectableLabel(key.Key, keyStyle, GUILayout.Width(120), GUILayout.Height(EditorGUIUtility.singleLineHeight));
+                                    GUI.color = originalColor;
+
+                                    // 参数描述
+                                    EditorGUILayout.SelectableLabel(key.Desc, keyStyle, GUILayout.Height(EditorGUIUtility.singleLineHeight));
+                                    EditorGUILayout.EndHorizontal();
+                                }
+                            }
+                            else
+                            {
+                                EditorGUILayout.LabelField("无参数", EditorStyles.centeredGreyMiniLabel);
+                            }
+
+                            EditorGUILayout.EndVertical();
+
+                            // 添加一些间距
+                            EditorGUILayout.Space(3);
+
+                            // === 状态树结构部分 ===
+                            EditorGUILayout.BeginVertical("box");
+
+                            // 获取预览信息
+                            string preview = method.Preview();
+
+                            // 计算文本行数
+                            int lineCount = 1;
+                            if (!string.IsNullOrEmpty(preview))
+                            {
+                                lineCount = preview.Split('\n').Length;
+                            }
+
+                            // 显示预览信息
+                            EditorGUILayout.SelectableLabel(preview, EditorStyles.wordWrappedLabel,
+                            GUILayout.Height(EditorGUIUtility.singleLineHeight * lineCount * 0.8f));
+
+                            EditorGUILayout.EndVertical();
+                            EditorGUILayout.EndVertical();
+                        }
+
+                        EditorGUILayout.EndVertical();
                     }
-                    else
-                    {
-                        EditorGUILayout.LabelField("无参数", EditorStyles.centeredGreyMiniLabel);
-                    }
 
-                    EditorGUILayout.EndVertical();
-
-                    // 添加一些间距
-                    EditorGUILayout.Space(3);
-
-                    // === 状态树结构部分 ===
-                    EditorGUILayout.BeginVertical("box");
-
-                    // 获取预览信息
-                    string preview = method.Preview();
-
-                    // 计算文本行数
-                    int lineCount = 1;
-                    if (!string.IsNullOrEmpty(preview))
-                    {
-                        lineCount = preview.Split('\n').Length;
-                    }
-
-                    // 显示预览信息
-                    EditorGUILayout.SelectableLabel(preview, EditorStyles.wordWrappedLabel,
-                    GUILayout.Height(EditorGUIUtility.singleLineHeight * lineCount * 0.8f));
-
-                    EditorGUILayout.EndVertical();
+                    EditorGUI.indentLevel--;
                     EditorGUILayout.EndVertical();
                 }
 
                 EditorGUILayout.EndVertical();
+                EditorGUILayout.Space(5);
             }
 
             EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
         }
+
+        /// <summary>
+        /// 获取程序集的显示名称
+        /// </summary>
+        /// <param name="assembly">程序集</param>
+        /// <returns>程序集显示名称</returns>
+        private string GetAssemblyDisplayName(System.Reflection.Assembly assembly)
+        {
+            string assemblyName = assembly.GetName().Name;
+
+            // Return all names in English
+            if (assemblyName.StartsWith("Assembly-CSharp"))
+            {
+                return "Main Project Assembly";
+            }
+            else if (assemblyName.StartsWith("UnityMcp"))
+            {
+                return "Unity MCP";
+            }
+            else if (assemblyName.StartsWith("Unity."))
+            {
+                return $"Unity Built-in ({assemblyName.Replace("Unity.", "")})";
+            }
+            else if (assemblyName == "mscorlib" || assemblyName == "System" || assemblyName.StartsWith("System."))
+            {
+                return ".NET System Library";
+            }
+            else
+            {
+                return assemblyName;
+            }
+        }
+
         /// <summary>
         /// 处理方法帮助按钮的点击事件
         /// </summary>

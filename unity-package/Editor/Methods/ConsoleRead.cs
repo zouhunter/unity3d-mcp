@@ -14,9 +14,10 @@ namespace UnityMcp.Tools
     /// <summary>
     /// Handles reading and clearing Unity Editor console log entries.
     /// Uses reflection to access internal LogEntry methods/properties.
-    /// 对应方法名: read_console
+    /// 对应方法名: console_reader
     /// </summary>
-    public class ReadConsole : StateMethodBase
+    [ToolName("console_read")]
+    public class ConsoleRead : StateMethodBase
     {
         // 注意：实际的控制台操作功能已移至 ConsoleController
 

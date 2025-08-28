@@ -24,11 +24,12 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("action", "操作类型：play, pause, stop, get_state, set_active_tool, add_tag, add_layer", false),
+                new MethodKey("action", "操作类型：play, pause, stop, get_state, set_active_tool, add_tag, add_layer, execute_menu", false),
                 new MethodKey("wait_for_completion", "是否等待操作完成", true),
                 new MethodKey("tool_name", "工具名称（设置活动工具时使用）", true),
                 new MethodKey("tag_name", "标签名称（添加标签时使用）", true),
-                new MethodKey("layer_name", "层名称（添加层时使用）", true)
+                new MethodKey("layer_name", "层名称（添加层时使用）", true),
+                new MethodKey("menu_path", "菜单路径（执行菜单时使用）", true)
             };
         }
 
@@ -64,6 +65,9 @@ namespace UnityMcp.Tools
                     .Leaf("add_layer", HandleAddLayerAction)
                     .Leaf("remove_layer", HandleRemoveLayerAction)
                     .Leaf("get_layers", HandleGetLayersAction)
+
+                    // Menu Management
+                    .Leaf("execute_menu", MenuUtils.HandleExecuteMenu)
                 .Build();
         }
 

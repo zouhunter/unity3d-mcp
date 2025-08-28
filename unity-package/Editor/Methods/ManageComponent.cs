@@ -4,24 +4,18 @@ using System.Linq;
 using System.Reflection;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
-using UnityEditor.SceneManagement;
-using UnityEditorInternal;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityMcp.Models; // For Response class
 
 namespace UnityMcp.Tools
 {
     /// <summary>
-    /// Handles GameObject manipulation operations (modify, delete).
-    /// Scene hierarchy and creation operations are handled by ManageHierarchy.
-    /// Component operations are handled by ManageComponent.
-    /// 对应方法名: manage_gameobject
+    /// Handles Component manipulation operations (get, add, remove, set properties).
+    /// 对应方法名: manage_component
     /// </summary>
-    [ToolName("manage_gameobject")]
-    public class ManageGameObject : StateMethodBase
+    [ToolName("manage_component")]
+    public class ManageComponent : StateMethodBase
     {
-        // Instance of ManageHierarchy for finding GameObjects
         /// <summary>
         /// 创建当前方法支持的参数键列表
         /// </summary>
@@ -29,17 +23,13 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("action", "操作类型：modify, delete", false),
+                new MethodKey("action", "操作类型：get_components, add_component, remove_component, set_component_property", false),
                 new MethodKey("target", "目标GameObject标识符（名称、ID或路径）", false),
-                new MethodKey("name", "GameObject名称", true),
-                new MethodKey("tag", "GameObject标签", true),
-                new MethodKey("layer", "GameObject所在层", true),
-                new MethodKey("parent", "父对象标识符", true),
-                new MethodKey("position", "位置坐标 [x, y, z]", true),
-                new MethodKey("rotation", "旋转角度 [x, y, z]", true),
-                new MethodKey("scale", "缩放比例 [x, y, z]", true),
-                new MethodKey("set_active", "设置激活状态", true),
-                new MethodKey("search_method", "搜索方法：by_name, by_id, by_tag, by_layer等", true)
+                new MethodKey("search_method", "搜索方法：by_name, by_id, by_tag, by_layer等", true),
+                new MethodKey("component_name", "组件名称", true),
+                new MethodKey("components_to_add", "要添加的组件列表", true),
+                new MethodKey("components_to_remove", "要移除的组件列表", true),
+                new MethodKey("component_properties", "组件属性字典", true)
             };
         }
 
@@ -48,68 +38,82 @@ namespace UnityMcp.Tools
             return StateTreeBuilder
                 .Create()
                 .Key("action")
-                    .Leaf("modify", HandleModifyAction)
-                    .Leaf("delete", HandleDeleteAction)
-                    .Leaf("get_components", HandleComponentRedirect)
-                    .Leaf("add_component", HandleComponentRedirect)
-                    .Leaf("remove_component", HandleComponentRedirect)
-                    .Leaf("set_component_property", HandleComponentRedirect)
+                    .Leaf("get_components", HandleGetComponentsAction)
+                    .Leaf("add_component", HandleAddComponentAction)
+                    .Leaf("remove_component", HandleRemoveComponentAction)
+                    .Leaf("set_component_property", HandleSetComponentPropertyAction)
                 .Build();
         }
-
 
         // --- State Tree Action Handlers ---
 
         /// <summary>
-        /// 重定向组件相关操作到ManageComponent
+        /// 处理获取组件的操作
         /// </summary>
-        private object HandleComponentRedirect(JObject args)
-        {
-            string action = args["action"]?.ToString();
-            return Response.Error($"Component operation '{action}' has been moved to the 'manage_component' method. Please use 'manage_component' instead of 'manage_gameobject' for component-related operations.");
-        }
-
-        /// <summary>
-        /// 处理修改GameObject的操作
-        /// </summary>
-        private object HandleModifyAction(JObject args)
+        private object HandleGetComponentsAction(JObject args)
         {
             JToken targetToken = args["target"];
-            string searchMethod = args["searchMethod"]?.ToString()?.ToLower();
+            string searchMethod = args["search_method"]?.ToString()?.ToLower();
+            string getCompTarget = targetToken?.ToString();
+
+            if (getCompTarget == null)
+                return Response.Error("'target' parameter required for get_components.");
 
             // 检查预制体重定向
-            object redirectResult = CheckPrefabRedirection(args, "modify");
+            object redirectResult = CheckPrefabRedirection(args, "get_components");
             if (redirectResult != null)
                 return redirectResult;
 
-            return ModifyGameObject(args, targetToken, searchMethod);
+            return GetComponentsFromTarget(getCompTarget, searchMethod);
         }
 
         /// <summary>
-        /// 处理删除GameObject的操作
+        /// 处理添加组件的操作
         /// </summary>
-        private object HandleDeleteAction(JObject args)
+        private object HandleAddComponentAction(JObject args)
         {
             JToken targetToken = args["target"];
-            string searchMethod = args["searchMethod"]?.ToString()?.ToLower();
+            string searchMethod = args["search_method"]?.ToString()?.ToLower();
 
             // 检查预制体重定向
-            object redirectResult = CheckPrefabRedirection(args, "delete");
+            object redirectResult = CheckPrefabRedirection(args, "add_component");
             if (redirectResult != null)
                 return redirectResult;
 
-            return DeleteGameObject(targetToken, searchMethod);
+            return AddComponentToTarget(args, targetToken, searchMethod);
         }
 
+        /// <summary>
+        /// 处理移除组件的操作
+        /// </summary>
+        private object HandleRemoveComponentAction(JObject args)
+        {
+            JToken targetToken = args["target"];
+            string searchMethod = args["search_method"]?.ToString()?.ToLower();
 
+            // 检查预制体重定向
+            object redirectResult = CheckPrefabRedirection(args, "remove_component");
+            if (redirectResult != null)
+                return redirectResult;
 
+            return RemoveComponentFromTarget(args, targetToken, searchMethod);
+        }
 
+        /// <summary>
+        /// 处理设置组件属性的操作
+        /// </summary>
+        private object HandleSetComponentPropertyAction(JObject args)
+        {
+            JToken targetToken = args["target"];
+            string searchMethod = args["search_method"]?.ToString()?.ToLower();
 
+            // 检查预制体重定向
+            object redirectResult = CheckPrefabRedirection(args, "set_component_property");
+            if (redirectResult != null)
+                return redirectResult;
 
-
-
-
-
+            return SetComponentPropertyOnTarget(args, targetToken, searchMethod);
+        }
 
         /// <summary>
         /// 检查预制体重定向逻辑
@@ -123,11 +127,31 @@ namespace UnityMcp.Tools
                 return null; // 不是预制体，继续正常处理
 
             // 允许某些操作，禁止其他操作
-            if (action == "modify")
+            if (action == "set_component_property")
             {
-                return Response.Error($"Prefab modification should be performed using the 'manage_asset' command.");
+                LogInfo($"[ManageComponent->ManageAsset] Redirecting action '{action}' for prefab '{targetPath}' to ManageAsset.");
+
+                // 准备 ManageAsset 参数
+                JObject assetParams = new JObject();
+                assetParams["action"] = "modify"; // ManageAsset 使用 "modify"
+                assetParams["path"] = targetPath;
+
+                // 提取属性
+                string compName = args["component_name"]?.ToString();
+                JObject compProps = args["component_properties"]?[compName] as JObject;
+                if (string.IsNullOrEmpty(compName))
+                    return Response.Error("Missing 'component_name' for 'set_component_property' on prefab.");
+                if (compProps == null)
+                    return Response.Error($"Missing or invalid 'component_properties' for component '{compName}' for 'set_component_property' on prefab.");
+
+                JObject properties = new JObject();
+                properties[compName] = compProps;
+                assetParams["properties"] = properties;
+
+                // 调用 ManageAsset 处理器
+                return new ManageAsset().ExecuteMethod(assetParams);
             }
-            else if (action == "delete")
+            else if (action == "add_component" || action == "remove_component" || action == "get_components")
             {
                 return Response.Error($"Action '{action}' on a prefab asset ('{targetPath}') should be performed using the 'manage_asset' command.");
             }
@@ -135,13 +159,36 @@ namespace UnityMcp.Tools
             return null; // 其他操作可以继续
         }
 
+        // --- Core Methods ---
 
+        private object GetComponentsFromTarget(string target, string searchMethod)
+        {
+            GameObject targetGo = GameObjectUtils.FindObjectInternal(target, searchMethod);
+            if (targetGo == null)
+            {
+                return Response.Error(
+                    $"Target GameObject ('{target}') not found using method '{searchMethod ?? "default"}'."
+                );
+            }
 
+            try
+            {
+                Component[] components = targetGo.GetComponents<Component>();
+                var componentData = components.Select(c => GetComponentData(c)).ToList();
+                return Response.Success(
+                    $"Retrieved {componentData.Count} components from '{targetGo.name}'.",
+                    componentData
+                );
+            }
+            catch (Exception e)
+            {
+                return Response.Error(
+                    $"Error getting components from '{targetGo.name}': {e.Message}"
+                );
+            }
+        }
 
-
-        // --- Action Implementations ---
-
-        private object ModifyGameObject(
+        private object AddComponentToTarget(
             JObject cmd,
             JToken targetToken,
             string searchMethod
@@ -155,225 +202,276 @@ namespace UnityMcp.Tools
                 );
             }
 
-            // Record state for Undo *before* modifications
-            Undo.RecordObject(targetGo.transform, "Modify GameObject Transform");
-            Undo.RecordObject(targetGo, "Modify GameObject Properties");
+            string typeName = null;
+            JObject properties = null;
 
-            bool modified = false;
-
-            // Rename (using consolidated 'name' parameter)
-            string name = cmd["name"]?.ToString();
-            if (!string.IsNullOrEmpty(name) && targetGo.name != name)
+            // Allow adding component specified directly or via components_to_add array (take first)
+            if (cmd["component_name"] != null)
             {
-                targetGo.name = name;
-                modified = true;
+                typeName = cmd["component_name"]?.ToString();
+                properties = cmd["component_properties"]?[typeName] as JObject; // Check if props are nested under name
             }
-
-            // Change Parent (using consolidated 'parent' parameter)
-            JToken parentToken = cmd["parent"];
-            if (parentToken != null)
+            else if (
+               cmd["components_to_add"] is JArray componentsToAddArray
+                && componentsToAddArray.Count > 0
+            )
             {
-                GameObject newParentGo = GameObjectUtils.FindObjectInternal(parentToken, "by_id_or_name_or_path");
-                if (
-                    newParentGo == null
-                    && !(
-                        parentToken.Type == JTokenType.Null
-                        || (
-                            parentToken.Type == JTokenType.String
-                            && string.IsNullOrEmpty(parentToken.ToString())
-                        )
-                    )
-                )
+                var compToken = componentsToAddArray.First;
+                if (compToken.Type == JTokenType.String)
+                    typeName = compToken.ToString();
+                else if (compToken is JObject compObj)
                 {
-                    return Response.Error($"New parent ('{parentToken}') not found.");
-                }
-                // Check for hierarchy loops
-                if (newParentGo != null && newParentGo.transform.IsChildOf(targetGo.transform))
-                {
-                    return Response.Error(
-                        $"Cannot parent '{targetGo.name}' to '{newParentGo.name}', as it would create a hierarchy loop."
-                    );
-                }
-                if (targetGo.transform.parent != (newParentGo?.transform))
-                {
-                    targetGo.transform.SetParent(newParentGo?.transform, true); // worldPositionStays = true
-                    modified = true;
+                    typeName = compObj["typeName"]?.ToString();
+                    properties = compObj["properties"] as JObject;
                 }
             }
 
-            // Set Active State
-            bool? setActive = cmd["setActive"]?.ToObject<bool?>();
-            if (setActive.HasValue && targetGo.activeSelf != setActive.Value)
+            if (string.IsNullOrEmpty(typeName))
             {
-                targetGo.SetActive(setActive.Value);
-                modified = true;
-            }
-
-            // Change Tag (using consolidated 'tag' parameter)
-            string tag = cmd["tag"]?.ToString();
-            // Only attempt to change tag if a non-null tag is provided and it's different from the current one.
-            // Allow setting an empty string to remove the tag (Unity uses "Untagged").
-            if (tag != null && targetGo.tag != tag)
-            {
-                // Ensure the tag is not empty, if empty, it means "Untagged" implicitly
-                string tagToSet = string.IsNullOrEmpty(tag) ? "Untagged" : tag;
-
-                try
-                {
-                    // First attempt to set the tag
-                    targetGo.tag = tagToSet;
-                    modified = true;
-                }
-                catch (UnityException ex)
-                {
-                    // Check if the error is specifically because the tag doesn't exist
-                    if (ex.Message.Contains("is not defined"))
-                    {
-                        LogInfo($"[ManageGameObject] Tag '{tagToSet}' not found. Attempting to create it.");
-                        try
-                        {
-                            // Attempt to create the tag using internal utility
-                            InternalEditorUtility.AddTag(tagToSet);
-                            // Wait a frame maybe? Not strictly necessary but sometimes helps editor updates.
-                            // yield return null; // Cannot yield here, editor script limitation
-
-                            // Retry setting the tag immediately after creation
-                            targetGo.tag = tagToSet;
-                            modified = true; // Mark as modified on successful retry
-                            LogInfo($"[ManageGameObject] Tag '{tagToSet}' created and assigned successfully.");
-                        }
-                        catch (Exception innerEx)
-                        {
-                            // Handle failure during tag creation or the second assignment attempt
-                            Debug.LogError(
-                                $"[ManageGameObject] Failed to create or assign tag '{tagToSet}' after attempting creation: {innerEx.Message}"
-                            );
-                            return Response.Error(
-                                $"Failed to create or assign tag '{tagToSet}': {innerEx.Message}. Check Tag Manager and permissions."
-                            );
-                        }
-                    }
-                    else
-                    {
-                        // If the exception was for a different reason, return the original error
-                        return Response.Error($"Failed to set tag to '{tagToSet}': {ex.Message}.");
-                    }
-                }
-            }
-
-            // Change Layer (using consolidated 'layer' parameter)
-            string layerName = cmd["layer"]?.ToString();
-            if (!string.IsNullOrEmpty(layerName))
-            {
-                int layerId = LayerMask.NameToLayer(layerName);
-                if (layerId == -1 && layerName != "Default")
-                {
-                    return Response.Error(
-                        $"Invalid layer specified: '{layerName}'. Use a valid layer name."
-                    );
-                }
-                if (layerId != -1 && targetGo.layer != layerId)
-                {
-                    targetGo.layer = layerId;
-                    modified = true;
-                }
-            }
-
-            // Transform Modifications
-            Vector3? position = GameObjectUtils.ParseVector3(cmd["position"] as JArray);
-            Vector3? rotation = GameObjectUtils.ParseVector3(cmd["rotation"] as JArray);
-            Vector3? scale = GameObjectUtils.ParseVector3(cmd["scale"] as JArray);
-
-            if (position.HasValue && targetGo.transform.localPosition != position.Value)
-            {
-                targetGo.transform.localPosition = position.Value;
-                modified = true;
-            }
-            if (rotation.HasValue && targetGo.transform.localEulerAngles != rotation.Value)
-            {
-                targetGo.transform.localEulerAngles = rotation.Value;
-                modified = true;
-            }
-            if (scale.HasValue && targetGo.transform.localScale != scale.Value)
-            {
-                targetGo.transform.localScale = scale.Value;
-                modified = true;
-            }
-
-            // Component operations have been moved to ManageComponent
-
-            if (!modified)
-            {
-                return Response.Success(
-                    $"No modifications applied to GameObject '{targetGo.name}'.",
-                    GameObjectUtils.GetGameObjectData(targetGo)
+                return Response.Error(
+                    "Component type name ('component_name' or first element in 'components_to_add') is required."
                 );
             }
 
-            EditorUtility.SetDirty(targetGo); // Mark scene as dirty
+            var addResult = GameObjectUtils.AddComponentInternal(targetGo, typeName, properties);
+            if (addResult != null)
+                return addResult; // Return error
+
+            // Set properties if provided (after successful component addition)
+            if (properties != null)
+            {
+                var setResult = SetComponentPropertiesInternal(
+                    targetGo,
+                    typeName,
+                    properties
+                );
+                if (setResult != null)
+                {
+                    // If setting properties failed, consider removing the component or log warning
+                    Debug.LogWarning($"[ManageComponent] Failed to set properties for component '{typeName}': {setResult}");
+                }
+            }
+
+            EditorUtility.SetDirty(targetGo);
             return Response.Success(
-                $"GameObject '{targetGo.name}' modified successfully.",
+                $"Component '{typeName}' added to '{targetGo.name}'.",
+                GameObjectUtils.GetGameObjectData(targetGo)
+            ); // Return updated GO data
+        }
+
+        private object RemoveComponentFromTarget(
+            JObject cmd,
+            JToken targetToken,
+            string searchMethod
+        )
+        {
+            GameObject targetGo = GameObjectUtils.FindObjectInternal(targetToken, searchMethod);
+            if (targetGo == null)
+            {
+                return Response.Error(
+                    $"Target GameObject ('{targetToken}') not found using method '{searchMethod ?? "default"}'."
+                );
+            }
+
+            string typeName = null;
+            // Allow removing component specified directly or via components_to_remove array (take first)
+            if (cmd["component_name"] != null)
+            {
+                typeName = cmd["component_name"]?.ToString();
+            }
+            else if (
+               cmd["components_to_remove"] is JArray componentsToRemoveArray
+                && componentsToRemoveArray.Count > 0
+            )
+            {
+                typeName = componentsToRemoveArray.First?.ToString();
+            }
+
+            if (string.IsNullOrEmpty(typeName))
+            {
+                return Response.Error(
+                    "Component type name ('component_name' or first element in 'components_to_remove') is required."
+                );
+            }
+
+            var removeResult = RemoveComponentInternal(targetGo, typeName);
+            if (removeResult != null)
+                return removeResult; // Return error
+
+            EditorUtility.SetDirty(targetGo);
+            return Response.Success(
+                $"Component '{typeName}' removed from '{targetGo.name}'.",
                 GameObjectUtils.GetGameObjectData(targetGo)
             );
         }
 
-        private object DeleteGameObject(JToken targetToken, string searchMethod)
+        private object SetComponentPropertyOnTarget(
+            JObject cmd,
+            JToken targetToken,
+            string searchMethod
+        )
         {
-            // Find potentially multiple objects if name/tag search is used without find_all=false implicitly
-            List<GameObject> targets = GameObjectUtils.FindObjectsInternal(targetToken, searchMethod, true); // find_all=true for delete safety
-
-            if (targets.Count == 0)
+            GameObject targetGo = GameObjectUtils.FindObjectInternal(targetToken, searchMethod);
+            if (targetGo == null)
             {
                 return Response.Error(
-                    $"Target GameObject(s) ('{targetToken}') not found using method '{searchMethod ?? "default"}'."
+                    $"Target GameObject ('{targetToken}') not found using method '{searchMethod ?? "default"}'."
                 );
             }
 
-            List<object> deletedObjects = new List<object>();
-            foreach (var targetGo in targets)
-            {
-                if (targetGo != null)
-                {
-                    string goName = targetGo.name;
-                    int goId = targetGo.GetInstanceID();
-                    // Use Undo.DestroyObjectImmediate for undo support
-                    Undo.DestroyObjectImmediate(targetGo);
-                    deletedObjects.Add(new { name = goName, instanceID = goId });
-                }
-            }
+            string compName = cmd["component_name"]?.ToString();
+            JObject propertiesToSet = null;
 
-            if (deletedObjects.Count > 0)
+            if (!string.IsNullOrEmpty(compName))
             {
-                string message =
-                    targets.Count == 1
-                        ? $"GameObject '{deletedObjects[0].GetType().GetProperty("name").GetValue(deletedObjects[0])}' deleted successfully."
-                        : $"{deletedObjects.Count} GameObjects deleted successfully.";
-                return Response.Success(message, deletedObjects);
+                // Properties might be directly under component_properties or nested under the component name
+                if (cmd["component_properties"] is JObject compProps)
+                {
+                    propertiesToSet = compProps[compName] as JObject ?? compProps; // Allow flat or nested structure
+                }
             }
             else
             {
-                // Should not happen if targets.Count > 0 initially, but defensive check
-                return Response.Error("Failed to delete target GameObject(s).");
+                return Response.Error("'component_name' parameter is required.");
             }
+
+            if (propertiesToSet == null || !propertiesToSet.HasValues)
+            {
+                return Response.Error(
+                    "'component_properties' dictionary for the specified component is required and cannot be empty."
+                );
+            }
+
+            var setResult = SetComponentPropertiesInternal(targetGo, compName, propertiesToSet);
+            if (setResult != null)
+                return setResult; // Return error
+
+            EditorUtility.SetDirty(targetGo);
+            return Response.Success(
+                $"Properties set for component '{compName}' on '{targetGo.name}'.",
+                GameObjectUtils.GetGameObjectData(targetGo)
+            );
         }
-
-
-
-
-
-
-
-
-
-
 
         // --- Component Helper Methods ---
 
+        /// <summary>
+        /// Removes a component by type name.
+        /// Returns null on success, or an error response object on failure.
+        /// </summary>
+        private object RemoveComponentInternal(GameObject targetGo, string typeName)
+        {
+            Type componentType = GameObjectUtils.FindType(typeName);
+            if (componentType == null)
+            {
+                return Response.Error($"Component type '{typeName}' not found for removal.");
+            }
 
+            // Prevent removing essential components
+            if (componentType == typeof(Transform))
+            {
+                return Response.Error("Cannot remove the Transform component.");
+            }
 
+            Component componentToRemove = targetGo.GetComponent(componentType);
+            if (componentToRemove == null)
+            {
+                return Response.Error(
+                    $"Component '{typeName}' not found on '{targetGo.name}' to remove."
+                );
+            }
 
+            try
+            {
+                // Use Undo.DestroyObjectImmediate for undo support
+                Undo.DestroyObjectImmediate(componentToRemove);
+                return null; // Success
+            }
+            catch (Exception e)
+            {
+                return Response.Error(
+                    $"Error removing component '{typeName}' from '{targetGo.name}': {e.Message}"
+                );
+            }
+        }
 
+        /// <summary>
+        /// Sets properties on a component.
+        /// Returns null on success, or an error response object on failure.
+        /// </summary>
+        private object SetComponentPropertiesInternal(
+            GameObject targetGo,
+            string compName,
+            JObject propertiesToSet,
+            Component targetComponentInstance = null
+        )
+        {
+            Component targetComponent = targetComponentInstance;
 
+            // If no specific component instance is provided, find it by type name
+            if (targetComponent == null)
+            {
+                // Use FindType helper to locate the correct component type
+                Type componentType = GameObjectUtils.FindType(compName);
+                if (componentType != null && typeof(Component).IsAssignableFrom(componentType))
+                {
+                    targetComponent = targetGo.GetComponent(componentType);
+                }
+                else
+                {
+                    // Fallback: try common Unity component namespaces
+                    string[] commonNamespaces = { "UnityEngine", "UnityEngine.UI" };
+                    foreach (string ns in commonNamespaces)
+                    {
+                        string fullTypeName = $"{ns}.{compName}";
+                        componentType = GameObjectUtils.FindType(fullTypeName);
+                        if (componentType != null && typeof(Component).IsAssignableFrom(componentType))
+                        {
+                            targetComponent = targetGo.GetComponent(componentType);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (targetComponent == null)
+            {
+                return Response.Error(
+                    $"Component '{compName}' not found on '{targetGo.name}' to set properties."
+                );
+            }
+
+            Undo.RecordObject(targetComponent, "Set Component Properties");
+
+            foreach (var prop in propertiesToSet.Properties())
+            {
+                string propName = prop.Name;
+                JToken propValue = prop.Value;
+
+                try
+                {
+                    if (!SetProperty(targetComponent, propName, propValue))
+                    {
+                        // Log warning if property could not be set
+                        Debug.LogWarning(
+                            $"[ManageComponent] Could not set property '{propName}' on component '{compName}' ('{targetComponent.GetType().Name}'). Property might not exist, be read-only, or type mismatch."
+                        );
+                        // Optionally return an error here instead of just logging
+                        // return Response.Error($"Could not set property '{propName}' on component '{compName}'.");
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError(
+                        $"[ManageComponent] Error setting property '{propName}' on '{compName}': {e.Message}"
+                    );
+                    // Optionally return an error here
+                    // return Response.Error($"Error setting property '{propName}' on '{compName}': {e.Message}");
+                }
+            }
+            EditorUtility.SetDirty(targetComponent);
+            return null; // Success (or partial success if warnings were logged)
+        }
 
         /// <summary>
         /// Helper to set a property or field via reflection, handling basic types.
@@ -954,12 +1052,6 @@ namespace UnityMcp.Tools
             }
         }
 
-
-
-
-
-
-
         /// <summary>
         /// Creates a serializable representation of a Component.
         /// TODO: Add property serialization.
@@ -994,7 +1086,5 @@ namespace UnityMcp.Tools
             */
             return data;
         }
-
     }
 }
-

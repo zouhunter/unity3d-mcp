@@ -96,13 +96,13 @@ namespace UnityMcp.Tools
         private object CreateAsset(JObject args)
         {
             string path = args["path"]?.ToString();
-            string assetType = args["assetType"]?.ToString();
+            string assetType = args["asset_type"]?.ToString();
             JObject properties = args["properties"] as JObject;
 
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for create.");
             if (string.IsNullOrEmpty(assetType))
-                return Response.Error("'assetType' is required for create.");
+                return Response.Error("'asset_type' is required for create.");
 
             string fullPath = SanitizeAssetPath(path);
             string directory = Path.GetDirectoryName(fullPath);
@@ -144,10 +144,10 @@ namespace UnityMcp.Tools
                 }
                 else if (lowerAssetType == "scriptableobject")
                 {
-                    string scriptClassName = properties?["scriptClass"]?.ToString();
+                    string scriptClassName = properties?["script_class"]?.ToString();
                     if (string.IsNullOrEmpty(scriptClassName))
                         return Response.Error(
-                            "'scriptClass' property required when creating ScriptableObject asset."
+                            "'script_class' property required when creating ScriptableObject asset."
                         );
 
                     Type scriptType = FindType(scriptClassName);
@@ -182,7 +182,7 @@ namespace UnityMcp.Tools
                         "Creating prefabs programmatically usually requires a source GameObject. Use manage_gameobject to create/configure, then save as prefab via a separate mechanism or future enhancement."
                     );
                     // Example (conceptual):
-                    // GameObject source = GameObject.Find(properties["sourceGameObject"].ToString());
+                    // GameObject source = GameObject.Find(properties["source_gameobject"].ToString());
                     // if(source != null) PrefabUtility.SaveAsPrefabAsset(source, fullPath);
                 }
                 // TODO: Add more asset types (Animation Controller, Scene, etc.)
@@ -584,13 +584,13 @@ namespace UnityMcp.Tools
 
         private object SearchAssets(JObject args)
         {
-            string searchPattern = args["searchPattern"]?.ToString();
-            string filterType = args["filterType"]?.ToString();
+            string searchPattern = args["search_pattern"]?.ToString();
+            string filterType = args["filter_type"]?.ToString();
             string pathScope = args["path"]?.ToString(); // Use path as folder scope
-            string filterDateAfterStr = args["filterDateAfter"]?.ToString();
-            int pageSize = args["pageSize"]?.ToObject<int?>() ?? 50; // Default page size
-            int pageNumber = args["pageNumber"]?.ToObject<int?>() ?? 1; // Default page number (1-based)
-            bool generatePreview = args["generatePreview"]?.ToObject<bool>() ?? false;
+            string filterDateAfterStr = args["filter_date_after"]?.ToString();
+            int pageSize = args["page_size"]?.ToObject<int?>() ?? 50; // Default page size
+            int pageNumber = args["page_number"]?.ToObject<int?>() ?? 1; // Default page number (1-based)
+            bool generatePreview = args["generate_preview"]?.ToObject<bool>() ?? false;
 
             List<string> searchFilters = new List<string>();
             if (!string.IsNullOrEmpty(searchPattern))
@@ -630,7 +630,7 @@ namespace UnityMcp.Tools
                 else
                 {
                     Debug.LogWarning(
-                        $"Could not parse filterDateAfter: '{filterDateAfterStr}'. Expected ISO 8601 format."
+                        $"Could not parse filter_date_after: '{filterDateAfterStr}'. Expected ISO 8601 format."
                     );
                 }
             }
@@ -690,7 +690,7 @@ namespace UnityMcp.Tools
         private object GetAssetInfo(JObject args)
         {
             string path = args["path"]?.ToString();
-            bool generatePreview = args["generatePreview"]?.ToObject<bool>() ?? false;
+            bool generatePreview = args["generate_preview"]?.ToObject<bool>() ?? false;
 
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for get_info.");

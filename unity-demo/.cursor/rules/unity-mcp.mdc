@@ -7,7 +7,7 @@ alwaysApply: true
 
 本文档将工具按两类划分：
 - Tools: `function_call`, `functions_call`（调用/批量调用 Methods）。
-- Methods: `execute_menu_item`, `manage_asset`, `manage_editor`, `manage_gameobject`, `manage_http`, `manage_scene`, `manage_script`, `read_console`（均作为 `func` 传给 Tools）。
+- Methods: `hierarchy_create`, `hierarchy_link`, `hierarchy_search`, `manage_asset`, `manage_component`, `manage_editor`, `manage_gameobject`, `manage_http`, `manage_scene`, `manage_script`, `manage_shader`, `manage_texture`, `console_read`（均作为 `func` 传给 Tools）。
 
 除 `function_call` 与 `functions_call` 外，其余均为 Methods 名称，不直接调用；请通过 Tools 调用，并把方法参数放入 `args`（JSON 字符串）。
 
@@ -16,15 +16,20 @@ alwaysApply: true
   - `function_call`
   - `functions_call`
 - Methods
-  - `execute_menu_item`
   - `gm_command`
+  - `hierarchy_create`
+  - `hierarchy_link` 
+  - `hierarchy_search`
   - `manage_asset`
+  - `manage_component`
   - `manage_editor`
   - `manage_gameobject`
   - `manage_http`
   - `manage_scene`
   - `manage_script`
-  - `read_console`
+  - `manage_shader`
+  - `manage_texture`
+  - `console_read`
 - 使用指南
 
 ---
@@ -57,18 +62,17 @@ function_call(
 ```
 
 ---
-
 ### functions_call - 批量函数调用工具
 **功能**: 按顺序执行多个 Unity MCP 方法调用并收集所有返回值。
 
 参数
-- `function_calls` (string): 函数调用列表 JSON 字符串。
+- `funcs` (list): 函数调用列表。
 
 参数格式
-```json 示例：批量创建并添加组件
+```json
 [
-  { "func": "manage_gameobject", "args": "{\"action\":\"create\",\"name\":\"Enemy\",\"primitive_type\":\"Cube\"}" },
-  { "func": "manage_gameobject", "args": "{\"action\":\"add_component\",\"target\":\"Enemy\",\"component_name\":\"Rigidbody\"}" }
+  { "func": "manage_gameobject", "args": {"action": "create", "name": "Enemy", "primitive_type": "Cube"} },
+  { "func": "manage_gameobject", "args": {"action": "add_component", "target": "Enemy", "component_name": "Rigidbody"} }
 ]
 ```
 
@@ -84,36 +88,22 @@ function_call(
 }
 ```
 
+示例：批量创建并添加组件
+```python
+functions_call(
+  funcs=[
+    {"func": "manage_gameobject", "args": {"action": "create", "name": "Enemy", "primitive_type": "Cube"}},
+    {"func": "manage_gameobject", "args": {"action": "add_component", "target": "Enemy", "component_name": "Rigidbody"}}
+  ]
+)
+```
+
 ---
 
 ## 🧩 Methods
 > 通过 Tools 调用以下方法：
 > - 单次：使用 `function_call`，设置 `func` 为方法名，`args` 为方法参数 JSON 字符串。
 > - 批量：使用 `functions_call`，把多条 `{func, args}` 放入 `function_calls`。
-
-### execute_menu_item - Unity编辑器菜单执行
-**功能**: 执行Unity编辑器中的菜单命令。
-
-主要参数（放入 `args`）
-- `action` (string): 操作类型，默认 `execute`
-- `menu_path` (string, 必需): 菜单项完整路径
-
-示例：
-```python
-function_call(
-  func="execute_menu_item",
-  args="{\"action\":\"execute\",\"menu_path\":\"File/Save Project\"}"
-)
-```
-
-常用菜单路径
-- "File/Save Project" - 保存项目
-- "File/Save Scenes" - 保存场景
-- "GameObject/Create Empty" - 创建空GameObject
-- "Assets/Reimport All" - 重新导入所有资产
-- "Window/General/Console" - 打开控制台窗口
-
----
 
 ### gm_command - GM指令执行工具
 **功能**: 执行游戏管理员(GM)相关指令，用于游戏开发和调试。
@@ -142,6 +132,182 @@ function_call(
 ```
 
 注意：此工具当前处于测试阶段，主要用于验证GM指令系统的基础功能。
+
+---
+
+### hierarchy_create - 层级对象创建工具
+**功能**: 在Unity场景层级中创建GameObject对象，支持从基元、预制体和菜单项创建。
+
+主要参数（放入 `args`）
+- `from` (string, 必需): 操作类型，支持 `menu`、`primitive`、`prefab`
+- `name` (string, 可选): GameObject名称
+- `tag` (string, 可选): GameObject标签
+- `layer` (string, 可选): GameObject所在层
+- `parent` (string, 可选): 父对象标识符
+- `position` (list, 可选): 位置坐标 [x, y, z]
+- `rotation` (list, 可选): 旋转角度 [x, y, z]
+- `scale` (list, 可选): 缩放比例 [x, y, z]
+- `primitive_type` (string, 可选): 基元类型，支持 `Cube`、`Sphere`、`Cylinder`、`Capsule`、`Plane`、`Quad`
+- `prefab_path` (string, 可选): 预制体路径
+- `menu_path` (string, 可选): 菜单路径
+- `save_as_prefab` (bool, 可选): 是否保存为预制体
+- `set_active` (bool, 可选): 设置激活状态
+- `components_to_add` (list, 可选): 要添加的组件列表
+
+支持的创建类型 (from)
+- `primitive` - 从基元类型创建（Cube、Sphere等）
+- `prefab` - 从预制体实例化
+- `menu` - 通过Unity菜单项创建
+
+示例：创建基础立方体
+```python
+function_call(
+  func="hierarchy_create",
+  args="{\"from\":\"primitive\",\"primitive_type\":\"Cube\",\"name\":\"MyCube\",\"position\":[0,1,0],\"tag\":\"Interactable\"}"
+)
+```
+
+示例：从预制体创建
+```python
+function_call(
+  func="hierarchy_create",
+  args="{\"from\":\"prefab\",\"prefab_path\":\"Assets/Prefabs/Enemy.prefab\",\"name\":\"Enemy01\",\"position\":[5,0,0]}"
+)
+```
+
+示例：创建球体并保存为预制体
+```python
+function_call(
+  func="hierarchy_create",
+  args="{\"from\":\"primitive\",\"primitive_type\":\"Sphere\",\"name\":\"PlayerBall\",\"save_as_prefab\":true,\"prefab_path\":\"Assets/Prefabs/PlayerBall.prefab\"}"
+)
+```
+
+示例：通过菜单创建对象
+```python
+function_call(
+  func="hierarchy_create",
+  args="{\"from\":\"menu\",\"menu_path\":\"GameObject/Light/Directional Light\",\"name\":\"MainLight\"}"
+)
+```
+
+示例：创建带父对象的圆柱体
+```python
+function_call(
+  func="hierarchy_create",
+  args="{\"from\":\"primitive\",\"primitive_type\":\"Cylinder\",\"name\":\"Pillar\",\"parent\":\"Environment\",\"position\":[10,0,10],\"scale\":[2,5,2]}"
+)
+```
+
+---
+
+### hierarchy_link - 层级预制体链接工具
+**功能**: 管理GameObject与预制体的连接关系，包括连接、应用更改和断开连接。
+
+主要参数（放入 `args`）
+- `action` (string, 必需): 操作类型，固定为 `link`
+- `target_object` (string, 必需): 目标GameObject标识符（ID、名称或路径）
+- `prefab_path` (string, 可选): 预制体路径
+- `link_type` (string, 可选): 链接类型，支持 `connect_to_prefab`、`apply_prefab_changes`、`break_prefab_connection`
+- `force_link` (bool, 可选): 是否强制创建链接（覆盖现有连接）
+
+支持的链接类型 (link_type)
+- `connect_to_prefab` - 连接GameObject到预制体（默认）
+- `apply_prefab_changes` - 应用预制体实例的更改到预制体资源
+- `break_prefab_connection` - 断开预制体连接
+
+示例：连接GameObject到预制体
+```python
+function_call(
+  func="hierarchy_link",
+  args="{\"action\":\"link\",\"target_object\":\"Player\",\"prefab_path\":\"Assets/Prefabs/Player.prefab\",\"link_type\":\"connect_to_prefab\"}"
+)
+```
+
+示例：强制连接（覆盖现有连接）
+```python
+function_call(
+  func="hierarchy_link",
+  args="{\"action\":\"link\",\"target_object\":\"Enemy\",\"prefab_path\":\"Assets/Prefabs/NewEnemy.prefab\",\"force_link\":true}"
+)
+```
+
+示例：应用预制体实例的更改
+```python
+function_call(
+  func="hierarchy_link",
+  args="{\"action\":\"link\",\"target_object\":\"PlayerInstance\",\"link_type\":\"apply_prefab_changes\"}"
+)
+```
+
+示例：断开预制体连接
+```python
+function_call(
+  func="hierarchy_link",
+  args="{\"action\":\"link\",\"target_object\":\"Enemy\",\"link_type\":\"break_prefab_connection\"}"
+)
+```
+
+---
+
+### hierarchy_search - 层级对象搜索工具
+**功能**: 在Unity场景层级中搜索和查找GameObject对象，支持多种搜索方式。
+
+主要参数（放入 `args`）
+- `action` (string, 必需): 操作类型，固定为 `find`
+- `search_method` (string, 可选): 搜索方法，支持 `by_name`、`by_id`、`by_tag`、`by_layer`、`by_component`等
+- `search_term` (string, 可选): 搜索条件
+- `target` (string, 可选): 搜索目标（可以是ID、名称或路径）
+- `search_in_children` (bool, 可选): 是否在子对象中搜索
+- `search_in_inactive` (bool, 可选): 是否搜索非激活对象
+- `find_all` (bool, 可选): 是否查找所有匹配项
+
+支持的搜索方法 (search_method)
+- `by_name` - 按名称搜索
+- `by_id` - 按ID搜索
+- `by_tag` - 按标签搜索
+- `by_layer` - 按层级搜索
+- `by_component` - 按组件类型搜索
+
+示例：按名称查找GameObject
+```python
+function_call(
+  func="hierarchy_search",
+  args="{\"action\":\"find\",\"target\":\"Player\",\"search_method\":\"by_name\"}"
+)
+```
+
+示例：查找所有带特定标签的对象
+```python
+function_call(
+  func="hierarchy_search",
+  args="{\"action\":\"find\",\"search_method\":\"by_tag\",\"search_term\":\"Enemy\",\"find_all\":true}"
+)
+```
+
+示例：按ID查找特定对象
+```python
+function_call(
+  func="hierarchy_search",
+  args="{\"action\":\"find\",\"target\":\"12345\",\"search_method\":\"by_id\"}"
+)
+```
+
+示例：查找包含特定组件的对象
+```python
+function_call(
+  func="hierarchy_search",
+  args="{\"action\":\"find\",\"search_method\":\"by_component\",\"search_term\":\"Rigidbody\",\"find_all\":true,\"search_in_inactive\":true}"
+)
+```
+
+示例：在特定层级查找对象
+```python
+function_call(
+  func="hierarchy_search",
+  args="{\"action\":\"find\",\"search_method\":\"by_layer\",\"search_term\":\"Default\",\"find_all\":true}"
+)
+```
 
 ---
 
@@ -189,30 +355,108 @@ function_call(
 
 ---
 
+### manage_component - 组件操作管理
+**功能**: 执行Unity GameObject组件的各种操作，包括获取、添加、移除、设置属性等。
+
+主要参数（放入 `args`）
+- `action` (required): 操作类型
+  - `get_components`: 获取组件列表
+  - `add_component`: 添加组件
+  - `remove_component`: 移除组件
+  - `set_component_property`: 设置组件属性
+- `target` (required): 目标GameObject标识符（名称、ID或路径）
+- `search_method` (optional): 搜索方法
+- `component_name` (optional): 组件名称
+- `components_to_add` (optional): 要添加的组件列表
+- `components_to_remove` (optional): 要移除的组件列表
+- `component_properties` (optional): 组件属性字典
+
+支持的操作：
+- **get_components**: 获取GameObject上的所有组件信息
+- **add_component**: 添加新组件到GameObject
+- **remove_component**: 从GameObject移除指定组件
+- **set_component_property**: 设置组件的属性值
+
+示例：
+```javascript
+// 获取组件列表
+function_call(
+  func="manage_component",
+  args="{\"action\":\"get_components\",\"target\":\"Player\"}"
+)
+
+// 添加Rigidbody组件
+function_call(
+  func="manage_component",
+  args="{\"action\":\"add_component\",\"target\":\"Player\",\"component_name\":\"Rigidbody\"}"
+)
+
+// 移除Collider组件
+function_call(
+  func="manage_component",
+  args="{\"action\":\"remove_component\",\"target\":\"Player\",\"component_name\":\"Collider\"}"
+)
+
+// 设置Image组件的sprite属性
+function_call(
+  func="manage_component",
+  args="{\"action\":\"set_component_property\",\"target\":\"Image\",\"component_name\":\"Image\",\"component_properties\":{\"sprite\":\"Assets/Pics/rabbit.jpg\"}}"
+)
+```
+
+---
+
 ### manage_editor - Unity编辑器状态管理
-**功能**: 控制和查询Unity编辑器的状态和设置。
+**功能**: 控制和查询Unity编辑器的状态和设置，包括播放模式控制、工具管理、标签层级管理等。
 
 主要参数（放入 `args`）
 - `action` (string, 必需): 操作类型
-- `wait_for_completion` (bool): 是否等待完成
-- `tool_name` (string): 工具名称
-- `tag_name` (string): 标签名称
-- `layer_name` (string): 层名称
+- `wait_for_completion` (bool, 可选): 是否等待操作完成
+- `toolName` (string, 可选): 工具名称（设置活动工具时使用）
+- `tagName` (string, 可选): 标签名称（标签操作时使用）
+- `layerName` (string, 可选): 层名称（层级操作时使用）
+- `menu_path` (string, 可选): 菜单路径（执行菜单时使用）
 
 支持的操作 (action)
-- `play` - 播放场景
-- `pause` - 暂停场景
-- `stop` - 停止场景
+
+**播放模式控制**
+- `play` - 进入播放模式
+- `pause` - 暂停/恢复播放模式
+- `stop` - 停止播放模式
+
+**编辑器状态/信息**
 - `get_state` - 获取编辑器状态
+- `get_windows` - 获取编辑器窗口
+- `get_active_tool` - 获取当前活动工具
+- `get_selection` - 获取当前选择对象
 - `set_active_tool` - 设置活动工具
+
+**标签管理**
 - `add_tag` - 添加标签
+- `remove_tag` - 移除标签  
+- `get_tags` - 获取标签列表
+
+**层级管理**
 - `add_layer` - 添加层
+- `remove_layer` - 移除层
+- `get_layers` - 获取层列表
+
+**菜单管理**
+- `execute_menu` - 执行Unity菜单项
 
 示例：播放场景
 ```python
 function_call(
   func="manage_editor",
   args="{\"action\":\"play\"}"
+)
+```
+
+示例：暂停/恢复场景
+```python
+function_call(
+  func="manage_editor",
+  args="{\"action\":\"pause\"}"
 )
 ```
 
@@ -224,11 +468,11 @@ function_call(
 )
 ```
 
-示例：添加标签
+示例：获取编辑器窗口
 ```python
 function_call(
   func="manage_editor",
-  args="{\"action\":\"add_tag\",\"tag_name\":\"Enemy\"}"
+  args="{\"action\":\"get_windows\"}"
 )
 ```
 
@@ -236,18 +480,82 @@ function_call(
 ```python
 function_call(
   func="manage_editor",
-  args="{\"action\":\"set_active_tool\",\"tool_name\":\"Move Tool\"}"
+  args="{\"action\":\"set_active_tool\",\"toolName\":\"Move\"}"
+)
+```
+
+示例：获取当前选择
+```python
+function_call(
+  func="manage_editor",
+  args="{\"action\":\"get_selection\"}"
+)
+```
+
+示例：添加标签
+```python
+function_call(
+  func="manage_editor",
+  args="{\"action\":\"add_tag\",\"tagName\":\"Enemy\"}"
+)
+```
+
+示例：移除标签
+```python
+function_call(
+  func="manage_editor",
+  args="{\"action\":\"remove_tag\",\"tagName\":\"Enemy\"}"
+)
+```
+
+示例：获取所有标签
+```python
+function_call(
+  func="manage_editor",
+  args="{\"action\":\"get_tags\"}"
+)
+```
+
+示例：添加层
+```python
+function_call(
+  func="manage_editor",
+  args="{\"action\":\"add_layer\",\"layerName\":\"Environment\"}"
+)
+```
+
+示例：移除层
+```python
+function_call(
+  func="manage_editor",
+  args="{\"action\":\"remove_layer\",\"layerName\":\"Environment\"}"
+)
+```
+
+示例：获取所有层
+```python
+function_call(
+  func="manage_editor",
+  args="{\"action\":\"get_layers\"}"
+)
+```
+
+示例：执行菜单项
+```python
+function_call(
+  func="manage_editor",
+  args="{\"action\":\"execute_menu\",\"menu_path\":\"GameObject/UI/Canvas\"}"
 )
 ```
 
 ---
 
-### manage_gameobject - GameObject 管理
-**功能**: 管理Unity中的GameObject，包括创建、修改、删除、查找和组件操作。
+### manage_gameobject - GameObject 操作管理
+**功能**: 管理Unity中的GameObject对象操作，包括修改和删除。对象创建请使用 `hierarchy_create`，预制体链接请使用 `hierarchy_link`，对象搜索请使用 `hierarchy_search`，组件操作请使用 `manage_component`。
 
 核心参数（放入 `args`）
 - `action` (string, 必需): 操作类型
-- `target` (string): 目标GameObject标识符
+- `target` (string, 必需): 目标GameObject标识符
 - `name` (string): GameObject名称
 - `tag` (string): 标签
 - `parent` (string): 父对象
@@ -256,27 +564,16 @@ function_call(
 - `scale` (list): 缩放 [x, y, z]
 
 支持的操作 (action)
-- `create` - 创建GameObject
-- `modify` - 修改GameObject
+- `modify` - 修改GameObject属性
 - `delete` - 删除GameObject
-- `find` - 查找GameObject
-- `add_component` - 添加组件
-- `remove_component` - 移除组件
-- `set_component_property` - 设置组件属性
 
-示例：创建基础 GameObject
+注意：组件相关操作（get_components, add_component, remove_component, set_component_property）已移至 `manage_component` 方法。
+
+示例：修改GameObject属性
 ```python
 function_call(
   func="manage_gameobject",
-  args="{\"action\":\"create\",\"name\":\"Player\",\"tag\":\"Player\",\"position\":[0,1,0]}"
-)
-```
-
-示例：创建并保存为预制体
-```python
-function_call(
-  func="manage_gameobject",
-  args="{\"action\":\"create\",\"name\":\"Enemy\",\"primitive_type\":\"Cube\",\"save_as_prefab\":true,\"prefab_path\":\"Assets/Prefabs/Enemy.prefab\"}"
+  args="{\"action\":\"modify\",\"target\":\"Player\",\"tag\":\"Player\",\"position\":[0,1,0]}"
 )
 ```
 
@@ -288,27 +585,11 @@ function_call(
 )
 ```
 
-示例：修改 GameObject 属性
+示例：删除GameObject
 ```python
 function_call(
   func="manage_gameobject",
-  args="{\"action\":\"modify\",\"target\":\"Player\",\"position\":[10,0,0],\"set_active\":true}"
-)
-```
-
-示例：查找 GameObject
-```python
-function_call(
-  func="manage_gameobject",
-  args="{\"action\":\"find\",\"search_term\":\"Player\",\"find_all\":true}"
-)
-```
-
-组件属性设置
-```python
-function_call(
-  func="manage_gameobject",
-  args="{\"action\":\"modify\",\"target\":\"Player\",\"component_properties\":{\"Rigidbody\":{\"mass\":10.0,\"useGravity\":true},\"MeshRenderer\":{\"material\":\"Assets/Materials/PlayerMaterial.mat\"}}}"
+  args="{\"action\":\"delete\",\"target\":\"Enemy\"}"
 )
 ```
 
@@ -500,7 +781,145 @@ function_call(
 
 ---
 
-### read_console - Unity 控制台读取
+### manage_shader - Shader管理
+**功能**: 管理Unity中的Shader文件，包括创建、读取、更新和删除。
+
+主要参数（放入 `args`）
+- `action` (string, 必需): 操作类型
+- `name` (string, 必需): Shader名称（不含.shader扩展名）
+- `path` (string, 可选): 资产路径（相对于Assets），默认为Shaders
+- `contents` (string, 可选): Shader代码内容
+- `contentsEncoded` (bool, 可选): 内容是否为base64编码，默认false
+- `encodedContents` (string, 可选): base64编码的Shader内容
+
+支持的操作 (action)
+- `create` - 创建Shader
+- `read` - 读取Shader
+- `update` - 更新Shader
+- `delete` - 删除Shader
+
+示例：创建基础Shader
+```python
+function_call(
+  func="manage_shader",
+  args="{\"action\":\"create\",\"name\":\"MyShader\",\"path\":\"Shaders\"}"
+)
+```
+
+示例：创建带自定义内容的Shader
+```python
+function_call(
+  func="manage_shader",
+  args="{\"action\":\"create\",\"name\":\"ColorShader\",\"path\":\"Shaders\",\"contents\":\"Shader \\\"ColorShader\\\"\\n{\\n    Properties\\n    {\\n        _Color (\\\"Color\\\", Color) = (1,0,0,1)\\n    }\\n    SubShader\\n    {\\n        Tags { \\\"RenderType\\\"=\\\"Opaque\\\" }\\n        Pass\\n        {\\n            Color [_Color]\\n        }\\n    }\\n}\"}"
+)
+```
+
+示例：读取Shader
+```python
+function_call(
+  func="manage_shader",
+  args="{\"action\":\"read\",\"name\":\"MyShader\",\"path\":\"Shaders\"}"
+)
+```
+
+示例：更新Shader内容
+```python
+function_call(
+  func="manage_shader",
+  args="{\"action\":\"update\",\"name\":\"MyShader\",\"path\":\"Shaders\",\"contents\":\"// 更新后的Shader代码\"}"
+)
+```
+
+示例：删除Shader
+```python
+function_call(
+  func="manage_shader",
+  args="{\"action\":\"delete\",\"name\":\"MyShader\",\"path\":\"Shaders\"}"
+)
+```
+
+---
+
+### manage_texture - 纹理导入设置修改
+**功能**: 修改Unity中纹理资源的导入设置，包括设置为Sprite类型、调整压缩质量等。
+
+主要参数（放入 `args`）
+- `action` (string, 必需): 操作类型
+- `texture_path` (string, 必需): 纹理资源路径（相对于Assets）
+- `texture_type` (string, 可选): 纹理类型
+- `sprite_mode` (string, 可选): Sprite模式
+- `pixels_per_unit` (float, 可选): 每单位像素数
+- `sprite_pivot` (string, 可选): Sprite轴心点
+- `generate_physics_shape` (bool, 可选): 生成物理形状
+- `mesh_type` (string, 可选): 网格类型
+- `compression` (string, 可选): 压缩格式
+- `max_texture_size` (int, 可选): 最大纹理尺寸
+- `filter_mode` (string, 可选): 过滤模式
+- `wrap_mode` (string, 可选): 包装模式
+- `readable` (bool, 可选): 可读写
+- `generate_mip_maps` (bool, 可选): 生成Mip贴图
+- `srgb_texture` (bool, 可选): sRGB纹理
+
+支持的操作 (action)
+- `set_type` - 设置纹理类型
+- `set_sprite_settings` - 设置Sprite详细参数
+- `get_settings` - 获取当前纹理设置
+
+纹理类型 (texture_type)
+- `Default` - 默认纹理
+- `NormalMap` - 法线贴图
+- `Sprite` - UI Sprite
+- `Cursor` - 光标
+- `Cookie` - 光照Cookie
+- `Lightmap` - 光照贴图
+- `HDR` - HDR纹理
+
+Sprite模式 (sprite_mode)
+- `Single` - 单个Sprite
+- `Multiple` - 多个Sprite
+- `Polygon` - 多边形模式
+
+轴心点 (sprite_pivot)
+- `Center` - 中心点
+- `TopLeft`、`TopCenter`、`TopRight` - 顶部
+- `MiddleLeft`、`MiddleCenter`、`MiddleRight` - 中部
+- `BottomLeft`、`BottomCenter`、`BottomRight` - 底部
+
+示例：设置图片为Sprite类型
+```python
+function_call(
+  func="manage_texture",
+  args="{\"action\":\"set_type\",\"texture_path\":\"Assets/Pics/rabbit.jpg\",\"texture_type\":\"Sprite\"}"
+)
+```
+
+示例：详细配置Sprite设置
+```python
+function_call(
+  func="manage_texture",
+  args="{\"action\":\"set_sprite_settings\",\"texture_path\":\"Assets/Pics/rabbit.jpg\",\"sprite_mode\":\"Single\",\"pixels_per_unit\":100,\"sprite_pivot\":\"Center\",\"generate_physics_shape\":true}"
+)
+```
+
+示例：获取纹理设置
+```python
+function_call(
+  func="manage_texture",
+  args="{\"action\":\"get_settings\",\"texture_path\":\"Assets/Pics/rabbit.jpg\"}"
+)
+```
+
+示例：设置压缩和质量
+```python
+function_call(
+  func="manage_texture",
+  args="{\"action\":\"set_sprite_settings\",\"texture_path\":\"Assets/Pics/rabbit.jpg\",\"compression\":\"HighQuality\",\"max_texture_size\":2048,\"filter_mode\":\"Bilinear\"}"
+)
+```
+
+---
+
+### console_read - Unity 控制台读取
 **功能**: 读取或清空Unity编辑器控制台消息。
 
 主要参数（放入 `args`）
@@ -529,7 +948,7 @@ function_call(
 示例：获取最新 1 条日志（无堆栈跟踪）
 ```python
 function_call(
-  func="read_console",
+  func="console_read",
   args="{\"action\":\"get\",\"count\":1}"
 )
 ```
@@ -537,7 +956,7 @@ function_call(
 示例：获取最新 5 条错误日志（包含完整堆栈跟踪）
 ```python
 function_call(
-  func="read_console",
+  func="console_read",
   args="{\"action\":\"get_full\",\"types\":[\"error\"],\"count\":5}"
 )
 ```
@@ -545,7 +964,7 @@ function_call(
 示例：获取所有包含 "FunctionCall" 的日志（无堆栈跟踪）
 ```python
 function_call(
-  func="read_console",
+  func="console_read",
   args="{\"action\":\"get\",\"filterText\":\"FunctionCall\"}"
 )
 ```
@@ -553,7 +972,7 @@ function_call(
 示例：获取所有警告日志（包含堆栈跟踪）
 ```python
 function_call(
-  func="read_console",
+  func="console_read",
   args="{\"action\":\"get_full\",\"types\":[\"warning\"]}"
 )
 ```
@@ -561,7 +980,7 @@ function_call(
 示例：清空控制台
 ```python
 function_call(
-  func="read_console",
+  func="console_read",
   args="{\"action\":\"clear\"}"
 )
 ```
@@ -569,7 +988,7 @@ function_call(
 示例：获取最新 10 条包含 "Error" 的日志（包含堆栈跟踪）
 ```python
 function_call(
-  func="read_console",
+  func="console_read",
   args="{\"action\":\"get_full\",\"count\":10,\"filterText\":\"Error\"}"
 )
 ```
@@ -600,7 +1019,7 @@ function_call(
 - 相对于项目根目录的Assets文件夹
 
 ### 4) 最佳实践
-- 在执行操作前使用 `read_console` 检查错误
+- 在执行操作前使用 `console_read` 检查错误
 - 使用 `manage_editor` 获取编辑器状态
 - 创建资产前确保目标文件夹存在
 - 批量操作时使用 `functions_call` 提高效率
@@ -610,6 +1029,6 @@ function_call(
 - 大文件操作时增加超时时间和重试机制
 
 ### 5) 调试建议
-- 使用 `read_console` 查看Unity控制台输出
+- 使用 `console_read` 查看Unity控制台输出
 - 检查返回值中的 `success` 字段
 - 查看 `message` 和 `error` 字段获取详细信息 

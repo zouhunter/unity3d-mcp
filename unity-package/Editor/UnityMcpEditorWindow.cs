@@ -478,7 +478,7 @@ namespace UnityMcp.Windows
 
                     // === 参数Keys信息部分 ===
                     EditorGUILayout.BeginVertical("box");
-                    
+
                     var keys = method.Keys;
                     if (keys != null && keys.Length > 0)
                     {
@@ -486,22 +486,18 @@ namespace UnityMcp.Windows
                         {
                             // 创建参数行的样式
                             EditorGUILayout.BeginHorizontal();
-                            
                             // 参数名称 - 必需参数用粗体，可选参数用普通字体
-                            GUIStyle keyStyle = key.Optional ? EditorStyles.label : EditorStyles.boldLabel;
+                            GUIStyle keyStyle = EditorStyles.miniBoldLabel;
                             Color originalColor = GUI.color;
-                            
+
                             // 必需参数用红色标记，可选参数用灰色标记
-                            GUI.color = key.Optional ? Color.gray : Color.red;
-                            EditorGUILayout.LabelField(key.Optional ? "[可选]" : "[必需]", GUILayout.Width(40));
-                            GUI.color = originalColor;
-                            
+                            GUI.color = key.Optional ? Color.green : Color.red;
                             // 参数名称
-                            EditorGUILayout.LabelField(key.Key, keyStyle, GUILayout.Width(120));
-                            
+                            EditorGUILayout.SelectableLabel(key.Key, keyStyle, GUILayout.Width(120), GUILayout.Height(EditorGUIUtility.singleLineHeight));
+                            GUI.color = originalColor;
+
                             // 参数描述
-                            EditorGUILayout.LabelField(key.Desc, EditorStyles.wordWrappedLabel);
-                            
+                            EditorGUILayout.SelectableLabel(key.Desc, keyStyle, GUILayout.Height(EditorGUIUtility.singleLineHeight));
                             EditorGUILayout.EndHorizontal();
                         }
                     }
@@ -509,9 +505,9 @@ namespace UnityMcp.Windows
                     {
                         EditorGUILayout.LabelField("无参数", EditorStyles.centeredGreyMiniLabel);
                     }
-                    
+
                     EditorGUILayout.EndVertical();
-                    
+
                     // 添加一些间距
                     EditorGUILayout.Space(3);
 
@@ -531,7 +527,7 @@ namespace UnityMcp.Windows
                     // 显示预览信息
                     EditorGUILayout.SelectableLabel(preview, EditorStyles.wordWrappedLabel,
                     GUILayout.Height(EditorGUIUtility.singleLineHeight * lineCount * 0.8f));
-                    
+
                     EditorGUILayout.EndVertical();
                     EditorGUILayout.EndVertical();
                 }

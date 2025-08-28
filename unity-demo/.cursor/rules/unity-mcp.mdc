@@ -7,7 +7,7 @@ alwaysApply: true
 
 本文档将工具按两类划分：
 - Tools: `function_call`, `functions_call`（调用/批量调用 Methods）。
-- Methods: `execute_menu_item`, `manage_asset`, `manage_editor`, `manage_gameobject`, `manage_scene`, `manage_script`, `read_console`（均作为 `func` 传给 Tools）。
+- Methods: `execute_menu_item`, `manage_asset`, `manage_editor`, `manage_gameobject`, `manage_http`, `manage_scene`, `manage_script`, `read_console`（均作为 `func` 传给 Tools）。
 
 除 `function_call` 与 `functions_call` 外，其余均为 Methods 名称，不直接调用；请通过 Tools 调用，并把方法参数放入 `args`（JSON 字符串）。
 
@@ -21,6 +21,7 @@ alwaysApply: true
   - `manage_asset`
   - `manage_editor`
   - `manage_gameobject`
+  - `manage_http`
   - `manage_scene`
   - `manage_script`
   - `read_console`
@@ -323,6 +324,100 @@ function_call(
 
 ---
 
+### manage_http - 网络资源管理
+**功能**: 执行网络请求和文件下载上传操作，支持HTTP/HTTPS协议。
+
+主要参数（放入 `args`）
+- `action` (string, 必需): 操作类型
+- `url` (string, 必需): 请求URL地址
+- `data` (object): 请求数据（POST/PUT时使用，JSON格式）
+- `headers` (object): 请求头字典
+- `save_path` (string): 保存路径（下载时使用）
+- `file_path` (string): 文件路径（上传时使用）
+- `timeout` (int): 超时时间（秒），默认30秒
+- `content_type` (string): 内容类型，默认application/json
+- `auth_token` (string): Bearer认证令牌
+- `basic_auth` (string): 基础认证（username:password）
+- `query_params` (object): URL查询参数
+- `form_data` (object): 表单数据
+- `retry_count` (int): 重试次数，默认0
+- `retry_delay` (float): 重试延迟（秒），默认1
+
+支持的操作 (action)
+- `get` - HTTP GET请求
+- `post` - HTTP POST请求
+- `put` - HTTP PUT请求
+- `delete` - HTTP DELETE请求
+- `download` - 下载文件到本地
+- `upload` - 上传本地文件
+- `ping` - 连通性测试
+
+示例：GET请求获取数据
+```python
+function_call(
+  func="manage_http",
+  args="{\"action\":\"get\",\"url\":\"https://api.github.com/repos/microsoft/vscode\",\"timeout\":30}"
+)
+```
+
+示例：POST请求发送数据
+```python
+function_call(
+  func="manage_http",
+  args="{\"action\":\"post\",\"url\":\"https://httpbin.org/post\",\"data\":{\"message\":\"Hello from Unity\",\"timestamp\":\"2024-01-01T12:00:00Z\"},\"content_type\":\"application/json\"}"
+)
+```
+
+示例：下载文件
+```python
+function_call(
+  func="manage_http",
+  args="{\"action\":\"download\",\"url\":\"https://httpbin.org/image/png\",\"save_path\":\"Assets/Downloaded/test_image.png\",\"timeout\":60}"
+)
+```
+
+示例：带认证的请求
+```python
+function_call(
+  func="manage_http",
+  args="{\"action\":\"get\",\"url\":\"https://api.example.com/data\",\"auth_token\":\"your_bearer_token_here\",\"headers\":{\"User-Agent\":\"Unity-MCP/1.0\"}}"
+)
+```
+
+示例：上传文件
+```python
+function_call(
+  func="manage_http",
+  args="{\"action\":\"upload\",\"url\":\"https://httpbin.org/post\",\"file_path\":\"Assets/Screenshots/screenshot.png\",\"form_data\":{\"description\":\"Unity screenshot\"}}"
+)
+```
+
+示例：Ping测试连通性
+```python
+function_call(
+  func="manage_http",
+  args="{\"action\":\"ping\",\"url\":\"https://httpbin.org/status/200\",\"timeout\":10}"
+)
+```
+
+示例：带查询参数的GET请求
+```python
+function_call(
+  func="manage_http",
+  args="{\"action\":\"get\",\"url\":\"https://httpbin.org/get\",\"query_params\":{\"param1\":\"value1\",\"param2\":\"value2\"}}"
+)
+```
+
+示例：带重试机制的请求
+```python
+function_call(
+  func="manage_http",
+  args="{\"action\":\"get\",\"url\":\"https://httpbin.org/status/500\",\"retry_count\":3,\"retry_delay\":1.5}"
+)
+```
+
+---
+
 ### manage_scene - 场景管理
 **功能**: 管理Unity场景，包括加载、保存、创建和获取层级结构。
 
@@ -519,6 +614,10 @@ function_call(
 - 使用 `manage_editor` 获取编辑器状态
 - 创建资产前确保目标文件夹存在
 - 批量操作时使用 `functions_call` 提高效率
+- 网络请求设置合适的超时时间，避免长时间阻塞
+- 下载文件前确保目标目录存在
+- 敏感API请求使用认证令牌保护
+- 大文件操作时增加超时时间和重试机制
 
 ### 5) 调试建议
 - 使用 `read_console` 查看Unity控制台输出

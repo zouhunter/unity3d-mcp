@@ -130,9 +130,15 @@ namespace UnityMcp.Tools
                 else if (lowerAssetType == "material")
                 {
                     Material mat = new Material(Shader.Find("Standard")); // Default shader
-                    // TODO: Apply properties from JObject (e.g., shader name, color, texture assignments)
+                    // Apply properties from JObject (e.g., shader name, color, texture assignments)
                     if (properties != null)
-                        ApplyMaterialProperties(mat, properties);
+                    {
+                        bool materialModified = ApplyMaterialProperties(mat, properties);
+                        if (materialModified)
+                        {
+                            EditorUtility.SetDirty(mat);
+                        }
+                    }
                     AssetDatabase.CreateAsset(mat, fullPath);
                     newAsset = mat;
                 }
@@ -156,7 +162,15 @@ namespace UnityMcp.Tools
                     }
 
                     ScriptableObject so = ScriptableObject.CreateInstance(scriptType);
-                    // TODO: Apply properties from JObject to the ScriptableObject instance?
+                    // Apply properties from JObject to the ScriptableObject instance
+                    if (properties != null && properties.HasValues)
+                    {
+                        bool soModified = ApplyObjectProperties(so, properties);
+                        if (soModified)
+                        {
+                            EditorUtility.SetDirty(so);
+                        }
+                    }
                     AssetDatabase.CreateAsset(so, fullPath);
                     newAsset = so;
                 }
@@ -286,6 +300,9 @@ namespace UnityMcp.Tools
                 if (asset == null)
                     return Response.Error($"Failed to load asset at path: {fullPath}");
 
+                // Record the asset state for Undo before making any modifications
+                Undo.RecordObject(asset, $"Modify Asset '{Path.GetFileName(fullPath)}'");
+
                 bool modified = false; // Flag to track if any changes were made
 
                 // --- NEW: Handle GameObject / Prefab Component Modification ---
@@ -308,6 +325,9 @@ namespace UnityMcp.Tools
 
                             if (targetComponent != null)
                             {
+                                // Record the component state for Undo before modification
+                                Undo.RecordObject(targetComponent, $"Modify Component '{componentName}' on '{gameObject.name}'");
+
                                 // Apply the nested properties (e.g., bobSpeed) to the found component instance
                                 // Use |= to ensure 'modified' becomes true if any component is successfully modified
                                 modified |= ApplyObjectProperties(
@@ -341,6 +361,7 @@ namespace UnityMcp.Tools
                 // Example: Modifying a Material
                 else if (asset is Material material)
                 {
+                    // Material already recorded by the main Undo.RecordObject call above
                     // Apply properties directly to the material. If this modifies, it sets modified=true.
                     // Use |= in case the asset was already marked modified by previous logic (though unlikely here)
                     modified |= ApplyMaterialProperties(material, properties);
@@ -348,6 +369,7 @@ namespace UnityMcp.Tools
                 // Example: Modifying a ScriptableObject
                 else if (asset is ScriptableObject so)
                 {
+                    // ScriptableObject already recorded by the main Undo.RecordObject call above
                     // Apply properties directly to the ScriptableObject.
                     modified |= ApplyObjectProperties(so, properties); // General helper
                 }
@@ -357,6 +379,9 @@ namespace UnityMcp.Tools
                     AssetImporter importer = AssetImporter.GetAtPath(fullPath);
                     if (importer is TextureImporter textureImporter)
                     {
+                        // Record the importer state for Undo before modification
+                        Undo.RecordObject(textureImporter, $"Modify Texture Import Settings '{Path.GetFileName(fullPath)}'");
+
                         bool importerModified = ApplyObjectProperties(textureImporter, properties);
                         if (importerModified)
                         {
@@ -375,6 +400,7 @@ namespace UnityMcp.Tools
                 else // Fallback for other asset types OR direct properties on non-GameObject assets
                 {
                     // This block handles non-GameObject/Material/ScriptableObject/Texture assets.
+                    // Asset already recorded by the main Undo.RecordObject call above
                     // Attempts to apply properties directly to the asset itself.
                     Debug.LogWarning(
                         $"[ManageAsset.ModifyAsset] Asset type '{asset.GetType().Name}' at '{fullPath}' is not explicitly handled for component modification. Attempting generic property setting on the asset itself."

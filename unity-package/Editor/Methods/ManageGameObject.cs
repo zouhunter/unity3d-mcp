@@ -2018,7 +2018,34 @@ namespace UnityMcp.Tools
             Component targetComponentInstance = null
         )
         {
-            Component targetComponent = targetComponentInstance ?? targetGo.GetComponent(compName);
+            Component targetComponent = targetComponentInstance;
+
+            // If no specific component instance is provided, find it by type name
+            if (targetComponent == null)
+            {
+                // Use FindType helper to locate the correct component type
+                Type componentType = FindType(compName);
+                if (componentType != null && typeof(Component).IsAssignableFrom(componentType))
+                {
+                    targetComponent = targetGo.GetComponent(componentType);
+                }
+                else
+                {
+                    // Fallback: try common Unity component namespaces
+                    string[] commonNamespaces = { "UnityEngine", "UnityEngine.UI" };
+                    foreach (string ns in commonNamespaces)
+                    {
+                        string fullTypeName = $"{ns}.{compName}";
+                        componentType = FindType(fullTypeName);
+                        if (componentType != null && typeof(Component).IsAssignableFrom(componentType))
+                        {
+                            targetComponent = targetGo.GetComponent(componentType);
+                            break;
+                        }
+                    }
+                }
+            }
+
             if (targetComponent == null)
             {
                 return Response.Error(

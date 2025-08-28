@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
@@ -109,35 +110,28 @@ namespace UnityMcp.Tools
         private async Task<object> ExecuteFunctionAsync(string functionName, string argsJson)
         {
             if (McpConnect.EnableLog) Debug.Log($"[FunctionCall] Executing async function: {functionName}->{argsJson}");
-            
-            // 使用主线程执行来确保Unity API正常工作
-            object result = null;
-            bool completed = false;
-            
-            // 在主线程执行
-            EditorApplication.delayCall += () => {
-                try
-                {
-                    result = ExecuteFunction(functionName, argsJson);
-                }
-                catch (Exception e)
-                {
-                    if (McpConnect.EnableLog) Debug.LogError($"[FunctionCall] Failed to execute function on main thread '{functionName}': {e}");
-                    result = Response.Error($"Error executing function on main thread '{functionName}->{argsJson}': {e.Message}");
-                }
-                finally
-                {
-                    completed = true;
-                }
-            };
-            
-            // 等待主线程执行完成
-            while (!completed)
+            try
             {
-                await Task.Delay(10); // 短暂延迟以避免占用过多CPU
+                // 确保方法已注册
+                EnsureMethodsRegistered();
+
+                // 解析参数
+                JObject args = JObject.Parse(argsJson);
+
+                // 查找对应的工具方法
+                if (!_registeredMethods.TryGetValue(functionName, out IToolMethod method))
+                {
+                    return Response.Error($"Unknown method: '{functionName}'. Available methods: {string.Join(", ", _registeredMethods.Keys)}");
+                }
+
+                // 调用工具的ExecuteMethodAsync方法（主线程转移在StateMethodBase中处理）
+                return await method.ExecuteMethodAsync(args);
             }
-            
-            return result;
+            catch (Exception e)
+            {
+                if (McpConnect.EnableLog) Debug.LogError($"[FunctionCall] Failed to execute async function '{functionName}': {e}");
+                return Response.Error($"Error executing async function '{functionName}->{argsJson}': {e.Message}");
+            }
         }
 
 

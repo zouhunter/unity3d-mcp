@@ -1,5 +1,7 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading;
 using UnityEngine;
 using UnityEditor;
 using UnityMcp.Models;
@@ -84,6 +86,26 @@ namespace UnityMcp.Tools
                 return Response.Error(_stateTree.ErrorMessage);
             }
             return result;
+        }
+
+        /// <summary>
+        /// 执行工具方法，实现 IToolMethod 接口（异步版本）。
+        /// 通过主线程执行器确保状态树在Unity主线程上执行。
+        /// </summary>
+        /// <param name="args">方法调用的参数对象</param>
+        /// <returns>执行结果，若状态树执行失败则返回错误响应</returns>
+        public virtual async Task<object> ExecuteMethodAsync(JObject args)
+        {
+            try
+            {
+                // 使用MainThreadExecutor确保在主线程执行
+                return await MainThreadExecutor.ExecuteAsync(() => ExecuteMethod(args));
+            }
+            catch (Exception e)
+            {
+                LogError($"[StateMethodBase] Failed to execute method on main thread: {e}");
+                return Response.Error($"Error executing method on main thread: {e.Message}");
+            }
         }
 
         /// <summary>

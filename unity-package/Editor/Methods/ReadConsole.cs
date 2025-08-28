@@ -211,12 +211,12 @@ namespace UnityMcp.Tools
         {
             var types = (args["types"] as JArray)?.Select(t => t.ToString().ToLower()).ToList()
                 ?? new List<string> { "error", "warning", "log" };
-            
+
             if (types.Contains("all"))
             {
                 types = new List<string> { "error", "warning", "log" };
             }
-            
+
             return types;
         }
 

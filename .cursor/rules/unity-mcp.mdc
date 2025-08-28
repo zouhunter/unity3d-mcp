@@ -61,13 +61,13 @@ function_call(
 **功能**: 按顺序执行多个 Unity MCP 方法调用并收集所有返回值。
 
 参数
-- `function_calls` (string): 函数调用列表 JSON 字符串。
+- `funcs` (list): 函数调用列表。
 
 参数格式
 ```json
 [
-  { "func": "manage_gameobject", "args": "{\"action\":\"create\",\"name\":\"Enemy\",\"primitive_type\":\"Cube\"}" },
-  { "func": "manage_gameobject", "args": "{\"action\":\"add_component\",\"target\":\"Enemy\",\"component_name\":\"Rigidbody\"}" }
+  { "func": "manage_gameobject", "args": {"action": "create", "name": "Enemy", "primitive_type": "Cube"} },
+  { "func": "manage_gameobject", "args": {"action": "add_component", "target": "Enemy", "component_name": "Rigidbody"} }
 ]
 ```
 
@@ -86,10 +86,10 @@ function_call(
 示例：批量创建并添加组件
 ```python
 functions_call(
-  function_calls='[
-    {"func":"manage_gameobject","args":"{\\"action\\":\\"create\\",\\"name\\":\\"Enemy\\",\\"primitive_type\\":\\"Cube\\"}"},
-    {"func":"manage_gameobject","args":"{\\"action\\":\\"add_component\\",\\"target\\":\\"Enemy\\",\\"component_name\\":\\"Rigidbody\\"}"}
-  ]'
+  funcs=[
+    {"func": "manage_gameobject", "args": {"action": "create", "name": "Enemy", "primitive_type": "Cube"}},
+    {"func": "manage_gameobject", "args": {"action": "add_component", "target": "Enemy", "component_name": "Rigidbody"}}
+  ]
 )
 ```
 
@@ -98,7 +98,7 @@ functions_call(
 ## 🧩 Methods
 > 通过 Tools 调用以下方法：
 > - 单次：使用 `function_call`，设置 `func` 为方法名，`args` 为方法参数 JSON 字符串。
-> - 批量：使用 `functions_call`，把多条 `{func, args}` 放入 `function_calls`。
+> - 批量：使用 `functions_call`，把多条 `{func, args}` 放入 `funcs`。
 
 ### execute_menu_item - Unity编辑器菜单执行
 **功能**: 执行Unity编辑器中的菜单命令。

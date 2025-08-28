@@ -311,41 +311,41 @@ namespace UnityMcp.Tools
                     // Iterate through the properties JSON: keys are component names, values are properties objects for that component
                     foreach (var prop in properties.Properties())
                     {
-                        string componentName = prop.Name; // e.g., "Collectible"
+                        string component_name = prop.Name; // e.g., "Collectible"
                         // Check if the value associated with the component name is actually an object containing properties
                         if (
-                            prop.Value is JObject componentProperties
-                            && componentProperties.HasValues
+                            prop.Value is JObject component_properties
+                            && component_properties.HasValues
                         ) // e.g., {"bobSpeed": 2.0}
                         {
                             // Find the component on the GameObject using the name from the JSON key
                             // Using GetComponent(string) is convenient but might require exact type name or be ambiguous.
                             // Consider using FindType helper if needed for more complex scenarios.
-                            Component targetComponent = gameObject.GetComponent(componentName);
+                            Component targetComponent = gameObject.GetComponent(component_name);
 
                             if (targetComponent != null)
                             {
                                 // Record the component state for Undo before modification
-                                Undo.RecordObject(targetComponent, $"Modify Component '{componentName}' on '{gameObject.name}'");
+                                Undo.RecordObject(targetComponent, $"Modify Component '{component_name}' on '{gameObject.name}'");
 
                                 // Apply the nested properties (e.g., bobSpeed) to the found component instance
                                 // Use |= to ensure 'modified' becomes true if any component is successfully modified
                                 modified |= ApplyObjectProperties(
                                     targetComponent,
-                                    componentProperties
+                                    component_properties
                                 );
                             }
                             else
                             {
                                 // Log a warning if a specified component couldn't be found
                                 Debug.LogWarning(
-                                    $"[ManageAsset.ModifyAsset] Component '{componentName}' not found on GameObject '{gameObject.name}' in asset '{fullPath}'. Skipping modification for this component."
+                                    $"[ManageAsset.ModifyAsset] Component '{component_name}' not found on GameObject '{gameObject.name}' in asset '{fullPath}'. Skipping modification for this component."
                                 );
                             }
                         }
                         else
                         {
-                            // Log a warning if the structure isn't {"ComponentName": {"prop": value}}
+                            // Log a warning if the structure isn't {"component_name": {"prop": value}}
                             // We could potentially try to apply this property directly to the GameObject here if needed,
                             // but the primary goal is component modification.
                             Debug.LogWarning(

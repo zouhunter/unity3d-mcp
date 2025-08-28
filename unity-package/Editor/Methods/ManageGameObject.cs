@@ -316,21 +316,21 @@ namespace UnityMcp.Tools
                 JObject properties = null;
                 if (action == "set_component_property")
                 {
-                    string compName = args["componentName"]?.ToString();
-                    JObject compProps = args["componentProperties"]?[compName] as JObject;
+                    string compName = args["component_name"]?.ToString();
+                    JObject compProps = args["component_properties"]?[compName] as JObject;
                     if (string.IsNullOrEmpty(compName))
-                        return Response.Error("Missing 'componentName' for 'set_component_property' on prefab.");
+                        return Response.Error("Missing 'component_name' for 'set_component_property' on prefab.");
                     if (compProps == null)
-                        return Response.Error($"Missing or invalid 'componentProperties' for component '{compName}' for 'set_component_property' on prefab.");
+                        return Response.Error($"Missing or invalid 'component_properties' for component '{compName}' for 'set_component_property' on prefab.");
 
                     properties = new JObject();
                     properties[compName] = compProps;
                 }
                 else // action == "modify"
                 {
-                    properties = args["componentProperties"] as JObject;
+                    properties = args["component_properties"] as JObject;
                     if (properties == null)
-                        return Response.Error("Missing 'componentProperties' for 'modify' action on prefab.");
+                        return Response.Error("Missing 'component_properties' for 'modify' action on prefab.");
                 }
 
                 assetParams["properties"] = properties;
@@ -1369,15 +1369,15 @@ namespace UnityMcp.Tools
             }
 
             // Set Component Properties
-            if (cmd["componentProperties"] is JObject componentPropertiesObj)
+            if (cmd["component_properties"] is JObject component_propertiesObj)
             {
-                foreach (var prop in componentPropertiesObj.Properties())
+                foreach (var prop in component_propertiesObj.Properties())
                 {
                     string compName = prop.Name;
                     JObject propertiesToSet = prop.Value as JObject;
                     if (propertiesToSet != null)
                     {
-                        var setResult = SetComponentPropertiesInternal(
+                        var setResult = Setcomponent_propertiesInternal(
                             targetGo,
                             compName,
                             propertiesToSet
@@ -1512,10 +1512,10 @@ namespace UnityMcp.Tools
             JObject properties = null;
 
             // Allow adding component specified directly or via componentsToAdd array (take first)
-            if (cmd["componentName"] != null)
+            if (cmd["component_name"] != null)
             {
-                typeName = cmd["componentName"]?.ToString();
-                properties = cmd["componentProperties"]?[typeName] as JObject; // Check if props are nested under name
+                typeName = cmd["component_name"]?.ToString();
+                properties = cmd["component_properties"]?[typeName] as JObject; // Check if props are nested under name
             }
             else if (
                cmd["componentsToAdd"] is JArray componentsToAddArray
@@ -1535,7 +1535,7 @@ namespace UnityMcp.Tools
             if (string.IsNullOrEmpty(typeName))
             {
                 return Response.Error(
-                    "Component type name ('componentName' or first element in 'componentsToAdd') is required."
+                    "Component type name ('component_name' or first element in 'componentsToAdd') is required."
                 );
             }
 
@@ -1566,9 +1566,9 @@ namespace UnityMcp.Tools
 
             string typeName = null;
             // Allow removing component specified directly or via componentsToRemove array (take first)
-            if (cmd["componentName"] != null)
+            if (cmd["component_name"] != null)
             {
-                typeName = cmd["componentName"]?.ToString();
+                typeName = cmd["component_name"]?.ToString();
             }
             else if (
                cmd["componentsToRemove"] is JArray componentsToRemoveArray
@@ -1581,7 +1581,7 @@ namespace UnityMcp.Tools
             if (string.IsNullOrEmpty(typeName))
             {
                 return Response.Error(
-                    "Component type name ('componentName' or first element in 'componentsToRemove') is required."
+                    "Component type name ('component_name' or first element in 'componentsToRemove') is required."
                 );
             }
 
@@ -1610,30 +1610,30 @@ namespace UnityMcp.Tools
                 );
             }
 
-            string compName = cmd["componentName"]?.ToString();
+            string compName = cmd["component_name"]?.ToString();
             JObject propertiesToSet = null;
 
             if (!string.IsNullOrEmpty(compName))
             {
-                // Properties might be directly under componentProperties or nested under the component name
-                if (cmd["componentProperties"] is JObject compProps)
+                // Properties might be directly under component_properties or nested under the component name
+                if (cmd["component_properties"] is JObject compProps)
                 {
                     propertiesToSet = compProps[compName] as JObject ?? compProps; // Allow flat or nested structure
                 }
             }
             else
             {
-                return Response.Error("'componentName' parameter is required.");
+                return Response.Error("'component_name' parameter is required.");
             }
 
             if (propertiesToSet == null || !propertiesToSet.HasValues)
             {
                 return Response.Error(
-                    "'componentProperties' dictionary for the specified component is required and cannot be empty."
+                    "'component_properties' dictionary for the specified component is required and cannot be empty."
                 );
             }
 
-            var setResult = SetComponentPropertiesInternal(targetGo, compName, propertiesToSet);
+            var setResult = Setcomponent_propertiesInternal(targetGo, compName, propertiesToSet);
             if (setResult != null)
                 return setResult; // Return error
 
@@ -1943,7 +1943,7 @@ namespace UnityMcp.Tools
                 // Set properties if provided
                 if (properties != null)
                 {
-                    var setResult = SetComponentPropertiesInternal(
+                    var setResult = Setcomponent_propertiesInternal(
                         targetGo,
                         typeName,
                         properties,
@@ -2011,7 +2011,7 @@ namespace UnityMcp.Tools
         /// Sets properties on a component.
         /// Returns null on success, or an error response object on failure.
         /// </summary>
-        private object SetComponentPropertiesInternal(
+        private object Setcomponent_propertiesInternal(
             GameObject targetGo,
             string compName,
             JObject propertiesToSet,
@@ -2804,7 +2804,7 @@ namespace UnityMcp.Tools
                 // Optionally include components, but can be large
                 // components = go.GetComponents<Component>().Select(c => GetComponentData(c)).ToList()
                 // Or just component names:
-                componentNames = go.GetComponents<Component>()
+                component_names = go.GetComponents<Component>()
                     .Select(c => c.GetType().FullName)
                     .ToList(),
             };

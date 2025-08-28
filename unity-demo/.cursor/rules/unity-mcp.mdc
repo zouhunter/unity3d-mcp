@@ -65,7 +65,7 @@ function_call(
 - `function_calls` (string): 函数调用列表 JSON 字符串。
 
 参数格式
-```json
+```json 示例：批量创建并添加组件
 [
   { "func": "manage_gameobject", "args": "{\"action\":\"create\",\"name\":\"Enemy\",\"primitive_type\":\"Cube\"}" },
   { "func": "manage_gameobject", "args": "{\"action\":\"add_component\",\"target\":\"Enemy\",\"component_name\":\"Rigidbody\"}" }
@@ -82,16 +82,6 @@ function_call(
   "successful_calls": 2,
   "failed_calls": 0
 }
-```
-
-示例：批量创建并添加组件
-```python
-functions_call(
-  function_calls='[
-    {"func":"manage_gameobject","args":"{\\"action\\":\\"create\\",\\"name\\":\\"Enemy\\",\\"primitive_type\\":\\"Cube\\"}"},
-    {"func":"manage_gameobject","args":"{\\"action\\":\\"add_component\\",\\"target\\":\\"Enemy\\",\\"component_name\\":\\"Rigidbody\\"}"}
-  ]'
-)
 ```
 
 ---

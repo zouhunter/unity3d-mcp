@@ -12,21 +12,18 @@ def register_functions_call_tools(mcp: FastMCP):
     @mcp.tool()
     def functions_call(
         ctx: Context,
-        funcs: List[str],
-        args: List[Dict[str, Any]]
+        funcs: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """批量函数调用工具，可以按顺序调用Unity中的多个函数并收集所有返回值。
 
         Args:
             ctx: MCP上下文。
-            funcs: 函数名称列表，例如：["Function1", "Function2", "Function3"]
-            args: 对应的参数列表，每个元素是参数对象，例如：
+            funcs: 函数调用列表，每个元素包含func和args字段，例如：
                 [
-                    {"param1": "value1"}, 
-                    {"param2": 123}, 
-                    {"param3": true}
+                    {"func": "manage_gameobject", "args": {"action": "create", "name": "Enemy", "primitive_type": "Cube"}},
+                    {"func": "manage_gameobject", "args": {"action": "add_component", "target": "Enemy", "component_name": "Rigidbody"}}
                 ]
-                注意：funcs数组和args数组的长度必须相等，按索引位置一一对应。
+                其中args字段是参数对象。
 
         Returns:
             包含所有函数调用结果的字典：
@@ -51,22 +48,11 @@ def register_functions_call_tools(mcp: FastMCP):
         
         try:
             # 验证输入参数
-            if not isinstance(funcs, list) or not isinstance(args, list):
+            if not isinstance(funcs, list):
                 return {
                     "success": False,
                     "results": [],
-                    "errors": ["funcs和args参数必须是数组类型"],
-                    "total_calls": 0,
-                    "successful_calls": 0,
-                    "failed_calls": 1
-                }
-            
-            # 验证数组长度是否一致
-            if len(funcs) != len(args):
-                return {
-                    "success": False,
-                    "results": [],
-                    "errors": [f"funcs数组长度({len(funcs)})与args数组长度({len(args)})不匹配"],
+                    "errors": ["funcs参数必须是数组类型"],
                     "total_calls": 0,
                     "successful_calls": 0,
                     "failed_calls": 1
@@ -77,20 +63,31 @@ def register_functions_call_tools(mcp: FastMCP):
             # 按顺序执行每个函数调用
             for i in range(total_calls):
                 try:
-                    func = funcs[i]
-                    arg = args[i]
+                    func_call = funcs[i]
                     
-                    # 验证函数名称
-                    if not func or not isinstance(func, str):
-                        error_msg = f"第{i+1}个函数名称无效或为空"
+                    # 验证函数调用对象格式
+                    if not isinstance(func_call, dict):
+                        error_msg = f"第{i+1}个函数调用必须是对象类型"
                         errors.append(error_msg)
                         results.append(None)
                         failed_calls += 1
                         continue
                     
-                    # 验证参数格式（应该是字典对象）
-                    if not isinstance(arg, dict):
-                        error_msg = f"第{i+1}个参数必须是对象类型"
+                    # 提取func和args字段
+                    func = func_call.get("func")
+                    args_obj = func_call.get("args")
+                    
+                    # 验证func字段
+                    if not func or not isinstance(func, str):
+                        error_msg = f"第{i+1}个函数调用的func字段无效或为空"
+                        errors.append(error_msg)
+                        results.append(None)
+                        failed_calls += 1
+                        continue
+                    
+                    # 验证args字段（应该是字典对象）
+                    if not isinstance(args_obj, dict):
+                        error_msg = f"第{i+1}个函数调用的args字段必须是对象类型"
                         errors.append(error_msg)
                         results.append(None)
                         failed_calls += 1
@@ -99,7 +96,7 @@ def register_functions_call_tools(mcp: FastMCP):
                     # 准备发送给Unity的参数
                     params = {
                         "func": func,
-                        "args": json.dumps(arg)  # 将对象序列化为JSON字符串发送给Unity
+                        "args": json.dumps(args_obj)  # 将对象序列化为JSON字符串发送给Unity
                     }
                     
                     # 调用Unity函数

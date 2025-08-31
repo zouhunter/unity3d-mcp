@@ -47,7 +47,7 @@ namespace UnityMcp.Tools
         {
             return StateTreeBuilder
                 .Create()
-                .Key("action")
+                .Key("from")
                     .Leaf("menu", MenuUtils.HandleExecuteMenu)
                     .Branch("primitive")
                         .OptionalKey("primitive_type")

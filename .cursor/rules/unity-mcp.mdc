@@ -7,7 +7,7 @@ alwaysApply: true
 
 本文档将工具按两类划分：
 - Tools: `function_call`, `functions_call`（调用/批量调用 Methods）。
-- Methods: `execute_menu_item`, `manage_asset`, `manage_editor`, `manage_gameobject`, `manage_scene`, `manage_script`, `read_console`（均作为 `func` 传给 Tools）。
+- Methods: `execute_menu_item`, `manage_asset`, `manage_editor`, `manage_gameobject`, `manage_scene`, `manage_script`, `manage_material`, `console_read`（均作为 `func` 传给 Tools）。
 
 除 `function_call` 与 `functions_call` 外，其余均为 Methods 名称，不直接调用；请通过 Tools 调用，并把方法参数放入 `args`（JSON 字符串）。
 
@@ -23,7 +23,8 @@ alwaysApply: true
   - `manage_gameobject`
   - `manage_scene`
   - `manage_script`
-  - `read_console`
+  - `manage_material`
+  - `console_read`
 - 使用指南
 
 ---
@@ -415,7 +416,86 @@ function_call(
 
 ---
 
-### read_console - Unity 控制台读取
+### manage_material - 材质管理
+**功能**: 专门管理Unity中的材质资源，提供材质的创建、修改、复制、删除等操作。
+
+主要参数（放入 `args`）
+- `action` (string, 必需): 操作类型
+- `path` (string, 必需): 材质资源路径，Unity标准格式：Assets/Materials/MaterialName.mat
+- `shader` (string): 着色器名称或路径
+- `properties` (dict): 材质属性字典，包含颜色、纹理、浮点数等属性
+- `source_path` (string): 源材质路径（复制时使用）
+- `destination` (string): 目标路径（复制/移动时使用）
+- `search_pattern` (string): 搜索模式，如*.mat
+- `recursive` (bool): 是否递归搜索子文件夹
+- `force` (bool): 是否强制执行操作（覆盖现有文件等）
+
+支持的操作 (action)
+- `create` - 创建材质
+- `modify` - 修改材质
+- `duplicate` - 复制材质
+- `get_info` - 获取材质信息
+- `search` - 搜索材质
+- `copy_properties` - 复制材质属性
+- `set_shader` - 设置着色器
+- `set_color` - 设置颜色
+- `set_texture` - 设置纹理
+- `set_float` - 设置浮点数
+- `set_vector` - 设置向量
+- `enable_keyword` - 启用关键字
+- `disable_keyword` - 禁用关键字
+
+示例：创建材质
+```python
+function_call(
+  func="manage_material",
+  args="{\"action\":\"create\",\"path\":\"Assets/Materials/NewMaterial.mat\",\"shader\":\"Standard\",\"properties\":{\"_Color\":{\"r\":1.0,\"g\":0.0,\"b\":0.0,\"a\":1.0}}}"
+)
+```
+
+示例：修改材质颜色
+```python
+function_call(
+  func="manage_material",
+  args="{\"action\":\"set_color\",\"path\":\"Assets/Materials/MyMaterial.mat\",\"property_name\":\"_Color\",\"color\":[1.0,0.5,0.0,1.0]}"
+)
+```
+
+示例：设置材质纹理
+```python
+function_call(
+  func="manage_material",
+  args="{\"action\":\"set_texture\",\"path\":\"Assets/Materials/MyMaterial.mat\",\"property_name\":\"_MainTex\",\"texture_path\":\"Assets/Textures/MyTexture.png\"}"
+)
+```
+
+示例：搜索材质
+```python
+function_call(
+  func="manage_material",
+  args="{\"action\":\"search\",\"search_pattern\":\"*.mat\",\"path\":\"Assets/Materials/\"}"
+)
+```
+
+示例：复制材质属性
+```python
+function_call(
+  func="manage_material",
+  args="{\"action\":\"copy_properties\",\"source_path\":\"Assets/Materials/SourceMaterial.mat\",\"destination\":\"Assets/Materials/TargetMaterial.mat\"}"
+)
+```
+
+示例：启用材质关键字
+```python
+function_call(
+  func="manage_material",
+  args="{\"action\":\"enable_keyword\",\"path\":\"Assets/Materials/MyMaterial.mat\",\"keyword\":\"_EMISSION\"}"
+)
+```
+
+---
+
+### console_read - Unity 控制台读取
 **功能**: 读取或清空Unity编辑器控制台消息。
 
 主要参数（放入 `args`）
@@ -439,7 +519,7 @@ function_call(
 示例：获取所有类型的最新 10 条
 ```python
 function_call(
-  func="read_console",
+  func="console_read",
   args="{\"action\":\"get\",\"types\":[\"error\",\"warning\",\"log\"],\"count\":10}"
 )
 ```
@@ -447,7 +527,7 @@ function_call(
 示例：只获取错误并带堆栈
 ```python
 function_call(
-  func="read_console",
+  func="console_read",
   args="{\"action\":\"get\",\"types\":[\"error\"],\"include_stacktrace\":true}"
 )
 ```
@@ -455,7 +535,7 @@ function_call(
 示例：清空控制台
 ```python
 function_call(
-  func="read_console",
+  func="console_read",
   args="{\"action\":\"clear\"}"
 )
 ```
@@ -463,7 +543,7 @@ function_call(
 示例：按时间过滤并以 JSON 返回
 ```python
 function_call(
-  func="read_console",
+  func="console_read",
   args="{\"action\":\"get\",\"since_timestamp\":\"2024-01-01T10:00:00Z\",\"format\":\"json\"}"
 )
 ```
@@ -494,12 +574,13 @@ function_call(
 - 相对于项目根目录的Assets文件夹
 
 ### 4) 最佳实践
-- 在执行操作前使用 `read_console` 检查错误
+- 在执行操作前使用 `console_read` 检查错误
 - 使用 `manage_editor` 获取编辑器状态
 - 创建资产前确保目标文件夹存在
 - 批量操作时使用 `functions_call` 提高效率
+- 生成代码时，注意UnityEngine命名空间下才能用Object
 
 ### 5) 调试建议
-- 使用 `read_console` 查看Unity控制台输出
+- 使用 `console_read` 查看Unity控制台输出
 - 检查返回值中的 `success` 字段
 - 查看 `message` 和 `error` 字段获取详细信息 

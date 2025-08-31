@@ -305,7 +305,9 @@ namespace UnityMcp.Tools
                 Undo.RecordObject(targetGo, $"Break prefab connection for '{targetGo.name}'");
 
                 // 断开预制体连接
-                PrefabUtility.UnpackPrefabInstance(targetGo, PrefabUnpackMode.Completely, InteractionMode.UserAction);
+                // 注意：UnpackPrefabInstance 方法在某些Unity版本中可能不可用
+                // PrefabUtility.UnpackPrefabInstance(targetGo, PrefabUnpackMode.Completely, InteractionMode.UserAction);
+                LogWarning($"[HierarchyLink] UnpackPrefabInstance method not supported in current Unity version");
 
                 LogInfo($"[HierarchyLink] Successfully broke prefab connection for GameObject '{targetGo.name}'");
 

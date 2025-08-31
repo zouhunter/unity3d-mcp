@@ -7,7 +7,7 @@ alwaysApply: true
 
 本文档将工具按两类划分：
 - Tools: `function_call`, `functions_call`（调用/批量调用 Methods）。
-- Methods: `hierarchy_create`, `hierarchy_link`, `hierarchy_search`, `manage_asset`, `manage_component`, `manage_editor`, `manage_gameobject`, `request_http`, `manage_scene`, `manage_script`, `manage_shader`, `manage_texture`, `console_read`（均作为 `func` 传给 Tools）。
+- Methods: `hierarchy_create`, `hierarchy_link`, `hierarchy_search`, `manage_asset`, `manage_component`, `manage_editor`, `manage_gameobject`, `request_http`, `manage_scene`, `manage_script`, `manage_shader`, `manage_texture`, `manage_material`, `console_read`（均作为 `func` 传给 Tools）。
 
 除 `function_call` 与 `functions_call` 外，其余均为 Methods 名称，不直接调用；请通过 Tools 调用，并把方法参数放入 `args`（JSON 字符串）。
 
@@ -29,6 +29,7 @@ alwaysApply: true
   - `manage_script`
   - `manage_shader`
   - `manage_texture`
+  - `manage_material`
   - `console_read`
 - 使用指南
 
@@ -261,6 +262,7 @@ function_call(
 - `search_in_children` (bool, 可选): 是否在子对象中搜索
 - `search_in_inactive` (bool, 可选): 是否搜索非激活对象
 - `find_all` (bool, 可选): 是否查找所有匹配项
+- `use_regex` (bool, 可选): 是否使用正则表达式（仅适用于by_term搜索）
 
 支持的搜索方法 (search_method)
 - `by_name` - 按名称搜索
@@ -268,6 +270,7 @@ function_call(
 - `by_tag` - 按标签搜索
 - `by_layer` - 按层级搜索
 - `by_component` - 按组件类型搜索
+- `by_term` - 通用术语搜索（搜索名称、标签、层级、组件类型等，支持正则表达式和类型前缀）
 
 示例：按名称查找GameObject
 ```python
@@ -306,6 +309,30 @@ function_call(
 function_call(
   func="hierarchy_search",
   args="{\"action\":\"find\",\"search_method\":\"by_layer\",\"search_term\":\"Default\",\"find_all\":true}"
+)
+```
+
+示例：通用术语搜索（搜索包含"Player"的所有对象）
+```python
+function_call(
+  func="hierarchy_search",
+  args="{\"action\":\"find\",\"search_method\":\"by_term\",\"search_term\":\"Player\",\"find_all\":true,\"search_in_children\":true}"
+)
+```
+
+示例：使用正则表达式搜索（搜索所有以"Test"开头的对象）
+```python
+function_call(
+  func="hierarchy_search",
+  args="{\"action\":\"find\",\"search_method\":\"by_term\",\"search_term\":\"^Test\",\"use_regex\":true,\"find_all\":true}"
+)
+```
+
+示例：按类型搜索（搜索所有包含MeshRenderer组件的对象）
+```python
+function_call(
+  func="hierarchy_search",
+  args="{\"action\":\"find\",\"search_method\":\"by_term\",\"search_term\":\"t:MeshRenderer\",\"find_all\":true}"
 )
 ```
 
@@ -914,6 +941,85 @@ function_call(
 function_call(
   func="manage_texture",
   args="{\"action\":\"set_sprite_settings\",\"texture_path\":\"Assets/Pics/rabbit.jpg\",\"compression\":\"HighQuality\",\"max_texture_size\":2048,\"filter_mode\":\"Bilinear\"}"
+)
+```
+
+---
+
+### manage_material - 材质管理
+**功能**: 专门管理Unity中的材质资源，提供材质的创建、修改、复制等操作。
+
+主要参数（放入 `args`）
+- `action` (string, 必需): 操作类型
+- `path` (string, 必需): 材质资源路径，Unity标准格式：Assets/Materials/MaterialName.mat
+- `shader` (string): 着色器名称或路径
+- `properties` (dict): 材质属性字典，包含颜色、纹理、浮点数等属性
+- `source_path` (string): 源材质路径（复制时使用）
+- `destination` (string): 目标路径（复制/移动时使用）
+- `search_pattern` (string): 搜索模式，如*.mat
+- `recursive` (bool): 是否递归搜索子文件夹
+- `force` (bool): 是否强制执行操作（覆盖现有文件等）
+
+支持的操作 (action)
+- `create` - 创建材质
+- `modify` - 修改材质
+- `duplicate` - 复制材质
+- `get_info` - 获取材质信息
+- `search` - 搜索材质
+- `copy_properties` - 复制材质属性
+- `set_shader` - 设置着色器
+- `set_color` - 设置颜色
+- `set_texture` - 设置纹理
+- `set_float` - 设置浮点数
+- `set_vector` - 设置向量
+- `enable_keyword` - 启用关键字
+- `disable_keyword` - 禁用关键字
+
+示例：创建材质
+```python
+function_call(
+  func="manage_material",
+  args="{\"action\":\"create\",\"path\":\"Assets/Materials/NewMaterial.mat\",\"shader\":\"Standard\",\"properties\":{\"_Color\":{\"r\":1.0,\"g\":0.0,\"b\":0.0,\"a\":1.0}}}"
+)
+```
+
+示例：修改材质颜色
+```python
+function_call(
+  func="manage_material",
+  args="{\"action\":\"set_color\",\"path\":\"Assets/Materials/MyMaterial.mat\",\"property_name\":\"_Color\",\"color\":[1.0,0.5,0.0,1.0]}"
+)
+```
+
+示例：设置材质纹理
+```python
+function_call(
+  func="manage_material",
+  args="{\"action\":\"set_texture\",\"path\":\"Assets/Materials/MyMaterial.mat\",\"property_name\":\"_MainTex\",\"texture_path\":\"Assets/Textures/MyTexture.png\"}"
+)
+```
+
+示例：搜索材质
+```python
+function_call(
+  func="manage_material",
+  args="{\"action\":\"search\",\"search_pattern\":\"*.mat\",\"path\":\"Assets/Materials/\"}"
+)
+```
+
+示例：复制材质属性
+```python
+function_call(
+  func="manage_material",
+  args="{\"action\":\"copy_properties\",\"source_path\":\"Assets/Materials/SourceMaterial.mat\",\"destination\":\"Assets/Materials/TargetMaterial.mat\"}"
+)
+```
+
+示例：启用材质关键字
+```python
+function_call(
+  func="manage_material",
+  args="{\"action\":\"enable_keyword\",\"path\":\"Assets/Materials/MyMaterial.mat\",\"keyword\":\"_EMISSION\"}"
 )
 ```
 

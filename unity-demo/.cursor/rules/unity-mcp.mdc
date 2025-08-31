@@ -7,9 +7,9 @@ alwaysApply: true
 
 本文档将工具按两类划分：
 - Tools: `function_call`, `functions_call`（调用/批量调用 Methods）。
-- Methods: `hierarchy_create`, `hierarchy_link`, `hierarchy_search`, `manage_asset`, `manage_component`, `manage_editor`, `manage_gameobject`, `request_http`, `manage_scene`, `manage_script`, `manage_shader`, `manage_texture`, `manage_material`, `console_read`（均作为 `func` 传给 Tools）。
+- Methods: `hierarchy_create`, `hierarchy_link`, `hierarchy_search`, `manage_asset`, `manage_component`, `manage_editor`, `manage_gameobject`, `manage_prefab`, `request_http`, `manage_scene`, `manage_script`, `manage_scriptableobject`, `manage_shader`, `manage_texture`, `manage_material`, `edit_mesh`, `console_read`（均作为 `func` 传给 Tools）。
 
-除 `function_call` 与 `functions_call` 外，其余均为 Methods 名称，不直接调用；请通过 Tools 调用，并把方法参数放入 `args`（JSON 字符串）。
+除 `function_call` 与 `functions_call` 外，其余均为 Methods 名称，不直接调用；请通过 Tools 调用，并把方法参数放入 `args`（字典类型）。
 
 ## 🗂️ 目录
 - Tools
@@ -24,12 +24,15 @@ alwaysApply: true
   - `manage_component`
   - `manage_editor`
   - `manage_gameobject`
+  - `manage_prefab`
   - `request_http`
   - `manage_scene`
   - `manage_script`
+  - `manage_scriptableobject`
   - `manage_shader`
   - `manage_texture`
   - `manage_material`
+  - `edit_mesh`
   - `console_read`
 - 使用指南
 
@@ -42,7 +45,7 @@ alwaysApply: true
 
 参数
 - `func` (string, 必需): 方法名（见 Methods 列表）。
-- `args` (string, 必需): 传入方法的 JSON 字符串参数。
+- `args` (dict, 必需): 传入方法的参数字典。
 
 返回值格式
 ```json
@@ -58,7 +61,7 @@ alwaysApply: true
 ```python
 function_call(
   func="manage_gameobject",
-  args="{\"action\":\"create\",\"name\":\"Cube\",\"primitive_type\":\"Cube\",\"position\":[0,0,0]}"
+  args={"action": "create", "name": "Cube", "primitive_type": "Cube", "position": [0, 0, 0]}
 )
 ```
 
@@ -70,7 +73,7 @@ function_call(
 - `funcs` (list): 函数调用列表。
 
 参数格式
-```json
+```python
 [
   { "func": "manage_gameobject", "args": {"action": "create", "name": "Enemy", "primitive_type": "Cube"} },
   { "func": "manage_gameobject", "args": {"action": "add_component", "target": "Enemy", "component_name": "Rigidbody"} }
@@ -103,7 +106,7 @@ functions_call(
 
 ## 🧩 Methods
 > 通过 Tools 调用以下方法：
-> - 单次：使用 `function_call`，设置 `func` 为方法名，`args` 为方法参数 JSON 字符串。
+> - 单次：使用 `function_call`，设置 `func` 为方法名，`args` 为方法参数字典。
 > - 批量：使用 `functions_call`，把多条 `{func, args}` 放入 `function_calls`。
 
 ### gm_command - GM指令执行工具
@@ -119,7 +122,7 @@ functions_call(
 ```python
 function_call(
   func="gm_command",
-  args="{\"action\":\"default\"}"
+  args={"action": "default"}
 )
 ```
 
@@ -164,7 +167,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_create",
-  args="{\"from\":\"primitive\",\"primitive_type\":\"Cube\",\"name\":\"MyCube\",\"position\":[0,1,0],\"tag\":\"Interactable\"}"
+  args={"from": "primitive", "primitive_type": "Cube", "name": "MyCube", "position": [0, 1, 0], "tag": "Interactable"}
 )
 ```
 
@@ -172,7 +175,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_create",
-  args="{\"from\":\"prefab\",\"prefab_path\":\"Assets/Prefabs/Enemy.prefab\",\"name\":\"Enemy01\",\"position\":[5,0,0]}"
+  args={"from": "prefab", "prefab_path": "Assets/Prefabs/Enemy.prefab", "name": "Enemy01", "position": [5, 0, 0]}
 )
 ```
 
@@ -180,7 +183,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_create",
-  args="{\"from\":\"primitive\",\"primitive_type\":\"Sphere\",\"name\":\"PlayerBall\",\"save_as_prefab\":true,\"prefab_path\":\"Assets/Prefabs/PlayerBall.prefab\"}"
+  args={"from": "primitive", "primitive_type": "Sphere", "name": "PlayerBall", "save_as_prefab": True, "prefab_path": "Assets/Prefabs/PlayerBall.prefab"}
 )
 ```
 
@@ -188,7 +191,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_create",
-  args="{\"from\":\"menu\",\"menu_path\":\"GameObject/Light/Directional Light\",\"name\":\"MainLight\"}"
+  args={"from": "menu", "menu_path": "GameObject/Light/Directional Light", "name": "MainLight"}
 )
 ```
 
@@ -196,7 +199,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_create",
-  args="{\"from\":\"primitive\",\"primitive_type\":\"Cylinder\",\"name\":\"Pillar\",\"parent\":\"Environment\",\"position\":[10,0,10],\"scale\":[2,5,2]}"
+  args={"from": "primitive", "primitive_type": "Cylinder", "name": "Pillar", "parent": "Environment", "position": [10, 0, 10], "scale": [2, 5, 2]}
 )
 ```
 
@@ -221,7 +224,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_link",
-  args="{\"action\":\"link\",\"target_object\":\"Player\",\"prefab_path\":\"Assets/Prefabs/Player.prefab\",\"link_type\":\"connect_to_prefab\"}"
+  args={"action": "link", "target_object": "Player", "prefab_path": "Assets/Prefabs/Player.prefab", "link_type": "connect_to_prefab"}
 )
 ```
 
@@ -229,7 +232,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_link",
-  args="{\"action\":\"link\",\"target_object\":\"Enemy\",\"prefab_path\":\"Assets/Prefabs/NewEnemy.prefab\",\"force_link\":true}"
+  args={"action": "link", "target_object": "Enemy", "prefab_path": "Assets/Prefabs/NewEnemy.prefab", "force_link": True}
 )
 ```
 
@@ -237,7 +240,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_link",
-  args="{\"action\":\"link\",\"target_object\":\"PlayerInstance\",\"link_type\":\"apply_prefab_changes\"}"
+  args={"action": "link", "target_object": "PlayerInstance", "link_type": "apply_prefab_changes"}
 )
 ```
 
@@ -245,7 +248,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_link",
-  args="{\"action\":\"link\",\"target_object\":\"Enemy\",\"link_type\":\"break_prefab_connection\"}"
+  args={"action": "link", "target_object": "Enemy", "link_type": "break_prefab_connection"}
 )
 ```
 
@@ -276,7 +279,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args="{\"action\":\"find\",\"target\":\"Player\",\"search_method\":\"by_name\"}"
+  args={"action": "find", "target": "Player", "search_method": "by_name"}
 )
 ```
 
@@ -284,7 +287,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args="{\"action\":\"find\",\"search_method\":\"by_tag\",\"search_term\":\"Enemy\",\"find_all\":true}"
+  args={"action": "find", "search_method": "by_tag", "search_term": "Enemy", "find_all": True}
 )
 ```
 
@@ -292,7 +295,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args="{\"action\":\"find\",\"target\":\"12345\",\"search_method\":\"by_id\"}"
+  args={"action": "find", "target": "12345", "search_method": "by_id"}
 )
 ```
 
@@ -300,7 +303,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args="{\"action\":\"find\",\"search_method\":\"by_component\",\"search_term\":\"Rigidbody\",\"find_all\":true,\"search_in_inactive\":true}"
+  args={"action": "find", "search_method": "by_component", "search_term": "Rigidbody", "find_all": True, "search_in_inactive": True}
 )
 ```
 
@@ -308,7 +311,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args="{\"action\":\"find\",\"search_method\":\"by_layer\",\"search_term\":\"Default\",\"find_all\":true}"
+  args={"action": "find", "search_method": "by_layer", "search_term": "Default", "find_all": True}
 )
 ```
 
@@ -316,7 +319,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args="{\"action\":\"find\",\"search_method\":\"by_term\",\"search_term\":\"Player\",\"find_all\":true,\"search_in_children\":true}"
+  args={"action": "find", "search_method": "by_term", "search_term": "Player", "find_all": True, "search_in_children": True}
 )
 ```
 
@@ -324,7 +327,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args="{\"action\":\"find\",\"search_method\":\"by_term\",\"search_term\":\"^Test\",\"use_regex\":true,\"find_all\":true}"
+  args={"action": "find", "search_method": "by_term", "search_term": "^Test", "use_regex": True, "find_all": True}
 )
 ```
 
@@ -332,35 +335,36 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args="{\"action\":\"find\",\"search_method\":\"by_term\",\"search_term\":\"t:MeshRenderer\",\"find_all\":true}"
+  args={"action": "find", "search_method": "by_term", "search_term": "t:MeshRenderer", "find_all": True}
 )
 ```
 
 ---
 
 ### manage_asset - Unity资产管理
-**功能**: 执行Unity资产的各种操作，包括导入、创建、修改、删除等。
+**功能**: 执行Unity资产的各种操作，包括导入、修改、移动、复制等。
 
 主要参数（放入 `args`）
-- `action` (string, 必需): 操作类型，如 `create`/`import`/`move` 等
+- `action` (string, 必需): 操作类型，如 `import`/`modify`/`move`/`duplicate` 等
 - `path` (string, 必需): 资产路径
-- `asset_type` (string): 资产类型（创建时需要）
 - `properties` (dict): 资产属性
 - `destination` (string): 目标路径（移动/复制时）
 
-示例：创建材质
-```python
-function_call(
-  func="manage_asset",
-  args="{\"action\":\"create\",\"path\":\"Assets/Materials/NewMaterial.mat\",\"asset_type\":\"Material\",\"properties\":{\"color\":[1,0,0,1]}}"
-)
-```
+支持的操作 (action)
+- `import` - 重新导入资产
+- `modify` - 修改现有资产
+- `duplicate` - 复制资产
+- `move` - 移动/重命名资产
+- `rename` - 移动/重命名资产（与move相同）
+- `search` - 搜索资产
+- `get_info` - 获取资产信息
+- `create_folder` - 创建文件夹
 
 示例：创建文件夹
 ```python
 function_call(
   func="manage_asset",
-  args="{\"action\":\"create_folder\",\"path\":\"Assets/NewFolder\"}"
+  args={"action": "create_folder", "path": "Assets/NewFolder"}
 )
 ```
 
@@ -368,7 +372,7 @@ function_call(
 ```python
 function_call(
   func="manage_asset",
-  args="{\"action\":\"search\",\"path\":\"Assets/\",\"search_pattern\":\"*.prefab\"}"
+  args={"action": "search", "path": "Assets/", "search_pattern": "*.prefab"}
 )
 ```
 
@@ -376,7 +380,31 @@ function_call(
 ```python
 function_call(
   func="manage_asset",
-  args="{\"action\":\"get_info\",\"path\":\"Assets/Scripts/PlayerController.cs\"}"
+  args={"action": "get_info", "path": "Assets/Scripts/PlayerController.cs"}
+)
+```
+
+示例：复制资产
+```python
+function_call(
+  func="manage_asset",
+  args={"action": "duplicate", "path": "Assets/Materials/RedMaterial.mat", "destination": "Assets/Materials/RedMaterialCopy.mat"}
+)
+```
+
+示例：移动/重命名资产
+```python
+function_call(
+  func="manage_asset",
+  args={"action": "move", "path": "Assets/Scripts/OldName.cs", "destination": "Assets/Scripts/NewName.cs"}
+)
+```
+
+示例：修改资产属性
+```python
+function_call(
+  func="manage_asset",
+  args={"action": "modify", "path": "Assets/Materials/MyMaterial.mat", "properties": {"_Color": {"r": 1.0, "g": 0.5, "b": 0.0, "a": 1.0}}}
 )
 ```
 
@@ -405,29 +433,29 @@ function_call(
 - **set_component_property**: 设置组件的属性值
 
 示例：
-```javascript
-// 获取组件列表
+```python
+# 获取组件列表
 function_call(
   func="manage_component",
-  args="{\"action\":\"get_components\",\"target\":\"Player\"}"
+  args={"action": "get_components", "target": "Player"}
 )
 
-// 添加Rigidbody组件
+# 添加Rigidbody组件
 function_call(
   func="manage_component",
-  args="{\"action\":\"add_component\",\"target\":\"Player\",\"component_name\":\"Rigidbody\"}"
+  args={"action": "add_component", "target": "Player", "component_name": "Rigidbody"}
 )
 
-// 移除Collider组件
+# 移除Collider组件
 function_call(
   func="manage_component",
-  args="{\"action\":\"remove_component\",\"target\":\"Player\",\"component_name\":\"Collider\"}"
+  args={"action": "remove_component", "target": "Player", "component_name": "Collider"}
 )
 
-// 设置Image组件的sprite属性
+# 设置Image组件的sprite属性
 function_call(
   func="manage_component",
-  args="{\"action\":\"set_component_property\",\"target\":\"Image\",\"component_name\":\"Image\",\"component_properties\":{\"sprite\":\"Assets/Pics/rabbit.jpg\"}}"
+  args={"action": "set_component_property", "target": "Image", "component_name": "Image", "component_properties": {"sprite": "Assets/Pics/rabbit.jpg"}}
 )
 ```
 
@@ -475,7 +503,7 @@ function_call(
 ```python
 function_call(
   func="manage_editor",
-  args="{\"action\":\"play\"}"
+  args={"action": "play"}
 )
 ```
 
@@ -483,7 +511,7 @@ function_call(
 ```python
 function_call(
   func="manage_editor",
-  args="{\"action\":\"pause\"}"
+  args={"action": "pause"}
 )
 ```
 
@@ -491,7 +519,7 @@ function_call(
 ```python
 function_call(
   func="manage_editor",
-  args="{\"action\":\"get_state\"}"
+  args={"action": "get_state"}
 )
 ```
 
@@ -499,7 +527,7 @@ function_call(
 ```python
 function_call(
   func="manage_editor",
-  args="{\"action\":\"get_windows\"}"
+  args={"action": "get_windows"}
 )
 ```
 
@@ -507,7 +535,7 @@ function_call(
 ```python
 function_call(
   func="manage_editor",
-  args="{\"action\":\"set_active_tool\",\"toolName\":\"Move\"}"
+  args={"action": "set_active_tool", "toolName": "Move"}
 )
 ```
 
@@ -515,7 +543,7 @@ function_call(
 ```python
 function_call(
   func="manage_editor",
-  args="{\"action\":\"get_selection\"}"
+  args={"action": "get_selection"}
 )
 ```
 
@@ -523,7 +551,7 @@ function_call(
 ```python
 function_call(
   func="manage_editor",
-  args="{\"action\":\"add_tag\",\"tagName\":\"Enemy\"}"
+  args={"action": "add_tag", "tagName": "Enemy"}
 )
 ```
 
@@ -531,7 +559,7 @@ function_call(
 ```python
 function_call(
   func="manage_editor",
-  args="{\"action\":\"remove_tag\",\"tagName\":\"Enemy\"}"
+  args={"action": "remove_tag", "tagName": "Enemy"}
 )
 ```
 
@@ -539,7 +567,7 @@ function_call(
 ```python
 function_call(
   func="manage_editor",
-  args="{\"action\":\"get_tags\"}"
+  args={"action": "get_tags"}
 )
 ```
 
@@ -547,7 +575,7 @@ function_call(
 ```python
 function_call(
   func="manage_editor",
-  args="{\"action\":\"add_layer\",\"layerName\":\"Environment\"}"
+  args={"action": "add_layer", "layerName": "Environment"}
 )
 ```
 
@@ -555,7 +583,7 @@ function_call(
 ```python
 function_call(
   func="manage_editor",
-  args="{\"action\":\"remove_layer\",\"layerName\":\"Environment\"}"
+  args={"action": "remove_layer", "layerName": "Environment"}
 )
 ```
 
@@ -563,7 +591,7 @@ function_call(
 ```python
 function_call(
   func="manage_editor",
-  args="{\"action\":\"get_layers\"}"
+  args={"action": "get_layers"}
 )
 ```
 
@@ -571,7 +599,7 @@ function_call(
 ```python
 function_call(
   func="manage_editor",
-  args="{\"action\":\"execute_menu\",\"menu_path\":\"GameObject/UI/Canvas\"}"
+  args={"action": "execute_menu", "menu_path": "GameObject/UI/Canvas"}
 )
 ```
 
@@ -600,7 +628,7 @@ function_call(
 ```python
 function_call(
   func="manage_gameobject",
-  args="{\"action\":\"modify\",\"target\":\"Player\",\"tag\":\"Player\",\"position\":[0,1,0]}"
+  args={"action": "modify", "target": "Player", "tag": "Player", "position": [0, 1, 0]}
 )
 ```
 
@@ -608,7 +636,7 @@ function_call(
 ```python
 function_call(
   func="manage_gameobject",
-  args="{\"action\":\"add_component\",\"target\":\"Player\",\"component_name\":\"Rigidbody\"}"
+  args={"action": "add_component", "target": "Player", "component_name": "Rigidbody"}
 )
 ```
 
@@ -616,7 +644,98 @@ function_call(
 ```python
 function_call(
   func="manage_gameobject",
-  args="{\"action\":\"delete\",\"target\":\"Enemy\"}"
+  args={"action": "delete", "target": "Enemy"}
+)
+```
+
+---
+
+### manage_prefab - 预制体管理
+**功能**: 专门管理Unity中的预制体资源，提供预制体的创建、修改、复制、实例化等操作。
+
+主要参数（放入 `args`）
+- `action` (string, 必需): 操作类型
+- `path` (string, 必需): 预制体资源路径，Unity标准格式：Assets/Prefabs/PrefabName.prefab
+- `source_object` (string, 可选): 源GameObject名称或路径（创建时使用）
+- `destination` (string, 可选): 目标路径（复制时使用）
+- `search_pattern` (string, 可选): 搜索模式，如*.prefab
+- `recursive` (bool, 可选): 是否递归搜索子文件夹
+- `force` (bool, 可选): 是否强制执行操作（覆盖现有文件等）
+- `prefab_variant` (bool, 可选): 是否创建预制体变体
+- `unpack_mode` (string, 可选): 解包模式：Completely, OutermostRoot
+- `pack_mode` (string, 可选): 打包模式：Default, ReuseExisting
+- `connect_to_prefab` (bool, 可选): 是否连接到预制体
+- `apply_prefab_changes` (bool, 可选): 是否应用预制体更改
+- `revert_prefab_changes` (bool, 可选): 是否还原预制体更改
+- `break_prefab_connection` (bool, 可选): 是否断开预制体连接
+- `prefab_type` (string, 可选): 预制体类型：Regular, Variant
+- `parent_prefab` (string, 可选): 父预制体路径（变体时使用）
+- `scene_path` (string, 可选): 场景路径（实例化时使用）
+- `position` (list, 可选): 位置坐标 [x, y, z]
+- `rotation` (list, 可选): 旋转角度 [x, y, z]
+- `scale` (list, 可选): 缩放比例 [x, y, z]
+- `parent` (string, 可选): 父对象名称或路径
+
+支持的操作 (action)
+- `create` - 创建预制体
+- `modify` - 修改预制体
+- `duplicate` - 复制预制体
+- `get_info` - 获取预制体信息
+- `search` - 搜索预制体
+- `instantiate` - 实例化预制体
+- `unpack` - 解包预制体
+- `pack` - 打包预制体
+- `create_variant` - 创建预制体变体
+- `connect_to_prefab` - 连接到预制体
+- `apply_changes` - 应用预制体更改
+- `revert_changes` - 还原预制体更改
+- `break_connection` - 断开预制体连接
+
+示例：创建预制体
+```python
+function_call(
+  func="manage_prefab",
+  args={"action": "create", "path": "Assets/Prefabs/NewPrefab.prefab", "source_object": "Player"}
+)
+```
+
+示例：复制预制体
+```python
+function_call(
+  func="manage_prefab",
+  args={"action": "duplicate", "path": "Assets/Prefabs/Player.prefab", "destination": "Assets/Prefabs/PlayerCopy.prefab"}
+)
+```
+
+示例：实例化预制体
+```python
+function_call(
+  func="manage_prefab",
+  args={"action": "instantiate", "path": "Assets/Prefabs/Enemy.prefab", "position": [0, 0, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1]}
+)
+```
+
+示例：搜索预制体
+```python
+function_call(
+  func="manage_prefab",
+  args={"action": "search", "search_pattern": "*.prefab", "path": "Assets/Prefabs/"}
+)
+```
+
+示例：创建预制体变体
+```python
+function_call(
+  func="manage_prefab",
+  args={"action": "create_variant", "path": "Assets/Prefabs/EnemyVariant.prefab", "parent_prefab": "Assets/Prefabs/Enemy.prefab"}
+)
+```
+
+示例：应用预制体更改
+```python
+function_call(
+  func="manage_prefab",
+  args={"action": "apply_changes", "path": "Assets/Prefabs/Player.prefab", "target_object": "PlayerInstance"}
 )
 ```
 
@@ -654,7 +773,7 @@ function_call(
 ```python
 function_call(
   func="request_http",
-  args="{\"action\":\"get\",\"url\":\"https://api.github.com/repos/microsoft/vscode\",\"timeout\":30}"
+  args={"action": "get", "url": "https://api.github.com/repos/microsoft/vscode", "timeout": 30}
 )
 ```
 
@@ -662,7 +781,7 @@ function_call(
 ```python
 function_call(
   func="request_http",
-  args="{\"action\":\"post\",\"url\":\"https://httpbin.org/post\",\"data\":{\"message\":\"Hello from Unity\",\"timestamp\":\"2024-01-01T12:00:00Z\"},\"content_type\":\"application/json\"}"
+  args={"action": "post", "url": "https://httpbin.org/post", "data": {"message": "Hello from Unity", "timestamp": "2024-01-01T12:00:00Z"}, "content_type": "application/json"}
 )
 ```
 
@@ -670,7 +789,7 @@ function_call(
 ```python
 function_call(
   func="request_http",
-  args="{\"action\":\"download\",\"url\":\"https://httpbin.org/image/png\",\"save_path\":\"Assets/Downloaded/test_image.png\",\"timeout\":60}"
+  args={"action": "download", "url": "https://httpbin.org/image/png", "save_path": "Assets/Downloaded/test_image.png", "timeout": 60}
 )
 ```
 
@@ -678,7 +797,7 @@ function_call(
 ```python
 function_call(
   func="request_http",
-  args="{\"action\":\"get\",\"url\":\"https://api.example.com/data\",\"auth_token\":\"your_bearer_token_here\",\"headers\":{\"User-Agent\":\"Unity-MCP/1.0\"}}"
+  args={"action": "get", "url": "https://api.example.com/data", "auth_token": "your_bearer_token_here", "headers": {"User-Agent": "Unity-MCP/1.0"}}
 )
 ```
 
@@ -686,7 +805,7 @@ function_call(
 ```python
 function_call(
   func="request_http",
-  args="{\"action\":\"upload\",\"url\":\"https://httpbin.org/post\",\"file_path\":\"Assets/Screenshots/screenshot.png\",\"form_data\":{\"description\":\"Unity screenshot\"}}"
+  args={"action": "upload", "url": "https://httpbin.org/post", "file_path": "Assets/Screenshots/screenshot.png", "form_data": {"description": "Unity screenshot"}}
 )
 ```
 
@@ -694,7 +813,7 @@ function_call(
 ```python
 function_call(
   func="request_http",
-  args="{\"action\":\"ping\",\"url\":\"https://httpbin.org/status/200\",\"timeout\":10}"
+  args={"action": "ping", "url": "https://httpbin.org/status/200", "timeout": 10}
 )
 ```
 
@@ -702,7 +821,7 @@ function_call(
 ```python
 function_call(
   func="request_http",
-  args="{\"action\":\"get\",\"url\":\"https://httpbin.org/get\",\"query_params\":{\"param1\":\"value1\",\"param2\":\"value2\"}}"
+  args={"action": "get", "url": "https://httpbin.org/get", "query_params": {"param1": "value1", "param2": "value2"}}
 )
 ```
 
@@ -710,7 +829,7 @@ function_call(
 ```python
 function_call(
   func="request_http",
-  args="{\"action\":\"get\",\"url\":\"https://httpbin.org/status/500\",\"retry_count\":3,\"retry_delay\":1.5}"
+  args={"action": "get", "url": "https://httpbin.org/status/500", "retry_count": 3, "retry_delay": 1.5}
 )
 ```
 
@@ -735,7 +854,7 @@ function_call(
 ```python
 function_call(
   func="manage_scene",
-  args="{\"action\":\"create\",\"name\":\"NewLevel\",\"path\":\"Assets/Scenes/\",\"build_index\":1}"
+  args={"action": "create", "name": "NewLevel", "path": "Assets/Scenes/", "build_index": 1}
 )
 ```
 
@@ -743,7 +862,7 @@ function_call(
 ```python
 function_call(
   func="manage_scene",
-  args="{\"action\":\"load\",\"name\":\"MainMenu\",\"path\":\"Assets/Scenes/MainMenu.unity\",\"build_index\":0}"
+  args={"action": "load", "name": "MainMenu", "path": "Assets/Scenes/MainMenu.unity", "build_index": 0}
 )
 ```
 
@@ -751,7 +870,7 @@ function_call(
 ```python
 function_call(
   func="manage_scene",
-  args="{\"action\":\"save\",\"name\":\"CurrentScene\",\"path\":\"Assets/Scenes/\",\"build_index\":0}"
+  args={"action": "save", "name": "CurrentScene", "path": "Assets/Scenes/", "build_index": 0}
 )
 ```
 
@@ -759,7 +878,7 @@ function_call(
 ```python
 function_call(
   func="manage_scene",
-  args="{\"action\":\"get_hierarchy\",\"name\":\"CurrentScene\",\"path\":\"\",\"build_index\":0}"
+  args={"action": "get_hierarchy", "name": "CurrentScene", "path": "", "build_index": 0}
 )
 ```
 
@@ -772,9 +891,9 @@ function_call(
 - `action` (string, 必需): 操作类型
 - `name` (string, 必需): 脚本名称（不含.cs扩展名）
 - `path` (string, 必需): 资产路径
-- `contents` (string, 必需): C#代码内容
-- `script_type` (string, 必需): 脚本类型
-- `namespace` (string, 必需): 命名空间
+- `lines` (array, 可选): C#代码内容（字符串数组，每行一个元素）
+- `script_type` (string, 可选): 脚本类型
+- `namespace` (string, 可选): 命名空间
 
 支持的操作 (action)
 - `create` - 创建脚本
@@ -786,7 +905,7 @@ function_call(
 ```python
 function_call(
   func="manage_script",
-  args="{\"action\":\"create\",\"name\":\"PlayerController\",\"path\":\"Assets/Scripts/\",\"contents\":\"using UnityEngine;\\n\\npublic class PlayerController : MonoBehaviour { public float speed = 5f; void Update(){ float h = Input.GetAxis(\\\"Horizontal\\\"); float v = Input.GetAxis(\\\"Vertical\\\"); Vector3 movement = new Vector3(h,0,v) * speed * Time.deltaTime; transform.Translate(movement);} }\",\"script_type\":\"MonoBehaviour\",\"namespace\":\"\"}"
+  args={"action": "create", "name": "PlayerController", "path": "Assets/Scripts/", "lines": ["using UnityEngine;", "", "public class PlayerController : MonoBehaviour", "{", "    public float speed = 5f;", "", "    void Update()", "    {", "        float h = Input.GetAxis(\"Horizontal\");", "        float v = Input.GetAxis(\"Vertical\");", "        Vector3 movement = new Vector3(h, 0, v) * speed * Time.deltaTime;", "        transform.Translate(movement);", "    }", "}"], "script_type": "MonoBehaviour", "namespace": ""}
 )
 ```
 
@@ -794,7 +913,7 @@ function_call(
 ```python
 function_call(
   func="manage_script",
-  args="{\"action\":\"read\",\"name\":\"PlayerController\",\"path\":\"Assets/Scripts/\"}"
+  args={"action": "read", "name": "PlayerController", "path": "Assets/Scripts/"}
 )
 ```
 
@@ -802,7 +921,69 @@ function_call(
 ```python
 function_call(
   func="manage_script",
-  args="{\"action\":\"update\",\"name\":\"PlayerController\",\"path\":\"Assets/Scripts/\",\"contents\":\"// 更新后的代码内容\",\"script_type\":\"MonoBehaviour\",\"namespace\":\"\"}"
+  args={"action": "update", "name": "PlayerController", "path": "Assets/Scripts/", "lines": ["// 更新后的代码内容", "using UnityEngine;", "", "public class PlayerController : MonoBehaviour", "{", "    // 新的代码内容", "}"], "script_type": "MonoBehaviour", "namespace": ""}
+)
+```
+
+---
+
+### manage_scriptableobject - ScriptableObject管理
+**功能**: 专门管理Unity中的ScriptableObject资产，提供创建、修改、复制、搜索等操作。
+
+主要参数（放入 `args`）
+- `action` (string, 必需): 操作类型
+- `path` (string, 必需): ScriptableObject资产路径，Unity标准格式：Assets/Folder/AssetName.asset
+- `script_class` (string): ScriptableObject脚本类名（创建时需要）
+- `properties` (dict): 资产属性字典，用于设置ScriptableObject的各种属性
+- `destination` (string): 目标路径（复制时使用）
+- `search_pattern` (string): 搜索模式，如*.asset
+- `recursive` (bool): 是否递归搜索子文件夹
+- `force` (bool): 是否强制执行操作（覆盖现有文件等）
+
+支持的操作 (action)
+- `create` - 创建ScriptableObject
+- `modify` - 修改ScriptableObject
+- `duplicate` - 复制ScriptableObject
+- `search` - 搜索ScriptableObject
+- `get_info` - 获取ScriptableObject信息
+
+示例：创建ScriptableObject
+```python
+function_call(
+  func="manage_scriptableobject",
+  args={"action": "create", "path": "Assets/Data/GameSettings.asset", "script_class": "GameSettings", "properties": {"playerSpeed": 5.0, "maxHealth": 100}}
+)
+```
+
+示例：修改ScriptableObject
+```python
+function_call(
+  func="manage_scriptableobject",
+  args={"action": "modify", "path": "Assets/Data/GameSettings.asset", "properties": {"playerSpeed": 7.0, "maxHealth": 150}}
+)
+```
+
+示例：复制ScriptableObject
+```python
+function_call(
+  func="manage_scriptableobject",
+  args={"action": "duplicate", "path": "Assets/Data/GameSettings.asset", "destination": "Assets/Data/GameSettingsCopy.asset"}
+)
+```
+
+示例：搜索ScriptableObject
+```python
+function_call(
+  func="manage_scriptableobject",
+  args={"action": "search", "search_pattern": "*.asset", "path": "Assets/Data/"}
+)
+```
+
+示例：获取ScriptableObject信息
+```python
+function_call(
+  func="manage_scriptableobject",
+  args={"action": "get_info", "path": "Assets/Data/GameSettings.asset"}
 )
 ```
 
@@ -815,9 +996,7 @@ function_call(
 - `action` (string, 必需): 操作类型
 - `name` (string, 必需): Shader名称（不含.shader扩展名）
 - `path` (string, 可选): 资产路径（相对于Assets），默认为Shaders
-- `contents` (string, 可选): Shader代码内容
-- `contentsEncoded` (bool, 可选): 内容是否为base64编码，默认false
-- `encodedContents` (string, 可选): base64编码的Shader内容
+- `lines` (array, 可选): Shader代码内容（字符串数组，每行一个元素）
 
 支持的操作 (action)
 - `create` - 创建Shader
@@ -829,7 +1008,7 @@ function_call(
 ```python
 function_call(
   func="manage_shader",
-  args="{\"action\":\"create\",\"name\":\"MyShader\",\"path\":\"Shaders\"}"
+  args={"action": "create", "name": "MyShader", "path": "Shaders"}
 )
 ```
 
@@ -837,7 +1016,7 @@ function_call(
 ```python
 function_call(
   func="manage_shader",
-  args="{\"action\":\"create\",\"name\":\"ColorShader\",\"path\":\"Shaders\",\"contents\":\"Shader \\\"ColorShader\\\"\\n{\\n    Properties\\n    {\\n        _Color (\\\"Color\\\", Color) = (1,0,0,1)\\n    }\\n    SubShader\\n    {\\n        Tags { \\\"RenderType\\\"=\\\"Opaque\\\" }\\n        Pass\\n        {\\n            Color [_Color]\\n        }\\n    }\\n}\"}"
+  args={"action": "create", "name": "ColorShader", "path": "Shaders", "lines": ["Shader \"ColorShader\"", "{", "    Properties", "    {", "        _Color (\"Color\", Color) = (1,0,0,1)", "    }", "    SubShader", "    {", "        Tags { \"RenderType\"=\"Opaque\" }", "        Pass", "        {", "            Color [_Color]", "        }", "    }", "}"]}
 )
 ```
 
@@ -845,7 +1024,7 @@ function_call(
 ```python
 function_call(
   func="manage_shader",
-  args="{\"action\":\"read\",\"name\":\"MyShader\",\"path\":\"Shaders\"}"
+  args={"action": "read", "name": "MyShader", "path": "Shaders"}
 )
 ```
 
@@ -853,7 +1032,7 @@ function_call(
 ```python
 function_call(
   func="manage_shader",
-  args="{\"action\":\"update\",\"name\":\"MyShader\",\"path\":\"Shaders\",\"contents\":\"// 更新后的Shader代码\"}"
+  args={"action": "update", "name": "MyShader", "path": "Shaders", "lines": ["// 更新后的Shader代码", "Shader \"MyShader\"", "{", "    // 新的代码内容", "}"]}
 )
 ```
 
@@ -861,7 +1040,7 @@ function_call(
 ```python
 function_call(
   func="manage_shader",
-  args="{\"action\":\"delete\",\"name\":\"MyShader\",\"path\":\"Shaders\"}"
+  args={"action": "delete", "name": "MyShader", "path": "Shaders"}
 )
 ```
 
@@ -916,7 +1095,7 @@ Sprite模式 (sprite_mode)
 ```python
 function_call(
   func="manage_texture",
-  args="{\"action\":\"set_type\",\"texture_path\":\"Assets/Pics/rabbit.jpg\",\"texture_type\":\"Sprite\"}"
+  args={"action": "set_type", "texture_path": "Assets/Pics/rabbit.jpg", "texture_type": "Sprite"}
 )
 ```
 
@@ -924,7 +1103,7 @@ function_call(
 ```python
 function_call(
   func="manage_texture",
-  args="{\"action\":\"set_sprite_settings\",\"texture_path\":\"Assets/Pics/rabbit.jpg\",\"sprite_mode\":\"Single\",\"pixels_per_unit\":100,\"sprite_pivot\":\"Center\",\"generate_physics_shape\":true}"
+  args={"action": "set_sprite_settings", "texture_path": "Assets/Pics/rabbit.jpg", "sprite_mode": "Single", "pixels_per_unit": 100, "sprite_pivot": "Center", "generate_physics_shape": True}
 )
 ```
 
@@ -932,7 +1111,7 @@ function_call(
 ```python
 function_call(
   func="manage_texture",
-  args="{\"action\":\"get_settings\",\"texture_path\":\"Assets/Pics/rabbit.jpg\"}"
+  args={"action": "get_settings", "texture_path": "Assets/Pics/rabbit.jpg"}
 )
 ```
 
@@ -940,7 +1119,7 @@ function_call(
 ```python
 function_call(
   func="manage_texture",
-  args="{\"action\":\"set_sprite_settings\",\"texture_path\":\"Assets/Pics/rabbit.jpg\",\"compression\":\"HighQuality\",\"max_texture_size\":2048,\"filter_mode\":\"Bilinear\"}"
+  args={"action": "set_sprite_settings", "texture_path": "Assets/Pics/rabbit.jpg", "compression": "HighQuality", "max_texture_size": 2048, "filter_mode": "Bilinear"}
 )
 ```
 
@@ -979,7 +1158,7 @@ function_call(
 ```python
 function_call(
   func="manage_material",
-  args="{\"action\":\"create\",\"path\":\"Assets/Materials/NewMaterial.mat\",\"shader\":\"Standard\",\"properties\":{\"_Color\":{\"r\":1.0,\"g\":0.0,\"b\":0.0,\"a\":1.0}}}"
+  args={"action": "create", "path": "Assets/Materials/NewMaterial.mat", "shader": "Standard", "properties": {"_Color": {"r": 1.0, "g": 0.0, "b": 0.0, "a": 1.0}}}
 )
 ```
 
@@ -987,7 +1166,7 @@ function_call(
 ```python
 function_call(
   func="manage_material",
-  args="{\"action\":\"set_color\",\"path\":\"Assets/Materials/MyMaterial.mat\",\"property_name\":\"_Color\",\"color\":[1.0,0.5,0.0,1.0]}"
+  args={"action": "set_color", "path": "Assets/Materials/MyMaterial.mat", "property_name": "_Color", "color": [1.0, 0.5, 0.0, 1.0]}
 )
 ```
 
@@ -995,7 +1174,7 @@ function_call(
 ```python
 function_call(
   func="manage_material",
-  args="{\"action\":\"set_texture\",\"path\":\"Assets/Materials/MyMaterial.mat\",\"property_name\":\"_MainTex\",\"texture_path\":\"Assets/Textures/MyTexture.png\"}"
+  args={"action": "set_texture", "path": "Assets/Materials/MyMaterial.mat", "property_name": "_MainTex", "texture_path": "Assets/Textures/MyTexture.png"}
 )
 ```
 
@@ -1003,7 +1182,7 @@ function_call(
 ```python
 function_call(
   func="manage_material",
-  args="{\"action\":\"search\",\"search_pattern\":\"*.mat\",\"path\":\"Assets/Materials/\"}"
+  args={"action": "search", "search_pattern": "*.mat", "path": "Assets/Materials/"}
 )
 ```
 
@@ -1011,7 +1190,7 @@ function_call(
 ```python
 function_call(
   func="manage_material",
-  args="{\"action\":\"copy_properties\",\"source_path\":\"Assets/Materials/SourceMaterial.mat\",\"destination\":\"Assets/Materials/TargetMaterial.mat\"}"
+  args={"action": "copy_properties", "source_path": "Assets/Materials/SourceMaterial.mat", "destination": "Assets/Materials/TargetMaterial.mat"}
 )
 ```
 
@@ -1019,7 +1198,165 @@ function_call(
 ```python
 function_call(
   func="manage_material",
-  args="{\"action\":\"enable_keyword\",\"path\":\"Assets/Materials/MyMaterial.mat\",\"keyword\":\"_EMISSION\"}"
+  args={"action": "enable_keyword", "path": "Assets/Materials/MyMaterial.mat", "keyword": "_EMISSION"}
+)
+```
+
+---
+
+### edit_mesh - 网格资产管理
+**功能**: 专门管理Unity中的网格资产，提供网格生成、修改、优化、细分、平滑、导入导出等操作。
+
+主要参数（放入 `args`）
+- `action` (string, 必需): 操作类型
+- `path` (string, 必需): 网格资产路径，Unity标准格式：Assets/Meshes/MeshName.asset
+- `mesh_type` (string): 网格类型：cube, sphere, cylinder, plane, custom等
+- `properties` (dict): 网格属性字典，包含顶点、面、UV等数据
+- `source_path` (string): 源网格路径（修改时使用）
+- `destination` (string): 目标路径（导出时使用）
+- `subdivision_level` (int): 细分级别（细分时使用，范围1-5）
+- `smooth_factor` (float): 平滑因子（平滑时使用，范围0.0-1.0）
+- `optimization_level` (string): 优化级别：low, medium, high
+- `export_format` (string): 导出格式：obj, asset
+- `force` (bool): 是否强制执行操作（覆盖现有文件等）
+
+支持的操作 (action)
+- `create` - 创建自定义网格
+- `modify` - 修改网格属性
+- `optimize` - 优化网格
+- `generate_primitive` - 生成基础几何体网格
+- `subdivide` - 细分网格
+- `smooth` - 平滑网格
+- `export` - 导出网格（需要指定export_format参数）
+- `import` - 导入网格（目前支持OBJ格式）
+- `get_info` - 获取网格信息
+- `duplicate` - 复制网格
+
+导出格式 (export_format)
+- `obj` - 导出为OBJ文件格式
+- `asset` - 导出为Unity资产格式
+
+网格属性支持 (properties)
+- `vertices` - 顶点数组 [[x,y,z], [x,y,z], ...]
+- `triangles` - 三角形索引数组 [0,1,2, 0,2,3, ...]
+- `normals` - 法线数组 [[x,y,z], [x,y,z], ...]
+- `uv` - UV坐标数组 [[u,v], [u,v], ...]
+- `tangents` - 切线数组 [[x,y,z,w], [x,y,z,w], ...]
+
+优化级别说明 (optimization_level)
+- `low` - 基础优化（仅调用mesh.Optimize()）
+- `medium` - 中等优化（优化+重新计算边界和法线）
+- `high` - 高级优化（优化+重新计算边界、法线和切线）
+
+示例：生成基础几何体网格
+```python
+function_call(
+  func="edit_mesh",
+  args={"action": "generate_primitive", "path": "Assets/Meshes/MyCube.asset", "mesh_type": "cube"}
+)
+```
+
+示例：生成球体网格
+```python
+function_call(
+  func="edit_mesh",
+  args={"action": "generate_primitive", "path": "Assets/Meshes/MySphere.asset", "mesh_type": "sphere"}
+)
+```
+
+示例：生成圆柱体网格
+```python
+function_call(
+  func="edit_mesh",
+  args={"action": "generate_primitive", "path": "Assets/Meshes/MyCylinder.asset", "mesh_type": "cylinder"}
+)
+```
+
+示例：生成平面网格
+```python
+function_call(
+  func="edit_mesh",
+  args={"action": "generate_primitive", "path": "Assets/Meshes/MyPlane.asset", "mesh_type": "plane"}
+)
+```
+
+示例：创建自定义网格
+```python
+function_call(
+  func="edit_mesh",
+  args={"action": "create", "path": "Assets/Meshes/CustomMesh.asset", "properties": {"vertices": [[0, 0, 0], [1, 0, 0], [0, 1, 0]], "triangles": [0, 1, 2]}}
+)
+```
+
+示例：创建带UV的自定义网格
+```python
+function_call(
+  func="edit_mesh",
+  args={"action": "create", "path": "Assets/Meshes/CustomMeshWithUV.asset", "properties": {"vertices": [[0, 0, 0], [1, 0, 0], [0, 1, 0]], "triangles": [0, 1, 2], "uv": [[0, 0], [1, 0], [0, 1]}}}
+)
+```
+
+示例：细分网格
+```python
+function_call(
+  func="edit_mesh",
+  args={"action": "subdivide", "path": "Assets/Meshes/MyMesh.asset", "subdivision_level": 2}
+)
+```
+
+示例：平滑网格
+```python
+function_call(
+  func="edit_mesh",
+  args={"action": "smooth", "path": "Assets/Meshes/MyMesh.asset", "smooth_factor": 0.5}
+)
+```
+
+示例：优化网格
+```python
+function_call(
+  func="edit_mesh",
+  args={"action": "optimize", "path": "Assets/Meshes/MyMesh.asset", "optimization_level": "high"}
+)
+```
+
+示例：导出网格为OBJ格式
+```python
+function_call(
+  func="edit_mesh",
+  args={"action": "export", "export_format": "obj", "path": "Assets/Meshes/MyMesh.asset", "destination": "ExportedMesh.obj"}
+)
+```
+
+示例：导出网格为Asset格式
+```python
+function_call(
+  func="edit_mesh",
+  args={"action": "export", "export_format": "asset", "path": "Assets/Meshes/MyMesh.asset", "destination": "Assets/Meshes/MyMeshCopy.asset"}
+)
+```
+
+示例：导入OBJ网格
+```python
+function_call(
+  func="edit_mesh",
+  args={"action": "import", "path": "Assets/Meshes/ImportedMesh.asset", "source_path": "MyMesh.obj"}
+)
+```
+
+示例：获取网格信息
+```python
+function_call(
+  func="edit_mesh",
+  args={"action": "get_info", "path": "Assets/Meshes/MyMesh.asset"}
+)
+```
+
+示例：复制网格
+```python
+function_call(
+  func="edit_mesh",
+  args={"action": "duplicate", "path": "Assets/Meshes/MyMesh.asset", "destination": "Assets/Meshes/MyMeshCopy.asset"}
 )
 ```
 
@@ -1055,7 +1392,7 @@ function_call(
 ```python
 function_call(
   func="console_read",
-  args="{\"action\":\"get\",\"count\":1}"
+  args={"action": "get", "count": 1}
 )
 ```
 
@@ -1063,7 +1400,7 @@ function_call(
 ```python
 function_call(
   func="console_read",
-  args="{\"action\":\"get_full\",\"types\":[\"error\"],\"count\":5}"
+  args={"action": "get_full", "types": ["error"], "count": 5}
 )
 ```
 
@@ -1071,7 +1408,7 @@ function_call(
 ```python
 function_call(
   func="console_read",
-  args="{\"action\":\"get\",\"filterText\":\"FunctionCall\"}"
+  args={"action": "get", "filterText": "FunctionCall"}
 )
 ```
 
@@ -1079,7 +1416,7 @@ function_call(
 ```python
 function_call(
   func="console_read",
-  args="{\"action\":\"get_full\",\"types\":[\"warning\"]}"
+  args={"action": "get_full", "types": ["warning"]}
 )
 ```
 
@@ -1087,7 +1424,7 @@ function_call(
 ```python
 function_call(
   func="console_read",
-  args="{\"action\":\"clear\"}"
+  args={"action": "clear"}
 )
 ```
 
@@ -1095,7 +1432,7 @@ function_call(
 ```python
 function_call(
   func="console_read",
-  args="{\"action\":\"get_full\",\"count\":10,\"filterText\":\"Error\"}"
+  args={"action": "get_full", "count": 10, "filterText": "Error"}
 )
 ```
 

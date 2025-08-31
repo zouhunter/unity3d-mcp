@@ -23,7 +23,7 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("action", "操作类型：create, modify, duplicate, delete, get_info, search, instantiate, unpack, pack", false),
+                new MethodKey("action", "操作类型：create, modify, duplicate, get_info, search, instantiate, unpack, pack", false),
                 new MethodKey("path", "预制体资源路径，Unity标准格式：Assets/Prefabs/PrefabName.prefab", false),
                 new MethodKey("source_object", "源GameObject名称或路径（创建时使用）", true),
                 new MethodKey("destination", "目标路径（复制/移动时使用）", true),
@@ -58,7 +58,6 @@ namespace UnityMcp.Tools
                     .Leaf("create", CreatePrefab)
                     .Leaf("modify", ModifyPrefab)
                     .Leaf("duplicate", DuplicatePrefab)
-                    .Leaf("delete", DeletePrefab)
                     .Leaf("get_info", GetPrefabInfo)
                     .Leaf("search", SearchPrefabs)
                     .Leaf("instantiate", InstantiatePrefab)
@@ -259,35 +258,7 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object DeletePrefab(JObject args)
-        {
-            string path = args["path"]?.ToString();
 
-            if (string.IsNullOrEmpty(path))
-                return Response.Error("'path' is required for delete.");
-
-            string fullPath = SanitizeAssetPath(path);
-            if (!AssetExists(fullPath))
-                return Response.Error($"Prefab not found at path: {fullPath}");
-
-            try
-            {
-                bool success = AssetDatabase.DeleteAsset(fullPath);
-                if (success)
-                {
-                    LogInfo($"[ManagePrefab] Deleted prefab at '{fullPath}'");
-                    return Response.Success($"Prefab '{fullPath}' deleted successfully.");
-                }
-                else
-                {
-                    return Response.Error($"Failed to delete prefab '{fullPath}'. Check logs or if the file is locked.");
-                }
-            }
-            catch (Exception e)
-            {
-                return Response.Error($"Error deleting prefab '{fullPath}': {e.Message}");
-            }
-        }
 
         private object GetPrefabInfo(JObject args)
         {

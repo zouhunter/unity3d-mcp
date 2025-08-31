@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
@@ -26,9 +27,7 @@ namespace UnityMcp.Tools
                 new MethodKey("action", "操作类型：create, read, update, delete", false),
                 new MethodKey("name", "Shader名称（不含.shader扩展名）", false),
                 new MethodKey("path", "资产路径（相对于Assets），默认为Shaders", true),
-                new MethodKey("contents", "Shader代码内容", true),
-                new MethodKey("contentsEncoded", "内容是否为base64编码，默认false", true),
-                new MethodKey("encodedContents", "base64编码的Shader内容", true)
+                new MethodKey("lines", "Shader代码内容（已换行的字符串数组）", true)
             };
         }
 
@@ -107,16 +106,13 @@ namespace UnityMcp.Tools
             {
                 string contents = File.ReadAllText(pathInfo.FullPath);
 
-                // Return both normal and encoded contents for larger files
-                bool isLarge = contents.Length > 10000; // If content is large, include encoded version
+                // Return both normal content and lines array
                 var responseData = new
                 {
                     path = pathInfo.RelativePath,
                     name = validationResult.Name,
                     contents = contents,
-                    // For large files, also include base64-encoded version
-                    encodedContents = isLarge ? EncodeBase64(contents) : null,
-                    contentsEncoded = isLarge,
+                    lines = contents.Split('\n'),
                     fileSize = contents.Length
                 };
 
@@ -304,24 +300,30 @@ namespace UnityMcp.Tools
         /// </summary>
         private string GetShaderContents(JObject args)
         {
-            // Check if we have base64 encoded contents
-            bool contentsEncoded = args["contentsEncoded"]?.ToObject<bool>() ?? false;
-            if (contentsEncoded && args["encodedContents"] != null)
+            // Handle lines parameter (array of strings)
+            if (args["lines"] != null)
             {
                 try
                 {
-                    return DecodeBase64(args["encodedContents"].ToString());
+                    var linesArray = args["lines"] as JArray;
+                    if (linesArray != null)
+                    {
+                        return string.Join("\n", linesArray.Select(line => line.ToString()));
+                    }
+                    else
+                    {
+                        LogError("[ManageShader] Lines parameter must be an array of strings.");
+                        return null;
+                    }
                 }
                 catch (Exception e)
                 {
-                    LogError($"[ManageShader] Failed to decode shader contents: {e.Message}");
+                    LogError($"[ManageShader] Failed to process lines parameter: {e.Message}");
                     return null;
                 }
             }
-            else
-            {
-                return args["contents"]?.ToString();
-            }
+            
+            return null;
         }
 
         /// <summary>
@@ -388,23 +390,7 @@ namespace UnityMcp.Tools
             }
         }
 
-        /// <summary>
-        /// Decode base64 string to normal text
-        /// </summary>
-        private static string DecodeBase64(string encoded)
-        {
-            byte[] data = Convert.FromBase64String(encoded);
-            return System.Text.Encoding.UTF8.GetString(data);
-        }
 
-        /// <summary>
-        /// Encode text to base64 string
-        /// </summary>
-        private static string EncodeBase64(string text)
-        {
-            byte[] data = System.Text.Encoding.UTF8.GetBytes(text);
-            return Convert.ToBase64String(data);
-        }
 
         /// <summary>
         /// Generate default shader content

@@ -26,7 +26,7 @@ namespace UnityMcp.Tools
                 new MethodKey("action", "操作类型：create, read, update, delete", false),
                 new MethodKey("name", "脚本名称（不含.cs扩展名）", false),
                 new MethodKey("path", "脚本资产路径", false),
-                new MethodKey("contents", "C#代码内容", true),
+                new MethodKey("lines", "C#代码内容（已换行的字符串数组）", true),
                 new MethodKey("script_type", "脚本类型：MonoBehaviour, ScriptableObject等", true),
                 new MethodKey("namespace", "命名空间", true)
             };
@@ -164,23 +164,27 @@ namespace UnityMcp.Tools
             string path = args["path"]?.ToString(); // Relative to Assets/
             string contents = null;
 
-            // Check if we have base64 encoded contents
-            bool contentsEncoded = args["contentsEncoded"]?.ToObject<bool>() ?? false;
-            if (contentsEncoded && args["encodedContents"] != null)
+            // Handle lines parameter (array of strings)
+            if (args["lines"] != null)
             {
                 try
                 {
-                    contents = DecodeBase64(args["encodedContents"].ToString());
+                    var linesArray = args["lines"] as JArray;
+                    if (linesArray != null)
+                    {
+                        contents = string.Join("\n", linesArray.Select(line => line.ToString()));
+                    }
+                    else
+                    {
+                        info.ErrorResponse = Response.Error("Lines parameter must be an array of strings.");
+                        return info;
+                    }
                 }
                 catch (Exception e)
                 {
-                    info.ErrorResponse = Response.Error($"Failed to decode script contents: {e.Message}");
+                    info.ErrorResponse = Response.Error($"Failed to process lines parameter: {e.Message}");
                     return info;
                 }
-            }
-            else
-            {
-                contents = args["contents"]?.ToString();
             }
 
             string scriptType = args["scriptType"]?.ToString();
@@ -253,23 +257,7 @@ namespace UnityMcp.Tools
 
         // --- Action Implementations ---
 
-        /// <summary>
-        /// Decode base64 string to normal text
-        /// </summary>
-        private static string DecodeBase64(string encoded)
-        {
-            byte[] data = Convert.FromBase64String(encoded);
-            return System.Text.Encoding.UTF8.GetString(data);
-        }
 
-        /// <summary>
-        /// Encode text to base64 string
-        /// </summary>
-        private static string EncodeBase64(string text)
-        {
-            byte[] data = System.Text.Encoding.UTF8.GetBytes(text);
-            return Convert.ToBase64String(data);
-        }
 
         private object CreateScript(
             string fullPath,
@@ -329,15 +317,12 @@ namespace UnityMcp.Tools
             {
                 string contents = File.ReadAllText(fullPath);
 
-                // Return both normal and encoded contents for larger files
-                bool isLarge = contents.Length > 10000; // If content is large, include encoded version
+                // Return both normal content and lines array
                 var responseData = new
                 {
                     path = relativePath,
                     contents = contents,
-                    // For large files, also include base64-encoded version
-                    encodedContents = isLarge ? EncodeBase64(contents) : null,
-                    contentsEncoded = isLarge,
+                    lines = contents.Split('\n')
                 };
 
                 return Response.Success(

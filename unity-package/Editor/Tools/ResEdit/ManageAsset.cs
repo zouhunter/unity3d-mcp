@@ -11,10 +11,10 @@ using UnityMcp.Tools; // 添加这个引用
 
 namespace UnityMcp.Tools
 {
-    /// <summary>
-    /// Handles Unity asset management operations including create, import, move, etc.
-    /// 对应方法名: manage_asset
-    /// </summary>
+            /// <summary>
+        /// Handles Unity asset management operations including import, modify, move, duplicate, etc.
+        /// 对应方法名: manage_asset
+        /// </summary>
     [ToolName("manage_asset")]
     public class ManageAsset : StateMethodBase
     {
@@ -25,9 +25,8 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("action", "操作类型：create, import, move, copy, delete, get_info, search, create_folder等", false),
+                new MethodKey("action", "操作类型：import, modify, move, duplicate, rename, search, get_info, create_folder等", false),
                 new MethodKey("path", "资产路径，Unity标准格式：Assets/Folder/File.extension", false),
-                new MethodKey("asset_type", "资产类型：Material, Texture2D, AudioClip等（创建时需要）", true),
                 new MethodKey("properties", "资产属性字典，用于设置资产的各种属性", true),
                 new MethodKey("destination", "目标路径（移动/复制时使用）", true),
                 new MethodKey("search_pattern", "搜索模式，如*.prefab, *.cs等（搜索时使用）", true),
@@ -46,16 +45,13 @@ namespace UnityMcp.Tools
                 .Create()
                 .Key("action")
                     .Leaf("import", ReimportAsset)
-                    .Leaf("create", CreateAsset)
                     .Leaf("modify", ModifyAsset)
-                    .Leaf("delete", DeleteAsset)
                     .Leaf("duplicate", DuplicateAsset)
                     .Leaf("move", MoveOrRenameAsset)
                     .Leaf("rename", MoveOrRenameAsset)
                     .Leaf("search", SearchAssets)
                     .Leaf("get_info", GetAssetInfo)
                     .Leaf("create_folder", CreateFolder)
-                    .Leaf("get_components", GetComponentsFromAsset)
                 .Build();
         }
 
@@ -93,133 +89,7 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object CreateAsset(JObject args)
-        {
-            string path = args["path"]?.ToString();
-            string assetType = args["asset_type"]?.ToString();
-            JObject properties = args["properties"] as JObject;
 
-            if (string.IsNullOrEmpty(path))
-                return Response.Error("'path' is required for create.");
-            if (string.IsNullOrEmpty(assetType))
-                return Response.Error("'asset_type' is required for create.");
-
-            string fullPath = SanitizeAssetPath(path);
-            string directory = Path.GetDirectoryName(fullPath);
-
-            // Ensure directory exists
-            if (!Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), directory)))
-            {
-                Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), directory));
-                AssetDatabase.Refresh(); // Make sure Unity knows about the new folder
-            }
-
-            if (AssetExists(fullPath))
-                return Response.Error($"Asset already exists at path: {fullPath}");
-
-            try
-            {
-                UnityEngine.Object newAsset = null;
-                string lowerAssetType = assetType.ToLowerInvariant();
-
-                // Handle common asset types
-                if (lowerAssetType == "folder")
-                {
-                    return CreateFolder(args); // Use dedicated method
-                }
-                else if (lowerAssetType == "material")
-                {
-                    Material mat = new Material(Shader.Find("Standard")); // Default shader
-                    // Apply properties from JObject (e.g., shader name, color, texture assignments)
-                    if (properties != null)
-                    {
-                        bool materialModified = ApplyMaterialProperties(mat, properties);
-                        if (materialModified)
-                        {
-                            EditorUtility.SetDirty(mat);
-                        }
-                    }
-                    AssetDatabase.CreateAsset(mat, fullPath);
-                    newAsset = mat;
-                }
-                else if (lowerAssetType == "scriptableobject")
-                {
-                    string scriptClassName = properties?["script_class"]?.ToString();
-                    if (string.IsNullOrEmpty(scriptClassName))
-                        return Response.Error(
-                            "'script_class' property required when creating ScriptableObject asset."
-                        );
-
-                    Type scriptType = FindType(scriptClassName);
-                    if (
-                        scriptType == null
-                        || !typeof(ScriptableObject).IsAssignableFrom(scriptType)
-                    )
-                    {
-                        return Response.Error(
-                            $"Script class '{scriptClassName}' not found or does not inherit from ScriptableObject."
-                        );
-                    }
-
-                    ScriptableObject so = ScriptableObject.CreateInstance(scriptType);
-                    // Apply properties from JObject to the ScriptableObject instance
-                    if (properties != null && properties.HasValues)
-                    {
-                        bool soModified = ApplyObjectProperties(so, properties);
-                        if (soModified)
-                        {
-                            EditorUtility.SetDirty(so);
-                        }
-                    }
-                    AssetDatabase.CreateAsset(so, fullPath);
-                    newAsset = so;
-                }
-                else if (lowerAssetType == "prefab")
-                {
-                    // Creating prefabs usually involves saving an existing GameObject hierarchy.
-                    // A common pattern is to create an empty GameObject, configure it, and then save it.
-                    return Response.Error(
-                        "Creating prefabs programmatically usually requires a source GameObject. Use manage_gameobject to create/configure, then save as prefab via a separate mechanism or future enhancement."
-                    );
-                    // Example (conceptual):
-                    // GameObject source = GameObject.Find(properties["source_gameobject"].ToString());
-                    // if(source != null) PrefabUtility.SaveAsPrefabAsset(source, fullPath);
-                }
-                // TODO: Add more asset types (Animation Controller, Scene, etc.)
-                else
-                {
-                    // Generic creation attempt (might fail or create empty files)
-                    // For some types, just creating the file might be enough if Unity imports it.
-                    // File.Create(Path.Combine(Directory.GetCurrentDirectory(), fullPath)).Close();
-                    // AssetDatabase.ImportAsset(fullPath); // Let Unity try to import it
-                    // newAsset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(fullPath);
-                    return Response.Error(
-                        $"Creation for asset type '{assetType}' is not explicitly supported yet. Supported: Folder, Material, ScriptableObject."
-                    );
-                }
-
-                if (
-                    newAsset == null
-                    && !Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), fullPath))
-                ) // Check if it wasn't a folder and asset wasn't created
-                {
-                    return Response.Error(
-                        $"Failed to create asset '{assetType}' at '{fullPath}'. See logs for details."
-                    );
-                }
-
-                AssetDatabase.SaveAssets();
-                // AssetDatabase.Refresh(); // CreateAsset often handles refresh
-                return Response.Success(
-                    $"Asset '{fullPath}' created successfully.",
-                    GetAssetData(fullPath)
-                );
-            }
-            catch (Exception e)
-            {
-                return Response.Error($"Failed to create asset at '{fullPath}': {e.Message}");
-            }
-        }
 
         private object CreateFolder(JObject args)
         {
@@ -442,37 +312,7 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object DeleteAsset(JObject args)
-        {
-            string path = args["path"]?.ToString();
 
-            if (string.IsNullOrEmpty(path))
-                return Response.Error("'path' is required for delete.");
-            string fullPath = SanitizeAssetPath(path);
-            if (!AssetExists(fullPath))
-                return Response.Error($"Asset not found at path: {fullPath}");
-
-            try
-            {
-                bool success = AssetDatabase.DeleteAsset(fullPath);
-                if (success)
-                {
-                    // AssetDatabase.Refresh(); // DeleteAsset usually handles refresh
-                    return Response.Success($"Asset '{fullPath}' deleted successfully.");
-                }
-                else
-                {
-                    // This might happen if the file couldn't be deleted (e.g., locked)
-                    return Response.Error(
-                        $"Failed to delete asset '{fullPath}'. Check logs or if the file is locked."
-                    );
-                }
-            }
-            catch (Exception e)
-            {
-                return Response.Error($"Error deleting asset '{fullPath}': {e.Message}");
-            }
-        }
 
         private object DuplicateAsset(JObject args)
         {
@@ -711,82 +551,7 @@ namespace UnityMcp.Tools
             }
         }
 
-        /// <summary>
-        /// Retrieves components attached to a GameObject asset (like a Prefab).
-        /// </summary>
-        /// <param name="args">JObject containing the 'path' parameter.</param>
-        /// <returns>A response object containing a list of component type names or an error.</returns>
-        private object GetComponentsFromAsset(JObject args)
-        {
-            // 1. Validate input path
-            string path = args["path"]?.ToString();
 
-            if (string.IsNullOrEmpty(path))
-                return Response.Error("'path' is required for get_components.");
-
-            // 2. Sanitize and check existence
-            string fullPath = SanitizeAssetPath(path);
-            if (!AssetExists(fullPath))
-                return Response.Error($"Asset not found at path: {fullPath}");
-
-            try
-            {
-                // 3. Load the asset
-                UnityEngine.Object asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(
-                    fullPath
-                );
-                if (asset == null)
-                    return Response.Error($"Failed to load asset at path: {fullPath}");
-
-                // 4. Check if it's a GameObject (Prefabs load as GameObjects)
-                GameObject gameObject = asset as GameObject;
-                if (gameObject == null)
-                {
-                    // Also check if it's *directly* a Component type (less common for primary assets)
-                    Component componentAsset = asset as Component;
-                    if (componentAsset != null)
-                    {
-                        // If the asset itself *is* a component, maybe return just its info?
-                        // This is an edge case. Let's stick to GameObjects for now.
-                        return Response.Error(
-                            $"Asset at '{fullPath}' is a Component ({asset.GetType().FullName}), not a GameObject. Components are typically retrieved *from* a GameObject."
-                        );
-                    }
-                    return Response.Error(
-                        $"Asset at '{fullPath}' is not a GameObject (Type: {asset.GetType().FullName}). Cannot get components from this asset type."
-                    );
-                }
-
-                // 5. Get components
-                Component[] components = gameObject.GetComponents<Component>();
-
-                // 6. Format component data
-                List<object> componentList = components
-                    .Select(comp => new
-                    {
-                        typeName = comp.GetType().FullName,
-                        instanceID = comp.GetInstanceID(),
-                        // TODO: Add more component-specific details here if needed in the future?
-                        //       Requires reflection or specific handling per component type.
-                    })
-                    .ToList<object>(); // Explicit cast for clarity if needed
-
-                // 7. Return success response
-                return Response.Success(
-                    $"Found {componentList.Count} component(s) on asset '{fullPath}'.",
-                    componentList
-                );
-            }
-            catch (Exception e)
-            {
-                Debug.LogError(
-                    $"[ManageAsset.GetComponentsFromAsset] Error getting components for '{fullPath}': {e}"
-                );
-                return Response.Error(
-                    $"Error getting components for asset '{fullPath}': {e.Message}"
-                );
-            }
-        }
 
         // --- Internal Helpers ---
 

@@ -7,7 +7,7 @@ alwaysApply: true
 
 本文档将工具按两类划分：
 - Tools: `function_call`, `functions_call`（调用/批量调用 Methods）。
-- Methods: `hierarchy_create`, `hierarchy_link`, `hierarchy_search`, `manage_asset`, `manage_component`, `manage_editor`, `manage_gameobject`, `manage_prefab`, `request_http`, `manage_scene`, `manage_script`, `manage_scriptableobject`, `manage_shader`, `manage_texture`, `manage_material`, `edit_mesh`, `console_read`（均作为 `func` 传给 Tools）。
+- Methods: `hierarchy_create`, `hierarchy_link`, `hierarchy_search`, `edit_asset`, `edit_component`, `manage_editor`, `edit_gameobject`, `edit_prefab`, `request_http`, `edit_scene`, `edit_script`, `edit_scriptableobject`, `edit_shader`, `edit_texture`, `edit_material`, `edit_mesh`, `console_read`（均作为 `func` 传给 Tools）。
 
 除 `function_call` 与 `functions_call` 外，其余均为 Methods 名称，不直接调用；请通过 Tools 调用，并把方法参数放入 `args`（字典类型）。
 
@@ -20,18 +20,18 @@ alwaysApply: true
   - `hierarchy_create`
   - `hierarchy_link` 
   - `hierarchy_search`
-  - `manage_asset`
-  - `manage_component`
+  - `edit_asset`
+  - `edit_component`
   - `manage_editor`
-  - `manage_gameobject`
-  - `manage_prefab`
+  - `edit_gameobject`
+  - `edit_prefab`
   - `request_http`
-  - `manage_scene`
-  - `manage_script`
-  - `manage_scriptableobject`
-  - `manage_shader`
-  - `manage_texture`
-  - `manage_material`
+  - `edit_scene`
+  - `edit_script`
+  - `edit_scriptableobject`
+  - `edit_shader`
+  - `edit_texture`
+  - `edit_material`
   - `edit_mesh`
   - `console_read`
 - 使用指南
@@ -60,8 +60,8 @@ alwaysApply: true
 示例：创建一个 Cube
 ```python
 function_call(
-  func="manage_gameobject",
-  args={"action": "create", "name": "Cube", "primitive_type": "Cube", "position": [0, 0, 0]}
+  func="hierarchy_create",
+  args={"from": "primitive", "primitive_type": "Cube", "name": "Cube", "position": [0, 0, 0]}
 )
 ```
 
@@ -75,8 +75,8 @@ function_call(
 参数格式
 ```python
 [
-  { "func": "manage_gameobject", "args": {"action": "create", "name": "Enemy", "primitive_type": "Cube"} },
-  { "func": "manage_gameobject", "args": {"action": "add_component", "target": "Enemy", "component_name": "Rigidbody"} }
+  { "func": "hierarchy_create", "args": {"from": "primitive", "primitive_type": "Cube", "name": "Enemy"} },
+  { "func": "edit_gameobject", "args": {"target": "Enemy", "action": "add_component", "component_name": "Rigidbody"} }
 ]
 ```
 
@@ -96,8 +96,8 @@ function_call(
 ```python
 functions_call(
   funcs=[
-    {"func": "manage_gameobject", "args": {"action": "create", "name": "Enemy", "primitive_type": "Cube"}},
-    {"func": "manage_gameobject", "args": {"action": "add_component", "target": "Enemy", "component_name": "Rigidbody"}}
+    {"func": "hierarchy_create", "args": {"from": "primitive", "primitive_type": "Cube", "name": "Enemy"}},
+    {"func": "edit_gameobject", "args": {"target": "Enemy", "action": "add_component", "component_name": "Rigidbody"}}
   ]
 )
 ```
@@ -155,8 +155,8 @@ function_call(
 - `prefab_path` (string, 可选): 预制体路径
 - `menu_path` (string, 可选): 菜单路径
 - `save_as_prefab` (bool, 可选): 是否保存为预制体
-- `set_active` (bool, 可选): 设置激活状态
-- `components_to_add` (list, 可选): 要添加的组件列表
+- `active` (bool, 可选): 设置激活状态
+- `components` (list, 可选): 要添加的组件列表
 
 支持的创建类型 (from)
 - `primitive` - 从基元类型创建（Cube、Sphere等）
@@ -255,17 +255,17 @@ function_call(
 ---
 
 ### hierarchy_search - 层级对象搜索工具
-**功能**: 在Unity场景层级中搜索和查找GameObject对象，支持多种搜索方式。
+**功能**: 在Unity场景层级中搜索和查找GameObject对象，支持多种搜索方式，包括通配符和正则表达式。
 
 主要参数（放入 `args`）
 - `action` (string, 必需): 操作类型，固定为 `find`
-- `search_method` (string, 可选): 搜索方法，支持 `by_name`、`by_id`、`by_tag`、`by_layer`、`by_component`等
-- `search_term` (string, 可选): 搜索条件
+- `search_method` (string, 可选): 搜索方法，支持 `by_name`、`by_id`、`by_tag`、`by_layer`、`by_component`、`by_term`等
 - `target` (string, 可选): 搜索目标（可以是ID、名称或路径）
-- `search_in_children` (bool, 可选): 是否在子对象中搜索
-- `search_in_inactive` (bool, 可选): 是否搜索非激活对象
-- `find_all` (bool, 可选): 是否查找所有匹配项
-- `use_regex` (bool, 可选): 是否使用正则表达式（仅适用于by_term搜索）
+- `select_many` (bool, 可选): 是否查找所有匹配项，默认false
+- `search_term` (string, 可选): 搜索条件（支持通配符*）
+- `root_only` (bool, 可选): 是否仅搜索根对象（不包括子物体），默认false（包括所有层级）
+- `include_inactive` (bool, 可选): 是否搜索非激活对象，默认false
+- `use_regex` (bool, 可选): 是否使用正则表达式，默认false
 
 支持的搜索方法 (search_method)
 - `by_name` - 按名称搜索
@@ -273,7 +273,12 @@ function_call(
 - `by_tag` - 按标签搜索
 - `by_layer` - 按层级搜索
 - `by_component` - 按组件类型搜索
-- `by_term` - 通用术语搜索（搜索名称、标签、层级、组件类型等，支持正则表达式和类型前缀）
+- `by_term` - 通用术语搜索（搜索名称、标签、层级、组件类型等，支持通配符*、正则表达式和类型前缀）
+
+通配符支持 (search_term)
+- `*` - 匹配任意字符，如 `Player*` 匹配以Player开头的所有对象
+- `*Cube*` - 匹配包含Cube的所有对象
+- `Test*Object` - 匹配以Test开头、以Object结尾的对象
 
 示例：按名称查找GameObject
 ```python
@@ -287,7 +292,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "search_method": "by_tag", "search_term": "Enemy", "find_all": True}
+  args={"action": "find", "search_method": "by_tag", "search_term": "Enemy", "select_many": True}
 )
 ```
 
@@ -303,7 +308,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "search_method": "by_component", "search_term": "Rigidbody", "find_all": True, "search_in_inactive": True}
+  args={"action": "find", "search_method": "by_component", "search_term": "Rigidbody", "select_many": True, "include_inactive": True}
 )
 ```
 
@@ -311,15 +316,39 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "search_method": "by_layer", "search_term": "Default", "find_all": True}
+  args={"action": "find", "search_method": "by_layer", "search_term": "Default", "select_many": True}
 )
 ```
 
-示例：通用术语搜索（搜索包含"Player"的所有对象）
+示例：通用术语搜索（搜索包含"Player"的所有对象，包括子物体）
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "search_method": "by_term", "search_term": "Player", "find_all": True, "search_in_children": True}
+  args={"action": "find", "search_method": "by_term", "search_term": "Player", "select_many": True}
+)
+```
+
+示例：仅搜索根对象（不包括子物体）
+```python
+function_call(
+  func="hierarchy_search",
+  args={"action": "find", "search_method": "by_term", "search_term": "Player", "select_many": True, "root_only": True}
+)
+```
+
+示例：使用通配符搜索（搜索所有以"Player"开头的对象）
+```python
+function_call(
+  func="hierarchy_search",
+  args={"action": "find", "search_method": "by_term", "search_term": "Player*", "select_many": True}
+)
+```
+
+示例：使用通配符搜索（搜索所有包含"Cube"的对象）
+```python
+function_call(
+  func="hierarchy_search",
+  args={"action": "find", "search_method": "by_term", "search_term": "*Cube*", "select_many": True}
 )
 ```
 
@@ -327,7 +356,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "search_method": "by_term", "search_term": "^Test", "use_regex": True, "find_all": True}
+  args={"action": "find", "search_method": "by_term", "search_term": "^Test", "use_regex": True, "select_many": True}
 )
 ```
 
@@ -335,13 +364,21 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "search_method": "by_term", "search_term": "t:MeshRenderer", "find_all": True}
+  args={"action": "find", "search_method": "by_term", "search_term": "t:MeshRenderer", "select_many": True}
+)
+```
+
+示例：搜索场景中所有物体
+```python
+function_call(
+  func="hierarchy_search",
+  args={"action": "find", "search_method": "by_term", "search_term": "*", "select_many": True}
 )
 ```
 
 ---
 
-### manage_asset - Unity资产管理
+### edit_asset - Unity资产管理
 **功能**: 执行Unity资产的各种操作，包括导入、修改、移动、复制等。
 
 主要参数（放入 `args`）
@@ -363,7 +400,7 @@ function_call(
 示例：创建文件夹
 ```python
 function_call(
-  func="manage_asset",
+  func="edit_asset",
   args={"action": "create_folder", "path": "Assets/NewFolder"}
 )
 ```
@@ -371,7 +408,7 @@ function_call(
 示例：搜索预制体
 ```python
 function_call(
-  func="manage_asset",
+  func="edit_asset",
   args={"action": "search", "path": "Assets/", "search_pattern": "*.prefab"}
 )
 ```
@@ -379,7 +416,7 @@ function_call(
 示例：获取资产信息
 ```python
 function_call(
-  func="manage_asset",
+  func="edit_asset",
   args={"action": "get_info", "path": "Assets/Scripts/PlayerController.cs"}
 )
 ```
@@ -387,7 +424,7 @@ function_call(
 示例：复制资产
 ```python
 function_call(
-  func="manage_asset",
+  func="edit_asset",
   args={"action": "duplicate", "path": "Assets/Materials/RedMaterial.mat", "destination": "Assets/Materials/RedMaterialCopy.mat"}
 )
 ```
@@ -395,22 +432,22 @@ function_call(
 示例：移动/重命名资产
 ```python
 function_call(
-  func="manage_asset",
+  func="edit_asset",
   args={"action": "move", "path": "Assets/Scripts/OldName.cs", "destination": "Assets/Scripts/NewName.cs"}
 )
 ```
 
-示例：修改资产属性
+示例：设置材质属性
 ```python
 function_call(
-  func="manage_asset",
-  args={"action": "modify", "path": "Assets/Materials/MyMaterial.mat", "properties": {"_Color": {"r": 1.0, "g": 0.5, "b": 0.0, "a": 1.0}}}
+  func="edit_material",
+  args={"action": "set_properties", "path": "Assets/Materials/MyMaterial.mat", "properties": {"_Color": {"r": 1.0, "g": 0.5, "b": 0.0, "a": 1.0}}}
 )
 ```
 
 ---
 
-### manage_component - 组件操作管理
+### edit_component - 组件操作管理
 **功能**: 执行Unity GameObject组件的各种操作，包括获取、添加、移除、设置属性等。
 
 主要参数（放入 `args`）
@@ -422,7 +459,7 @@ function_call(
 - `target` (required): 目标GameObject标识符（名称、ID或路径）
 - `search_method` (optional): 搜索方法
 - `component_name` (optional): 组件名称
-- `components_to_add` (optional): 要添加的组件列表
+- `components` (optional): 要添加的组件列表
 - `components_to_remove` (optional): 要移除的组件列表
 - `component_properties` (optional): 组件属性字典
 
@@ -436,25 +473,25 @@ function_call(
 ```python
 # 获取组件列表
 function_call(
-  func="manage_component",
+  func="edit_component",
   args={"action": "get_components", "target": "Player"}
 )
 
 # 添加Rigidbody组件
 function_call(
-  func="manage_component",
+  func="edit_component",
   args={"action": "add_component", "target": "Player", "component_name": "Rigidbody"}
 )
 
 # 移除Collider组件
 function_call(
-  func="manage_component",
+  func="edit_component",
   args={"action": "remove_component", "target": "Player", "component_name": "Collider"}
 )
 
 # 设置Image组件的sprite属性
 function_call(
-  func="manage_component",
+  func="edit_component",
   args={"action": "set_component_property", "target": "Image", "component_name": "Image", "component_properties": {"sprite": "Assets/Pics/rabbit.jpg"}}
 )
 ```
@@ -605,52 +642,145 @@ function_call(
 
 ---
 
-### manage_gameobject - GameObject 操作管理
-**功能**: 管理Unity中的GameObject对象操作，包括修改和删除。对象创建请使用 `hierarchy_create`，预制体链接请使用 `hierarchy_link`，对象搜索请使用 `hierarchy_search`，组件操作请使用 `manage_component`。
+### edit_gameobject - GameObject编辑工具
+**功能**: 使用双状态树架构处理GameObject修改操作，支持目标定位和多种操作，包括修改属性、组件管理和高级属性设置。
 
-核心参数（放入 `args`）
-- `action` (string, 必需): 操作类型
-- `target` (string, 必需): 目标GameObject标识符
-- `name` (string): GameObject名称
-- `tag` (string): 标签
-- `parent` (string): 父对象
-- `position` (list): 位置坐标 [x, y, z]
-- `rotation` (list): 旋转 [x, y, z]
-- `scale` (list): 缩放 [x, y, z]
+主要参数（放入 `args`）
+- `target` (string, 必需): 目标GameObject标识符（名称、ID或路径）
+- `search_method` (string, 可选): 搜索方法，支持 `by_name`、`by_id`、`by_tag`、`by_layer`等
+- `search_in_scene` (bool, 可选): 是否仅在场景中查找（默认true）
+- `action` (string, 可选): 操作类型，支持 `modify`、`get_components`、`add_component`、`remove_component`、`set_component_property`、`set_property`、`get_property`
 
-支持的操作 (action)
-- `modify` - 修改GameObject属性
-- `delete` - 删除GameObject
+**基本修改参数**
+- `name` (string, 可选): GameObject名称
+- `tag` (string, 可选): GameObject标签
+- `layer` (string, 可选): GameObject所在层
+- `parent` (string, 可选): 父对象标识符
+- `position` (list, 可选): 位置坐标 [x, y, z]
+- `rotation` (list, 可选): 旋转角度 [x, y, z]
+- `scale` (list, 可选): 缩放比例 [x, y, z]
+- `active` (bool, 可选): 设置激活状态
 
-注意：组件相关操作（get_components, add_component, remove_component, set_component_property）已移至 `manage_component` 方法。
+**组件操作参数**
+- `component_name` (string, 可选): 组件名称
+- `components` (list, 可选): 要添加的组件列表
+- `components_to_remove` (list, 可选): 要移除的组件列表
+- `component_properties` (dict, 可选): 组件属性字典
 
-示例：修改GameObject属性
+**属性操作参数**
+- `property_name` (string, 可选): 属性名称（用于属性设置/获取）
+- `value` (any, 可选): 要设置的属性值
+
+支持的操作类型 (action)
+- `modify` - 修改GameObject基本属性（默认操作）
+- `get_components` - 获取GameObject上的所有组件
+- `add_component` - 添加组件到GameObject
+- `remove_component` - 从GameObject移除组件
+- `set_component_property` - 设置组件属性
+- `set_property` - 设置GameObject属性（通用属性操作）
+- `get_property` - 获取GameObject属性
+
+支持的搜索方法 (search_method)
+- `by_name` - 按名称搜索（默认）
+- `by_id` - 按ID搜索
+- `by_tag` - 按标签搜索
+- `by_layer` - 按层级搜索
+- `by_component` - 按组件类型搜索
+
+示例：修改GameObject基本属性（默认操作）
 ```python
 function_call(
-  func="manage_gameobject",
-  args={"action": "modify", "target": "Player", "tag": "Player", "position": [0, 1, 0]}
+  func="edit_gameobject",
+  args={"target": "Player", "name": "MainPlayer", "position": [0, 1, 0], "active": true}
 )
 ```
 
-示例：添加组件
+示例：获取GameObject组件列表
 ```python
 function_call(
-  func="manage_gameobject",
-  args={"action": "add_component", "target": "Player", "component_name": "Rigidbody"}
+  func="edit_gameobject",
+  args={"target": "Player", "action": "get_components"}
 )
 ```
 
-示例：删除GameObject
+示例：添加组件到GameObject
 ```python
 function_call(
-  func="manage_gameobject",
-  args={"action": "delete", "target": "Enemy"}
+  func="edit_gameobject",
+  args={"target": "Player", "action": "add_component", "component_name": "Rigidbody"}
 )
 ```
+
+示例：移除组件
+```python
+function_call(
+  func="edit_gameobject",
+  args={"target": "Player", "action": "remove_component", "component_name": "Collider"}
+)
+```
+
+示例：设置组件属性
+```python
+function_call(
+  func="edit_gameobject",
+  args={"target": "Player", "action": "set_component_property", "component_name": "Rigidbody", "component_properties": {"mass": 2.5, "useGravity": true}}
+)
+```
+
+示例：设置材质属性（使用嵌套访问）
+```python
+function_call(
+  func="edit_gameobject",
+  args={"target": "Cube", "action": "set_component_property", "component_name": "Renderer", "component_properties": {"material.color": [1.0, 0.0, 0.0, 1.0]}}
+)
+```
+
+示例：设置GameObject属性
+```python
+function_call(
+  func="edit_gameobject",
+  args={"target": "Player", "action": "set_property", "property_name": "tag", "value": "Player"}
+)
+```
+
+示例：获取GameObject属性
+```python
+function_call(
+  func="edit_gameobject",
+  args={"target": "Player", "action": "get_property", "property_name": "activeSelf"}
+)
+```
+
+示例：按标签搜索并修改
+```python
+function_call(
+  func="edit_gameobject",
+  args={"target": "Enemy", "search_method": "by_tag", "position": [0, 0, 0], "rotation": [0, 45, 0]}
+)
+```
+
+示例：批量添加多个组件
+```python
+function_call(
+  func="edit_gameobject",
+  args={"target": "Player", "action": "add_component", "components": ["Rigidbody", "BoxCollider", "AudioSource"]}
+)
+```
+
+特殊功能
+- **双状态树架构**: 第一树负责目标定位，第二树负责操作执行，提供更强大的处理能力
+- **智能类型转换**: 自动处理Unity对象引用、Vector3、Color等类型
+- **嵌套属性支持**: 支持通过点号访问嵌套属性，如 "material.color"、"material._MainTex"
+- **数组索引支持**: 支持访问数组元素，如 "materials[0].color"
+- **材质Shader属性**: 直接支持设置材质的Shader属性（以_开头的属性）
+- **组件属性批量设置**: 通过component_properties字典可一次设置多个属性
+- **标签自动创建**: 如果指定的标签不存在，会自动创建
+- **撤销支持**: 所有操作都支持Unity的撤销功能
 
 ---
 
-### manage_prefab - 预制体管理
+
+### edit_prefab - 预制体管理
 **功能**: 专门管理Unity中的预制体资源，提供预制体的创建、修改、复制、实例化等操作。
 
 主要参数（放入 `args`）
@@ -694,7 +824,7 @@ function_call(
 示例：创建预制体
 ```python
 function_call(
-  func="manage_prefab",
+  func="edit_prefab",
   args={"action": "create", "path": "Assets/Prefabs/NewPrefab.prefab", "source_object": "Player"}
 )
 ```
@@ -702,7 +832,7 @@ function_call(
 示例：复制预制体
 ```python
 function_call(
-  func="manage_prefab",
+  func="edit_prefab",
   args={"action": "duplicate", "path": "Assets/Prefabs/Player.prefab", "destination": "Assets/Prefabs/PlayerCopy.prefab"}
 )
 ```
@@ -710,7 +840,7 @@ function_call(
 示例：实例化预制体
 ```python
 function_call(
-  func="manage_prefab",
+  func="edit_prefab",
   args={"action": "instantiate", "path": "Assets/Prefabs/Enemy.prefab", "position": [0, 0, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1]}
 )
 ```
@@ -718,7 +848,7 @@ function_call(
 示例：搜索预制体
 ```python
 function_call(
-  func="manage_prefab",
+  func="edit_prefab",
   args={"action": "search", "search_pattern": "*.prefab", "path": "Assets/Prefabs/"}
 )
 ```
@@ -726,7 +856,7 @@ function_call(
 示例：创建预制体变体
 ```python
 function_call(
-  func="manage_prefab",
+  func="edit_prefab",
   args={"action": "create_variant", "path": "Assets/Prefabs/EnemyVariant.prefab", "parent_prefab": "Assets/Prefabs/Enemy.prefab"}
 )
 ```
@@ -734,7 +864,7 @@ function_call(
 示例：应用预制体更改
 ```python
 function_call(
-  func="manage_prefab",
+  func="edit_prefab",
   args={"action": "apply_changes", "path": "Assets/Prefabs/Player.prefab", "target_object": "PlayerInstance"}
 )
 ```
@@ -835,7 +965,7 @@ function_call(
 
 ---
 
-### manage_scene - 场景管理
+### edit_scene - 场景管理
 **功能**: 管理Unity场景，包括加载、保存、创建和获取层级结构。
 
 主要参数（放入 `args`）
@@ -853,7 +983,7 @@ function_call(
 示例：创建新场景
 ```python
 function_call(
-  func="manage_scene",
+  func="edit_scene",
   args={"action": "create", "name": "NewLevel", "path": "Assets/Scenes/", "build_index": 1}
 )
 ```
@@ -861,7 +991,7 @@ function_call(
 示例：加载场景
 ```python
 function_call(
-  func="manage_scene",
+  func="edit_scene",
   args={"action": "load", "name": "MainMenu", "path": "Assets/Scenes/MainMenu.unity", "build_index": 0}
 )
 ```
@@ -869,7 +999,7 @@ function_call(
 示例：保存当前场景
 ```python
 function_call(
-  func="manage_scene",
+  func="edit_scene",
   args={"action": "save", "name": "CurrentScene", "path": "Assets/Scenes/", "build_index": 0}
 )
 ```
@@ -877,14 +1007,14 @@ function_call(
 示例：获取场景层级结构
 ```python
 function_call(
-  func="manage_scene",
+  func="edit_scene",
   args={"action": "get_hierarchy", "name": "CurrentScene", "path": "", "build_index": 0}
 )
 ```
 
 ---
 
-### manage_script - C#脚本管理
+### edit_script - C#脚本管理
 **功能**: 管理Unity中的C#脚本，包括创建、读取、更新和删除。
 
 主要参数（放入 `args`）
@@ -904,7 +1034,7 @@ function_call(
 示例：创建 MonoBehaviour 脚本
 ```python
 function_call(
-  func="manage_script",
+  func="edit_script",
   args={"action": "create", "name": "PlayerController", "path": "Assets/Scripts/", "lines": ["using UnityEngine;", "", "public class PlayerController : MonoBehaviour", "{", "    public float speed = 5f;", "", "    void Update()", "    {", "        float h = Input.GetAxis(\"Horizontal\");", "        float v = Input.GetAxis(\"Vertical\");", "        Vector3 movement = new Vector3(h, 0, v) * speed * Time.deltaTime;", "        transform.Translate(movement);", "    }", "}"], "script_type": "MonoBehaviour", "namespace": ""}
 )
 ```
@@ -912,7 +1042,7 @@ function_call(
 示例：读取现有脚本
 ```python
 function_call(
-  func="manage_script",
+  func="edit_script",
   args={"action": "read", "name": "PlayerController", "path": "Assets/Scripts/"}
 )
 ```
@@ -920,14 +1050,14 @@ function_call(
 示例：更新脚本内容
 ```python
 function_call(
-  func="manage_script",
+  func="edit_script",
   args={"action": "update", "name": "PlayerController", "path": "Assets/Scripts/", "lines": ["// 更新后的代码内容", "using UnityEngine;", "", "public class PlayerController : MonoBehaviour", "{", "    // 新的代码内容", "}"], "script_type": "MonoBehaviour", "namespace": ""}
 )
 ```
 
 ---
 
-### manage_scriptableobject - ScriptableObject管理
+### edit_scriptableobject - ScriptableObject管理
 **功能**: 专门管理Unity中的ScriptableObject资产，提供创建、修改、复制、搜索等操作。
 
 主要参数（放入 `args`）
@@ -950,7 +1080,7 @@ function_call(
 示例：创建ScriptableObject
 ```python
 function_call(
-  func="manage_scriptableobject",
+  func="edit_scriptableobject",
   args={"action": "create", "path": "Assets/Data/GameSettings.asset", "script_class": "GameSettings", "properties": {"playerSpeed": 5.0, "maxHealth": 100}}
 )
 ```
@@ -958,7 +1088,7 @@ function_call(
 示例：修改ScriptableObject
 ```python
 function_call(
-  func="manage_scriptableobject",
+  func="edit_scriptableobject",
   args={"action": "modify", "path": "Assets/Data/GameSettings.asset", "properties": {"playerSpeed": 7.0, "maxHealth": 150}}
 )
 ```
@@ -966,7 +1096,7 @@ function_call(
 示例：复制ScriptableObject
 ```python
 function_call(
-  func="manage_scriptableobject",
+  func="edit_scriptableobject",
   args={"action": "duplicate", "path": "Assets/Data/GameSettings.asset", "destination": "Assets/Data/GameSettingsCopy.asset"}
 )
 ```
@@ -974,7 +1104,7 @@ function_call(
 示例：搜索ScriptableObject
 ```python
 function_call(
-  func="manage_scriptableobject",
+  func="edit_scriptableobject",
   args={"action": "search", "search_pattern": "*.asset", "path": "Assets/Data/"}
 )
 ```
@@ -982,14 +1112,14 @@ function_call(
 示例：获取ScriptableObject信息
 ```python
 function_call(
-  func="manage_scriptableobject",
+  func="edit_scriptableobject",
   args={"action": "get_info", "path": "Assets/Data/GameSettings.asset"}
 )
 ```
 
 ---
 
-### manage_shader - Shader管理
+### edit_shader - Shader管理
 **功能**: 管理Unity中的Shader文件，包括创建、读取、更新和删除。
 
 主要参数（放入 `args`）
@@ -1007,7 +1137,7 @@ function_call(
 示例：创建基础Shader
 ```python
 function_call(
-  func="manage_shader",
+  func="edit_shader",
   args={"action": "create", "name": "MyShader", "path": "Shaders"}
 )
 ```
@@ -1015,7 +1145,7 @@ function_call(
 示例：创建带自定义内容的Shader
 ```python
 function_call(
-  func="manage_shader",
+  func="edit_shader",
   args={"action": "create", "name": "ColorShader", "path": "Shaders", "lines": ["Shader \"ColorShader\"", "{", "    Properties", "    {", "        _Color (\"Color\", Color) = (1,0,0,1)", "    }", "    SubShader", "    {", "        Tags { \"RenderType\"=\"Opaque\" }", "        Pass", "        {", "            Color [_Color]", "        }", "    }", "}"]}
 )
 ```
@@ -1023,7 +1153,7 @@ function_call(
 示例：读取Shader
 ```python
 function_call(
-  func="manage_shader",
+  func="edit_shader",
   args={"action": "read", "name": "MyShader", "path": "Shaders"}
 )
 ```
@@ -1031,7 +1161,7 @@ function_call(
 示例：更新Shader内容
 ```python
 function_call(
-  func="manage_shader",
+  func="edit_shader",
   args={"action": "update", "name": "MyShader", "path": "Shaders", "lines": ["// 更新后的Shader代码", "Shader \"MyShader\"", "{", "    // 新的代码内容", "}"]}
 )
 ```
@@ -1039,14 +1169,14 @@ function_call(
 示例：删除Shader
 ```python
 function_call(
-  func="manage_shader",
+  func="edit_shader",
   args={"action": "delete", "name": "MyShader", "path": "Shaders"}
 )
 ```
 
 ---
 
-### manage_texture - 纹理导入设置修改
+### edit_texture - 纹理导入设置修改
 **功能**: 修改Unity中纹理资源的导入设置，包括设置为Sprite类型、调整压缩质量等。
 
 主要参数（放入 `args`）
@@ -1094,7 +1224,7 @@ Sprite模式 (sprite_mode)
 示例：设置图片为Sprite类型
 ```python
 function_call(
-  func="manage_texture",
+  func="edit_texture",
   args={"action": "set_type", "texture_path": "Assets/Pics/rabbit.jpg", "texture_type": "Sprite"}
 )
 ```
@@ -1102,7 +1232,7 @@ function_call(
 示例：详细配置Sprite设置
 ```python
 function_call(
-  func="manage_texture",
+  func="edit_texture",
   args={"action": "set_sprite_settings", "texture_path": "Assets/Pics/rabbit.jpg", "sprite_mode": "Single", "pixels_per_unit": 100, "sprite_pivot": "Center", "generate_physics_shape": True}
 )
 ```
@@ -1110,7 +1240,7 @@ function_call(
 示例：获取纹理设置
 ```python
 function_call(
-  func="manage_texture",
+  func="edit_texture",
   args={"action": "get_settings", "texture_path": "Assets/Pics/rabbit.jpg"}
 )
 ```
@@ -1118,15 +1248,15 @@ function_call(
 示例：设置压缩和质量
 ```python
 function_call(
-  func="manage_texture",
+  func="edit_texture",
   args={"action": "set_sprite_settings", "texture_path": "Assets/Pics/rabbit.jpg", "compression": "HighQuality", "max_texture_size": 2048, "filter_mode": "Bilinear"}
 )
 ```
 
 ---
 
-### manage_material - 材质管理
-**功能**: 专门管理Unity中的材质资源，提供材质的创建、修改、复制等操作。
+### edit_material - 材质编辑工具
+**功能**: 专门管理Unity中的材质资源，提供材质的创建、修改、复制、删除等操作。
 
 主要参数（放入 `args`）
 - `action` (string, 必需): 操作类型
@@ -1141,47 +1271,45 @@ function_call(
 
 支持的操作 (action)
 - `create` - 创建材质
-- `modify` - 修改材质
+- `set_properties` - 设置材质属性
 - `duplicate` - 复制材质
 - `get_info` - 获取材质信息
 - `search` - 搜索材质
 - `copy_properties` - 复制材质属性
-- `set_shader` - 设置着色器
-- `set_color` - 设置颜色
-- `set_texture` - 设置纹理
-- `set_float` - 设置浮点数
-- `set_vector` - 设置向量
-- `enable_keyword` - 启用关键字
-- `disable_keyword` - 禁用关键字
+- `change_shader` - 更改着色器
+- `enable_keyword` - 启用着色器关键字
+- `disable_keyword` - 禁用着色器关键字
 
 示例：创建材质
 ```python
 function_call(
-  func="manage_material",
+  func="edit_material",
   args={"action": "create", "path": "Assets/Materials/NewMaterial.mat", "shader": "Standard", "properties": {"_Color": {"r": 1.0, "g": 0.0, "b": 0.0, "a": 1.0}}}
 )
 ```
 
-示例：修改材质颜色
+示例：设置材质属性
 ```python
 function_call(
-  func="manage_material",
-  args={"action": "set_color", "path": "Assets/Materials/MyMaterial.mat", "property_name": "_Color", "color": [1.0, 0.5, 0.0, 1.0]}
+  func="edit_material",
+  args={"action": "set_properties", "path": "Assets/Materials/MyMaterial.mat", "properties": {"_Color": {"r": 1.0, "g": 0.5, "b": 0.0, "a": 1.0}, "_Metallic": 0.5}}
 )
 ```
 
-示例：设置材质纹理
+
+
+示例：更改着色器
 ```python
 function_call(
-  func="manage_material",
-  args={"action": "set_texture", "path": "Assets/Materials/MyMaterial.mat", "property_name": "_MainTex", "texture_path": "Assets/Textures/MyTexture.png"}
+  func="edit_material",
+  args={"action": "change_shader", "path": "Assets/Materials/MyMaterial.mat", "shader": "Custom/MyShader"}
 )
 ```
 
 示例：搜索材质
 ```python
 function_call(
-  func="manage_material",
+  func="edit_material",
   args={"action": "search", "search_pattern": "*.mat", "path": "Assets/Materials/"}
 )
 ```
@@ -1189,16 +1317,24 @@ function_call(
 示例：复制材质属性
 ```python
 function_call(
-  func="manage_material",
+  func="edit_material",
   args={"action": "copy_properties", "source_path": "Assets/Materials/SourceMaterial.mat", "destination": "Assets/Materials/TargetMaterial.mat"}
 )
 ```
 
-示例：启用材质关键字
+示例：启用着色器关键字
 ```python
 function_call(
-  func="manage_material",
+  func="edit_material",
   args={"action": "enable_keyword", "path": "Assets/Materials/MyMaterial.mat", "keyword": "_EMISSION"}
+)
+```
+
+示例：禁用着色器关键字
+```python
+function_call(
+  func="edit_material",
+  args={"action": "disable_keyword", "path": "Assets/Materials/MyMaterial.mat", "keyword": "_NORMALMAP"}
 )
 ```
 

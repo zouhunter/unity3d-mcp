@@ -95,7 +95,7 @@ namespace UnityMcp.Tools
                 }
 
                 // 调用工具的ExecuteMethod方法
-                return method.ExecuteMethod(args);
+                return method.ExecuteMethod(new StateTreeContext(args, new System.Collections.Generic.Dictionary<string, object>()));
             }
             catch (Exception e)
             {
@@ -109,7 +109,10 @@ namespace UnityMcp.Tools
         /// </summary>
         private async Task<object> ExecuteFunctionAsync(string functionName, string argsJson)
         {
-            if (McpConnect.EnableLog) Debug.Log($"[FunctionCall] Executing async function: {functionName}->{argsJson}");
+            if (McpConnect.EnableLog)
+            {
+                Debug.Log($"[FunctionCall] Executing async function: {functionName}->{argsJson}");
+            }
             try
             {
                 // 确保方法已注册
@@ -125,7 +128,7 @@ namespace UnityMcp.Tools
                 }
 
                 // 调用工具的ExecuteMethodAsync方法（主线程转移在StateMethodBase中处理）
-                return await method.ExecuteMethodAsync(args);
+                return await method.ExecuteMethodAsync(new StateTreeContext(args, new System.Collections.Generic.Dictionary<string, object>()));
             }
             catch (Exception e)
             {

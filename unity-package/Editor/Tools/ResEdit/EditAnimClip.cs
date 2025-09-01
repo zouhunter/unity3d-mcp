@@ -13,8 +13,8 @@ namespace UnityMcp.Tools
     /// 专门的动画片段管理工具，提供动画片段的创建、修改、复制、删除等操作
     /// 对应方法名: manage_anim_clip
     /// </summary>
-    [ToolName("manage_anim_clip")]
-    public class ManageAnimClip : StateMethodBase
+    [ToolName("edit_anim_clip")]
+    public class EditAnimClip : StateMethodBase
     {
         /// <summary>
         /// 创建当前方法支持的参数键列表
@@ -98,7 +98,7 @@ namespace UnityMcp.Tools
             try
             {
                 AnimationClip clip = new AnimationClip();
-                
+
                 // 设置基本属性
                 clip.frameRate = frameRate;
                 // 注意：clip.length 是只读属性，不能直接设置
@@ -672,22 +672,22 @@ namespace UnityMcp.Tools
                     if (eventData is JObject eventObj)
                     {
                         AnimationEvent animEvent = new AnimationEvent();
-                        
+
                         if (eventObj["time"] != null)
                             animEvent.time = eventObj["time"].ToObject<float>();
-                        
+
                         if (eventObj["function_name"] != null)
                             animEvent.functionName = eventObj["function_name"].ToString();
-                        
+
                         if (eventObj["string_parameter"] != null)
                             animEvent.stringParameter = eventObj["string_parameter"].ToString();
-                        
+
                         if (eventObj["float_parameter"] != null)
                             animEvent.floatParameter = eventObj["float_parameter"].ToObject<float>();
-                        
+
                         if (eventObj["int_parameter"] != null)
                             animEvent.intParameter = eventObj["int_parameter"].ToObject<int>();
-                        
+
                         if (eventObj["object_reference_parameter"] != null)
                         {
                             string objPath = eventObj["object_reference_parameter"].ToString();
@@ -752,4 +752,4 @@ namespace UnityMcp.Tools
             };
         }
     }
-} 
+}

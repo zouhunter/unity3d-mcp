@@ -13,8 +13,8 @@ namespace UnityMcp.Tools
     /// 专门的模型管理工具，提供模型的导入、修改、复制、删除等操作
     /// 对应方法名: manage_model
     /// </summary>
-    [ToolName("manage_model")]
-    public class ManageModel : StateMethodBase
+    [ToolName("edit_model")]
+    public class EditModel : StateMethodBase
     {
         /// <summary>
         /// 创建当前方法支持的参数键列表
@@ -419,7 +419,7 @@ namespace UnityMcp.Tools
 
                 // 设置提取材质
                 importer.materialImportMode = ModelImporterMaterialImportMode.ImportStandard;
-                
+
                 if (!string.IsNullOrEmpty(extractPath))
                 {
                     string extractFullPath = SanitizeAssetPath(extractPath);
@@ -533,8 +533,8 @@ namespace UnityMcp.Tools
         private bool IsModelFile(string path)
         {
             string extension = Path.GetExtension(path).ToLowerInvariant();
-            return extension == ".fbx" || extension == ".obj" || extension == ".dae" || 
-                   extension == ".3ds" || extension == ".dxf" || extension == ".skp" || 
+            return extension == ".fbx" || extension == ".obj" || extension == ".dae" ||
+                   extension == ".3ds" || extension == ".dxf" || extension == ".skp" ||
                    extension == ".max" || extension == ".c4d" || extension == ".blend";
         }
 
@@ -649,7 +649,7 @@ namespace UnityMcp.Tools
                             {
                                 string animationType = settingValue.ToString();
                                 ModelImporterAnimationType animType = ModelImporterAnimationType.None;
-                                
+
                                 switch (animationType.ToLowerInvariant())
                                 {
                                     case "legacy":
@@ -668,7 +668,7 @@ namespace UnityMcp.Tools
                                         animType = ModelImporterAnimationType.None;
                                         break;
                                 }
-                                
+
                                 if (importer.animationType != animType)
                                 {
                                     importer.animationType = animType;
@@ -724,10 +724,10 @@ namespace UnityMcp.Tools
                             if (settingValue.Type == JTokenType.Boolean)
                             {
                                 bool importMaterials = settingValue.ToObject<bool>();
-                                ModelImporterMaterialImportMode materialMode = importMaterials ? 
-                                    ModelImporterMaterialImportMode.ImportStandard : 
+                                ModelImporterMaterialImportMode materialMode = importMaterials ?
+                                    ModelImporterMaterialImportMode.ImportStandard :
                                     ModelImporterMaterialImportMode.None;
-                                
+
                                 if (importer.materialImportMode != materialMode)
                                 {
                                     importer.materialImportMode = materialMode;
@@ -740,7 +740,7 @@ namespace UnityMcp.Tools
                             {
                                 string compression = settingValue.ToString();
                                 ModelImporterMeshCompression meshCompression = ModelImporterMeshCompression.Off;
-                                
+
                                 switch (compression.ToLowerInvariant())
                                 {
                                     case "low":
@@ -757,7 +757,7 @@ namespace UnityMcp.Tools
                                         meshCompression = ModelImporterMeshCompression.Off;
                                         break;
                                 }
-                                
+
                                 if (importer.meshCompression != meshCompression)
                                 {
                                     importer.meshCompression = meshCompression;
@@ -815,7 +815,7 @@ namespace UnityMcp.Tools
             // 获取模型导入器信息
             ModelImporter importer = AssetImporter.GetAtPath(path) as ModelImporter;
             object importSettings = null;
-            
+
             if (importer != null)
             {
                 importSettings = new
@@ -853,4 +853,4 @@ namespace UnityMcp.Tools
             };
         }
     }
-} 
+}

@@ -16,8 +16,8 @@ namespace UnityMcp.Tools
     /// Handles Unity scene management operations.
     /// 对应方法名: manage_scene
     /// </summary>
-    [ToolName("manage_scene")]
-    public class ManageScene : StateMethodBase
+    [ToolName("edit_scene")]
+    public class EditScene : StateMethodBase
     {
         /// <summary>
         /// 创建当前方法支持的参数键列表

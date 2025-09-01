@@ -49,7 +49,6 @@ namespace UnityMcp.Tools
         {
             return Branch(StateTree.Default);
         }
-
         public StateTreeBuilder Leaf(object edgeKey, Func<JObject, object> action)
         {
             // 防止null key导致异常
@@ -60,6 +59,22 @@ namespace UnityMcp.Tools
 
             Current.select[edgeKey] = (StateTree)action;
             return this;
+        }
+        public StateTreeBuilder Leaf(object edgeKey, Func<StateTreeContext, object> action)
+        {
+            // 防止null key导致异常
+            if (edgeKey == null)
+            {
+                throw new ArgumentNullException(nameof(edgeKey), "edgeKey cannot be null in Leaf method");
+            }
+
+            Current.select[edgeKey] = (StateTree)action;
+            return this;
+        }
+
+        public StateTreeBuilder DefaultLeaf(Func<StateTreeContext, object> action)
+        {
+            return Leaf(StateTree.Default, action);
         }
 
         public StateTreeBuilder DefaultLeaf(Func<JObject, object> action)
@@ -79,7 +94,18 @@ namespace UnityMcp.Tools
             Current.optionalParams.Add(parameterName);
             return this;
         }
-
+        /// <summary>
+        /// 添加可选参数分支：当指定的参数存在时执行对应的动作
+        /// </summary>
+        /// <param name="parameterName">要检查的参数名</param>
+        /// <param name="action">参数存在时执行的动作</param>
+        public StateTreeBuilder OptionalLeaf(string parameterName, Func<StateTreeContext, object> action)
+        {
+            // 直接使用参数名作为key，并添加到可选参数集合中
+            Current.select[parameterName] = (StateTree)action;
+            Current.optionalParams.Add(parameterName);
+            return this;
+        }
         /// <summary>
         /// 添加可选参数分支：当指定的参数存在时进入子分支
         /// </summary>
@@ -131,10 +157,16 @@ namespace UnityMcp.Tools
             return this;
         }
 
+        public StateTreeBuilder ULeaf(object edgeKey, Func<StateTreeContext, object> action)
+        {
+            return Up().Leaf(edgeKey, action);
+        }
+
         public StateTreeBuilder ULeaf(object edgeKey, Func<JObject, object> action)
         {
             return Up().Leaf(edgeKey, action);
         }
+
 
         public StateTreeBuilder UNode(object edgeKey, string variableKey)
         {

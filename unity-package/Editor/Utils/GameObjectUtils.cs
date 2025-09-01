@@ -388,6 +388,10 @@ namespace UnityMcp.Tools
         /// </summary>
         public static void ApplyCommonGameObjectSettings(JObject args, GameObject newGo, Action<string> logAction = null)
         {
+
+            // 设置名称
+            ApplyNameSetting(args, newGo, logAction);
+
             // 设置父对象
             ApplyParentSetting(args, newGo, logAction);
 
@@ -403,14 +407,27 @@ namespace UnityMcp.Tools
             // 添加组件
             ApplyComponentsToAdd(args, newGo, logAction);
 
+            //设置组件属性
+            ApplyComponentProperties(args, newGo, logAction);
+
             // 设置激活状态
-            bool? setActive = args["set_active"]?.ToObject<bool?>();
+            bool? setActive = args["active"]?.ToObject<bool?>();
             if (setActive.HasValue)
             {
                 newGo.SetActive(setActive.Value);
             }
         }
-
+        /// <summary>
+        /// 应用名称设置
+        /// </summary>
+        public static void ApplyNameSetting(JObject args, GameObject newGo, Action<string> logAction = null)
+        {
+            string name = args["name"]?.ToString();
+            if (!string.IsNullOrEmpty(name))
+            {
+                newGo.name = name;
+            }
+        }
         /// <summary>
         /// 应用父对象设置
         /// </summary>
@@ -508,7 +525,7 @@ namespace UnityMcp.Tools
         /// </summary>
         public static void ApplyComponentsToAdd(JObject args, GameObject newGo, Action<string> logAction = null)
         {
-            if (args["components_to_add"] is JArray componentsToAddArray)
+            if (args["components"] is JArray componentsToAddArray)
             {
                 foreach (var compToken in componentsToAddArray)
                 {
@@ -535,9 +552,274 @@ namespace UnityMcp.Tools
                     }
                     else
                     {
-                        logAction?.Invoke($"Invalid component format in components_to_add: {compToken}");
+                        logAction?.Invoke($"Invalid component format in components: {compToken}");
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// 应用组件属性设置
+        /// </summary>
+        public static void ApplyComponentProperties(JObject args, GameObject newGo, Action<string> logAction = null)
+        {
+            // 处理component_properties
+            if (args["component_properties"] is JObject componentPropsObj)
+            {
+                foreach (var componentProp in componentPropsObj.Properties())
+                {
+                    string componentName = componentProp.Name;
+                    if (componentProp.Value is JObject properties)
+                    {
+                        SetComponentPropertiesInternal(newGo, componentName, properties, logAction);
+                    }
+                }
+            }
+
+            // 处理单个component_name和component_properties的情况
+            string singleComponentName = args["component_name"]?.ToString();
+            if (!string.IsNullOrEmpty(singleComponentName) && args["component_properties"] is JObject singleProps)
+            {
+                // 检查是否是嵌套结构
+                if (singleProps[singleComponentName] is JObject nestedProps)
+                {
+                    SetComponentPropertiesInternal(newGo, singleComponentName, nestedProps, logAction);
+                }
+                else
+                {
+                    // 直接使用属性对象
+                    SetComponentPropertiesInternal(newGo, singleComponentName, singleProps, logAction);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 设置组件属性的内部方法
+        /// </summary>
+        private static void SetComponentPropertiesInternal(
+            GameObject targetGo,
+            string componentName,
+            JObject properties,
+            Action<string> logAction = null
+        )
+        {
+            if (properties == null || !properties.HasValues)
+                return;
+
+            // 查找组件类型
+            Type componentType = FindType(componentName);
+            Component targetComponent = null;
+
+            if (componentType != null && typeof(Component).IsAssignableFrom(componentType))
+            {
+                targetComponent = targetGo.GetComponent(componentType);
+            }
+            else
+            {
+                // 尝试常见的Unity组件命名空间
+                string[] commonNamespaces = { "UnityEngine", "UnityEngine.UI" };
+                foreach (string ns in commonNamespaces)
+                {
+                    string fullTypeName = $"{ns}.{componentName}";
+                    componentType = FindType(fullTypeName);
+                    if (componentType != null && typeof(Component).IsAssignableFrom(componentType))
+                    {
+                        targetComponent = targetGo.GetComponent(componentType);
+                        break;
+                    }
+                }
+            }
+
+            if (targetComponent == null)
+            {
+                logAction?.Invoke($"Component '{componentName}' not found on '{targetGo.name}' to set properties.");
+                return;
+            }
+
+            Undo.RecordObject(targetComponent, "Set Component Properties");
+
+            foreach (var prop in properties.Properties())
+            {
+                string propName = prop.Name;
+                JToken propValue = prop.Value;
+
+                try
+                {
+                    if (!SetComponentProperty(targetComponent, propName, propValue, logAction))
+                    {
+                        logAction?.Invoke($"Could not set property '{propName}' on component '{componentName}'. Property might not exist, be read-only, or type mismatch.");
+                    }
+                }
+                catch (Exception e)
+                {
+                    logAction?.Invoke($"Error setting property '{propName}' on '{componentName}': {e.Message}");
+                }
+            }
+
+            EditorUtility.SetDirty(targetComponent);
+        }
+
+        /// <summary>
+        /// 设置组件属性
+        /// </summary>
+        private static bool SetComponentProperty(object target, string memberName, JToken value, Action<string> logAction = null)
+        {
+            Type type = target.GetType();
+            BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase;
+
+            try
+            {
+                // 处理材质属性的特殊情况
+                if (memberName.Equals("material", StringComparison.OrdinalIgnoreCase) && value.Type == JTokenType.String)
+                {
+                    string materialPath = value.ToString();
+                    if (!string.IsNullOrEmpty(materialPath))
+                    {
+                        Material material = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
+                        if (material != null)
+                        {
+                            PropertyInfo materialProp = type.GetProperty("material", flags);
+                            if (materialProp != null && materialProp.CanWrite)
+                            {
+                                materialProp.SetValue(target, material);
+                                logAction?.Invoke($"Set material to '{materialPath}' on {type.Name}");
+                                return true;
+                            }
+                        }
+                        else
+                        {
+                            logAction?.Invoke($"Could not load material at path: '{materialPath}'");
+                            return false;
+                        }
+                    }
+                }
+
+                // 处理嵌套属性 (如 material.color)
+                if (memberName.Contains('.'))
+                {
+                    return SetNestedProperty(target, memberName, value, logAction);
+                }
+
+                // 处理普通属性
+                PropertyInfo propInfo = type.GetProperty(memberName, flags);
+                if (propInfo != null && propInfo.CanWrite)
+                {
+                    object convertedValue = ConvertJTokenToType(value, propInfo.PropertyType);
+                    if (convertedValue != null)
+                    {
+                        propInfo.SetValue(target, convertedValue);
+                        return true;
+                    }
+                }
+                else
+                {
+                    FieldInfo fieldInfo = type.GetField(memberName, flags);
+                    if (fieldInfo != null)
+                    {
+                        object convertedValue = ConvertJTokenToType(value, fieldInfo.FieldType);
+                        if (convertedValue != null)
+                        {
+                            fieldInfo.SetValue(target, convertedValue);
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logAction?.Invoke($"Failed to set '{memberName}' on {type.Name}: {ex.Message}");
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 设置嵌套属性
+        /// </summary>
+        private static bool SetNestedProperty(object target, string path, JToken value, Action<string> logAction = null)
+        {
+            string[] pathParts = path.Split('.');
+            if (pathParts.Length < 2)
+                return false;
+
+            object currentObject = target;
+            Type currentType = currentObject.GetType();
+            BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase;
+
+            // 遍历到最后一个属性之前
+            for (int i = 0; i < pathParts.Length - 1; i++)
+            {
+                string part = pathParts[i];
+                PropertyInfo propInfo = currentType.GetProperty(part, flags);
+                if (propInfo != null)
+                {
+                    currentObject = propInfo.GetValue(currentObject);
+                    if (currentObject == null)
+                    {
+                        logAction?.Invoke($"Property '{part}' is null, cannot access nested properties.");
+                        return false;
+                    }
+                    currentType = currentObject.GetType();
+                }
+                else
+                {
+                    logAction?.Invoke($"Could not find property '{part}' on type '{currentType.Name}'");
+                    return false;
+                }
+            }
+
+            // 设置最终属性
+            string finalPart = pathParts[pathParts.Length - 1];
+            return SetComponentProperty(currentObject, finalPart, value, logAction);
+        }
+
+        /// <summary>
+        /// 转换JToken为指定类型
+        /// </summary>
+        private static object ConvertJTokenToType(JToken token, Type targetType)
+        {
+            try
+            {
+                if (targetType == typeof(string))
+                    return token.ToObject<string>();
+                if (targetType == typeof(int))
+                    return token.ToObject<int>();
+                if (targetType == typeof(float))
+                    return token.ToObject<float>();
+                if (targetType == typeof(bool))
+                    return token.ToObject<bool>();
+
+                // Vector类型
+                if (targetType == typeof(Vector2) && token is JArray arrV2 && arrV2.Count == 2)
+                    return new Vector2(arrV2[0].ToObject<float>(), arrV2[1].ToObject<float>());
+                if (targetType == typeof(Vector3) && token is JArray arrV3 && arrV3.Count == 3)
+                    return new Vector3(arrV3[0].ToObject<float>(), arrV3[1].ToObject<float>(), arrV3[2].ToObject<float>());
+                if (targetType == typeof(Vector4) && token is JArray arrV4 && arrV4.Count == 4)
+                    return new Vector4(arrV4[0].ToObject<float>(), arrV4[1].ToObject<float>(), arrV4[2].ToObject<float>(), arrV4[3].ToObject<float>());
+
+                // Color类型
+                if (targetType == typeof(Color) && token is JArray arrC && arrC.Count >= 3)
+                    return new Color(arrC[0].ToObject<float>(), arrC[1].ToObject<float>(), arrC[2].ToObject<float>(), arrC.Count > 3 ? arrC[3].ToObject<float>() : 1.0f);
+
+                // 枚举类型
+                if (targetType.IsEnum)
+                    return Enum.Parse(targetType, token.ToString(), true);
+
+                // Unity Object类型（Material, Texture等）
+                if (typeof(UnityEngine.Object).IsAssignableFrom(targetType) && token.Type == JTokenType.String)
+                {
+                    string assetPath = token.ToString();
+                    if (!string.IsNullOrEmpty(assetPath))
+                    {
+                        return AssetDatabase.LoadAssetAtPath(assetPath, targetType);
+                    }
+                }
+
+                // 尝试直接转换
+                return token.ToObject(targetType);
+            }
+            catch
+            {
+                return null;
             }
         }
 

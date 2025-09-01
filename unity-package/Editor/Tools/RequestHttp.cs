@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using System.Threading.Tasks;
+using System.Threading;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -68,7 +68,6 @@ namespace UnityMcp.Tools
                     .Leaf("batch_download", HandleBatchDownload)
                 .Build();
         }
-
         // --- 请求处理方法 ---
 
         /// <summary>
@@ -217,11 +216,12 @@ namespace UnityMcp.Tools
                 // 同步执行请求
                 var asyncOp = request.SendWebRequest();
 
-                // 等待请求完成
+                // 等待请求完成（同步等待，但不阻塞主线程）
                 var startTime = EditorApplication.timeSinceStartup;
                 while (!asyncOp.isDone && (EditorApplication.timeSinceStartup - startTime) < timeout)
                 {
-                    System.Threading.Thread.Sleep(10); // 避免忙等待
+                    // 让Unity处理其他事件，不阻塞主线程
+                    System.Threading.Thread.Yield();
                 }
 
                 // 检查超时
@@ -479,11 +479,11 @@ namespace UnityMcp.Tools
 
                     var asyncOp = request.SendWebRequest();
 
-                    // 等待下载完成
+                    // 等待下载完成（同步）
                     var startTime = EditorApplication.timeSinceStartup;
                     while (!asyncOp.isDone && (EditorApplication.timeSinceStartup - startTime) < timeout)
                     {
-                        System.Threading.Thread.Sleep(10);
+                        System.Threading.Thread.Yield(); // 让Unity处理其他事件
                     }
 
                     if (!asyncOp.isDone)
@@ -578,11 +578,11 @@ namespace UnityMcp.Tools
 
                     var asyncOp = request.SendWebRequest();
 
-                    // 等待上传完成
+                    // 等待上传完成（同步）
                     var startTime = EditorApplication.timeSinceStartup;
                     while (!asyncOp.isDone && (EditorApplication.timeSinceStartup - startTime) < timeout)
                     {
-                        System.Threading.Thread.Sleep(10);
+                        System.Threading.Thread.Yield(); // 让Unity处理其他事件
                     }
 
                     if (!asyncOp.isDone)
@@ -624,7 +624,7 @@ namespace UnityMcp.Tools
 
                     while (!asyncOp.isDone && (EditorApplication.timeSinceStartup - startTime) < request.timeout)
                     {
-                        System.Threading.Thread.Sleep(10);
+                        System.Threading.Thread.Yield(); // 让Unity处理其他事件
                     }
 
                     if (!asyncOp.isDone)
@@ -681,10 +681,14 @@ namespace UnityMcp.Tools
                         return lastResult;
                     }
 
-                    // 等待重试
+                    // 等待重试（同步）
                     if (retryDelay > 0)
                     {
-                        System.Threading.Thread.Sleep((int)(retryDelay * 1000));
+                        var delayStart = EditorApplication.timeSinceStartup;
+                        while ((EditorApplication.timeSinceStartup - delayStart) < retryDelay)
+                        {
+                            System.Threading.Thread.Yield();
+                        }
                     }
                 }
                 catch (Exception e)
@@ -698,7 +702,11 @@ namespace UnityMcp.Tools
 
                     if (retryDelay > 0)
                     {
-                        System.Threading.Thread.Sleep((int)(retryDelay * 1000));
+                        var delayStart = EditorApplication.timeSinceStartup;
+                        while ((EditorApplication.timeSinceStartup - delayStart) < retryDelay)
+                        {
+                            System.Threading.Thread.Yield();
+                        }
                     }
                 }
             }
@@ -724,7 +732,7 @@ namespace UnityMcp.Tools
         }
 
         /// <summary>
-        /// 批量下载文件
+        /// 批量下载文件（支持实时控制台刷新）
         /// </summary>
         private object BatchDownload(JObject args)
         {
@@ -811,14 +819,23 @@ namespace UnityMcp.Tools
                         // 调用单个文件下载方法
                         var result = DownloadFile(downloadArgs);
 
+                        bool downloadSuccess = IsSuccessResponse(result);
+
                         downloadResults.Add(new
                         {
                             url = url,
                             file_path = filePath,
                             file_name = fileName,
-                            success = IsSuccessResponse(result),
+                            success = downloadSuccess,
                             result = result
                         });
+
+                        // 每下载完成一个文件，立即输出日志并刷新控制台
+                        string statusMessage = downloadSuccess ? "✅ 成功" : "❌ 失败";
+                        LogInfo($"[RequestHttp] 文件 {i + 1}/{urls.Length} {statusMessage}: {fileName}");
+
+                        // 强制刷新Unity控制台，让用户实时看到进度
+                        System.Threading.Thread.Yield(); // 让Unity有时间处理日志显示
                     }
                     catch (Exception e)
                     {

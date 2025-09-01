@@ -14,8 +14,8 @@ namespace UnityMcp.Tools
     /// Handles Unity ScriptableObject asset management operations including create, modify, duplicate, etc.
     /// 对应方法名: manage_scriptableobject
     /// </summary>
-    [ToolName("manage_scriptableobject")]
-    public class ManageScriptableObject : StateMethodBase
+    [ToolName("edit_scriptableobject")]
+    public class EditScriptableObject : StateMethodBase
     {
         /// <summary>
         /// 创建当前方法支持的参数键列表
@@ -87,7 +87,7 @@ namespace UnityMcp.Tools
                 }
 
                 ScriptableObject so = ScriptableObject.CreateInstance(scriptType);
-                
+
                 // Apply properties from JObject to the ScriptableObject instance
                 if (properties != null && properties.HasValues)
                 {
@@ -97,10 +97,10 @@ namespace UnityMcp.Tools
                         EditorUtility.SetDirty(so);
                     }
                 }
-                
+
                 AssetDatabase.CreateAsset(so, fullPath);
                 AssetDatabase.SaveAssets();
-                
+
                 return Response.Success(
                     $"ScriptableObject '{fullPath}' created successfully.",
                     GetScriptableObjectData(fullPath)
@@ -143,7 +143,7 @@ namespace UnityMcp.Tools
                     EditorUtility.SetDirty(so);
                     // Save all modified assets to disk
                     AssetDatabase.SaveAssets();
-                    
+
                     return Response.Success(
                         $"ScriptableObject '{fullPath}' modified successfully.",
                         GetScriptableObjectData(fullPath)
@@ -225,7 +225,7 @@ namespace UnityMcp.Tools
             List<string> searchFilters = new List<string>();
             if (!string.IsNullOrEmpty(searchPattern))
                 searchFilters.Add(searchPattern);
-            
+
             // Always filter for ScriptableObject type
             searchFilters.Add("t:ScriptableObject");
 
@@ -642,4 +642,4 @@ namespace UnityMcp.Tools
             };
         }
     }
-} 
+}

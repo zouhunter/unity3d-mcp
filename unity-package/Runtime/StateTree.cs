@@ -7,29 +7,44 @@ using Newtonsoft.Json.Linq;
 
 namespace UnityMcp.Tools
 {
+    /// <summary>
+    /// StateTree执行上下文包装类，支持JSON序列化字段和非序列化对象引用
+    /// </summary>
     public class StateTree
     {
         public string key;                         // 当前层变量
         public Dictionary<object, StateTree> select = new();
         public HashSet<string> optionalParams = new(); // 存储可选参数的key
-        public Func<JObject, object> func;     // 叶子函数
+        public Func<JObject, object> func;     // 叶子函数（向后兼容）
+        public Func<StateTreeContext, object> contextFunc; // 新的上下文叶子函数
         public const string Default = "*";          // 通配标识
         public string ErrorMessage;//执行错误信息
 
-        /* 隐式转换：Action → 叶子节点 */
+        /* 隐式转换：Action → 叶子节点（向后兼容） */
         public static implicit operator StateTree(Func<JObject, object> a) => new() { func = a };
 
-        /* 运行：沿树唯一路径（JObject 上下文） */
-        public object Run(JObject ctx)
+        /* 隐式转换：ContextAction → 叶子节点（新版本） */
+        public static implicit operator StateTree(Func<StateTreeContext, object> a) => new() { contextFunc = a };
+
+        /* 运行：沿树唯一路径（JObject 上下文，向后兼容） */
+        public object Run(JObject ctx, Dictionary<string, object> dict = null)
+        {
+            // 转换为StateTreeContext并调用新版本的Run方法
+            StateTreeContext context = new StateTreeContext(ctx, dict ?? new Dictionary<string, object>());
+            return Run(context);
+        }
+
+        /* 运行：沿树唯一路径（StateTreeContext 上下文） */
+        public object Run(StateTreeContext ctx)
         {
             var cur = this;
-            while (cur.func == null)
+            while (cur.func == null && cur.contextFunc == null)
             {
                 object keyToLookup = Default;
                 StateTree next = null;
 
                 // 首先检查是否有常规的key匹配
-                if (!string.IsNullOrEmpty(cur.key) && ctx != null && ctx.TryGetValue(cur.key, out JToken token))
+                if (!string.IsNullOrEmpty(cur.key) && ctx != null && ctx.TryGetJsonValue(cur.key, out JToken token))
                 {
                     keyToLookup = ConvertTokenToKey(token);
                     cur.select.TryGetValue(keyToLookup, out next);
@@ -47,7 +62,7 @@ namespace UnityMcp.Tools
                         if (!string.IsNullOrEmpty(key) && cur.optionalParams.Contains(key))
                         {
                             // 检查参数是否存在且不为空
-                            if (ctx.TryGetValue(key, out JToken paramToken) &&
+                            if (ctx.TryGetJsonValue(key, out JToken paramToken) &&
                                 paramToken != null &&
                                 paramToken.Type != JTokenType.Null &&
                                 !string.IsNullOrEmpty(paramToken.ToString()))
@@ -84,7 +99,18 @@ namespace UnityMcp.Tools
                 }
                 cur = next;
             }
-            return cur.func?.Invoke(ctx);
+
+            // 优先使用新版本的contextFunc，如果没有则回退到旧版本的func
+            if (cur.contextFunc != null)
+            {
+                return cur.contextFunc.Invoke(ctx);
+            }
+            else if (cur.func != null)
+            {
+                return cur.func.Invoke(ctx?.JsonData);
+            }
+
+            return null;
         }
 
         private static object ConvertTokenToKey(JToken token)
@@ -150,16 +176,24 @@ namespace UnityMcp.Tools
                 bool isLastChild = i == entries.Count - 1;
                 string connector = isLastChild ? "└─" : "├─";
                 string label = entry.Key?.ToString() == Default ? "*" : entry.Key?.ToString();
-                
+
                 // 如果是可选参数，添加(option)标识
                 if (!string.IsNullOrEmpty(label) && optionalParams.Contains(label))
                 {
                     label = label + "(option)";
                 }
 
-                if (entry.Value.func != null)
+                if (entry.Value.func != null || entry.Value.contextFunc != null)
                 {
-                    string actionName = entry.Value.func.Method?.Name ?? "Anonymous";
+                    string actionName;
+                    if (entry.Value.contextFunc != null)
+                    {
+                        actionName = entry.Value.contextFunc.Method?.Name ?? "Anonymous";
+                    }
+                    else
+                    {
+                        actionName = entry.Value.func.Method?.Name ?? "Anonymous";
+                    }
                     sb.AppendLine($"{edgesIndent}{connector} {label} → {actionName}");
                 }
                 else

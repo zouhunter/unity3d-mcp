@@ -13,8 +13,8 @@ namespace UnityMcp.Tools
     /// 专门的音频管理工具，提供音频的导入、修改、复制、删除等操作
     /// 对应方法名: manage_audio
     /// </summary>
-    [ToolName("manage_audio")]
-    public class ManageAudio : StateMethodBase
+    [ToolName("edit_audio")]
+    public class EditAudio : StateMethodBase
     {
         /// <summary>
         /// 创建当前方法支持的参数键列表
@@ -72,7 +72,7 @@ namespace UnityMcp.Tools
 
         // --- 状态树操作方法 ---
 
-        private object ImportAudio(JObject args)
+        private object ImportAudio(StateTreeContext args)
         {
             string sourceFile = args["source_file"]?.ToString();
             string path = args["path"]?.ToString();
@@ -370,7 +370,7 @@ namespace UnityMcp.Tools
                     return Response.Error($"Failed to get AudioImporter for '{fullPath}'");
 
                 AudioImporterSampleSettings settings = importer.defaultSampleSettings;
-                
+
                 // 设置目标格式
                 switch (targetFormat.ToLowerInvariant())
                 {
@@ -534,7 +534,7 @@ namespace UnityMcp.Tools
                             {
                                 string loadType = settingValue.ToString();
                                 AudioClipLoadType clipLoadType = AudioClipLoadType.DecompressOnLoad;
-                                
+
                                 switch (loadType.ToLowerInvariant())
                                 {
                                     case "compressedinmemory":
@@ -548,7 +548,7 @@ namespace UnityMcp.Tools
                                         clipLoadType = AudioClipLoadType.DecompressOnLoad;
                                         break;
                                 }
-                                
+
                                 if (sampleSettings.loadType != clipLoadType)
                                 {
                                     sampleSettings.loadType = clipLoadType;
@@ -561,7 +561,7 @@ namespace UnityMcp.Tools
                             {
                                 string compressionFormat = settingValue.ToString();
                                 AudioCompressionFormat format = AudioCompressionFormat.PCM;
-                                
+
                                 switch (compressionFormat.ToLowerInvariant())
                                 {
                                     case "vorbis":
@@ -578,7 +578,7 @@ namespace UnityMcp.Tools
                                         format = AudioCompressionFormat.PCM;
                                         break;
                                 }
-                                
+
                                 if (sampleSettings.compressionFormat != format)
                                 {
                                     sampleSettings.compressionFormat = format;
@@ -603,7 +603,7 @@ namespace UnityMcp.Tools
                             {
                                 string sampleRateSetting = settingValue.ToString();
                                 AudioSampleRateSetting rateSetting = AudioSampleRateSetting.PreserveSampleRate;
-                                
+
                                 switch (sampleRateSetting.ToLowerInvariant())
                                 {
                                     case "optimizesamplerate":
@@ -617,7 +617,7 @@ namespace UnityMcp.Tools
                                         rateSetting = AudioSampleRateSetting.PreserveSampleRate;
                                         break;
                                 }
-                                
+
                                 if (sampleSettings.sampleRateSetting != rateSetting)
                                 {
                                     sampleSettings.sampleRateSetting = rateSetting;
@@ -685,7 +685,7 @@ namespace UnityMcp.Tools
                                 //         bufferSize = DSPBufferSize.BestPerformance;
                                 //         break;
                                 // }
-                                
+
                                 LogWarning($"[ApplyAudioImportSettings] DSPBufferSize enum and dspBufferSize setting not supported in current Unity version");
                             }
                             break;
@@ -751,7 +751,7 @@ namespace UnityMcp.Tools
             // 获取音频导入器信息
             AudioImporter importer = AssetImporter.GetAtPath(path) as AudioImporter;
             object importSettings = null;
-            
+
             if (importer != null)
             {
                 AudioImporterSampleSettings settings = importer.defaultSampleSettings;
@@ -795,4 +795,4 @@ namespace UnityMcp.Tools
             };
         }
     }
-} 
+}

@@ -13,8 +13,8 @@ namespace UnityMcp.Tools
     /// 专门的材质管理工具，提供材质的创建、修改、复制、删除等操作
     /// 对应方法名: manage_material
     /// </summary>
-    [ToolName("manage_material")]
-    public class ManageMaterial : StateMethodBase
+    [ToolName("edit_material")]
+    public class EditMaterial : StateMethodBase
     {
         /// <summary>
         /// 创建当前方法支持的参数键列表
@@ -23,7 +23,7 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("action", "操作类型：create, modify, duplicate, delete, get_info, search, copy_properties", false),
+                new MethodKey("action", "操作类型：create, set_properties, duplicate, delete, get_info, search, copy_properties", false),
                 new MethodKey("path", "材质资源路径，Unity标准格式：Assets/Materials/MaterialName.mat", false),
                 new MethodKey("shader", "着色器名称或路径", true),
                 new MethodKey("properties", "材质属性字典，包含颜色、纹理、浮点数等属性", true),
@@ -46,17 +46,13 @@ namespace UnityMcp.Tools
             return StateTreeBuilder
                 .Create()
                 .Key("action")
-                                    .Leaf("create", CreateMaterial)
-                .Leaf("modify", ModifyMaterial)
-                .Leaf("duplicate", DuplicateMaterial)
-                .Leaf("get_info", GetMaterialInfo)
+                    .Leaf("create", CreateMaterial)
+                    .Leaf("set_properties", SetProperties)
+                    .Leaf("duplicate", DuplicateMaterial)
+                    .Leaf("get_info", GetMaterialInfo)
                     .Leaf("search", SearchMaterials)
                     .Leaf("copy_properties", CopyMaterialProperties)
-                    .Leaf("set_shader", SetMaterialShader)
-                    .Leaf("set_color", SetMaterialColor)
-                    .Leaf("set_texture", SetMaterialTexture)
-                    .Leaf("set_float", SetMaterialFloat)
-                    .Leaf("set_vector", SetMaterialVector)
+                    .Leaf("change_shader", ChangeMaterialShader)
                     .Leaf("enable_keyword", EnableMaterialKeyword)
                     .Leaf("disable_keyword", DisableMaterialKeyword)
                 .Build();
@@ -99,14 +95,14 @@ namespace UnityMcp.Tools
                         shader = AssetDatabase.LoadAssetAtPath<Shader>(SanitizeAssetPath(shaderName));
                     }
                 }
-                
+
                 if (shader == null)
                 {
                     shader = Shader.Find("Standard"); // 默认着色器
                 }
 
                 Material material = new Material(shader);
-                
+
                 // 应用属性
                 if (properties != null && properties.HasValues)
                 {
@@ -125,7 +121,7 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object ModifyMaterial(JObject args)
+        private object SetProperties(JObject args)
         {
             string path = args["path"]?.ToString();
             JObject properties = args["properties"] as JObject;
@@ -133,7 +129,7 @@ namespace UnityMcp.Tools
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for modify.");
             if (properties == null || !properties.HasValues)
-                return Response.Error("'properties' are required for modify.");
+                return Response.Error("'properties' are required for set_properties.");
 
             string fullPath = SanitizeAssetPath(path);
             if (!AssetExists(fullPath))
@@ -145,7 +141,7 @@ namespace UnityMcp.Tools
                 if (material == null)
                     return Response.Error($"Failed to load material at path: {fullPath}");
 
-                Undo.RecordObject(material, $"Modify Material '{Path.GetFileName(fullPath)}'");
+                Undo.RecordObject(material, $"Set Properties on Material '{Path.GetFileName(fullPath)}'");
 
                 bool modified = ApplyMaterialProperties(material, properties);
 
@@ -153,17 +149,17 @@ namespace UnityMcp.Tools
                 {
                     EditorUtility.SetDirty(material);
                     AssetDatabase.SaveAssets();
-                    LogInfo($"[ManageMaterial] Modified material at '{fullPath}'");
-                    return Response.Success($"Material '{fullPath}' modified successfully.", GetMaterialData(fullPath));
+                    LogInfo($"[ManageMaterial] Set properties on material at '{fullPath}'");
+                    return Response.Success($"Material '{fullPath}' properties set successfully.", GetMaterialData(fullPath));
                 }
                 else
                 {
-                    return Response.Success($"No applicable properties found to modify for material '{fullPath}'.", GetMaterialData(fullPath));
+                    return Response.Success($"No applicable properties found to set for material '{fullPath}'.", GetMaterialData(fullPath));
                 }
             }
             catch (Exception e)
             {
-                return Response.Error($"Failed to modify material '{fullPath}': {e.Message}");
+                return Response.Error($"Failed to set properties on material '{fullPath}': {e.Message}");
             }
         }
 
@@ -315,7 +311,7 @@ namespace UnityMcp.Tools
                 // 复制所有属性
                 Shader shader = sourceMaterial.shader;
                 int propertyCount = ShaderUtil.GetPropertyCount(shader);
-                
+
                 for (int i = 0; i < propertyCount; i++)
                 {
                     string propertyName = ShaderUtil.GetPropertyName(shader, i);
@@ -333,10 +329,10 @@ namespace UnityMcp.Tools
                         case ShaderUtil.ShaderPropertyType.Range:
                             destMaterial.SetFloat(propertyName, sourceMaterial.GetFloat(propertyName));
                             break;
-                        // 注意：ShaderPropertyType.Texture 在某些Unity版本中可能不可用
-                        // case ShaderUtil.ShaderPropertyType.Texture:
-                        //     destMaterial.SetTexture(propertyName, sourceMaterial.GetTexture(propertyName));
-                        //     break;
+                            // 注意：ShaderPropertyType.Texture 在某些Unity版本中可能不可用
+                            // case ShaderUtil.ShaderPropertyType.Texture:
+                            //     destMaterial.SetTexture(propertyName, sourceMaterial.GetTexture(propertyName));
+                            //     break;
                     }
                 }
 
@@ -359,15 +355,15 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object SetMaterialShader(JObject args)
+        private object ChangeMaterialShader(JObject args)
         {
             string path = args["path"]?.ToString();
             string shaderName = args["shader"]?.ToString();
 
             if (string.IsNullOrEmpty(path))
-                return Response.Error("'path' is required for set_shader.");
+                return Response.Error("'path' is required for change_shader.");
             if (string.IsNullOrEmpty(shaderName))
-                return Response.Error("'shader' is required for set_shader.");
+                return Response.Error("'shader' is required for change_shader.");
 
             string fullPath = SanitizeAssetPath(path);
             if (!AssetExists(fullPath))
@@ -388,193 +384,17 @@ namespace UnityMcp.Tools
                 if (shader == null)
                     return Response.Error($"Shader '{shaderName}' not found.");
 
-                Undo.RecordObject(material, $"Set Shader on Material '{Path.GetFileName(fullPath)}'");
+                Undo.RecordObject(material, $"Change Shader on Material '{Path.GetFileName(fullPath)}'");
                 material.shader = shader;
                 EditorUtility.SetDirty(material);
                 AssetDatabase.SaveAssets();
 
-                LogInfo($"[ManageMaterial] Set shader '{shader.name}' on material '{fullPath}'");
-                return Response.Success($"Shader set to '{shader.name}' on material '{fullPath}'.", GetMaterialData(fullPath));
+                LogInfo($"[ManageMaterial] Changed shader to '{shader.name}' on material '{fullPath}'");
+                return Response.Success($"Shader changed to '{shader.name}' on material '{fullPath}'.", GetMaterialData(fullPath));
             }
             catch (Exception e)
             {
-                return Response.Error($"Error setting shader on material '{fullPath}': {e.Message}");
-            }
-        }
-
-        private object SetMaterialColor(JObject args)
-        {
-            string path = args["path"]?.ToString();
-            string propertyName = args["property_name"]?.ToString() ?? "_Color";
-            JArray colorArray = args["color"] as JArray;
-
-            if (string.IsNullOrEmpty(path))
-                return Response.Error("'path' is required for set_color.");
-            if (colorArray == null || colorArray.Count < 3)
-                return Response.Error("'color' array with at least 3 values (RGB) is required for set_color.");
-
-            string fullPath = SanitizeAssetPath(path);
-            if (!AssetExists(fullPath))
-                return Response.Error($"Material not found at path: {fullPath}");
-
-            try
-            {
-                Material material = AssetDatabase.LoadAssetAtPath<Material>(fullPath);
-                if (material == null)
-                    return Response.Error($"Failed to load material at path: {fullPath}");
-
-                Color newColor = new Color(
-                    colorArray[0].ToObject<float>(),
-                    colorArray[1].ToObject<float>(),
-                    colorArray[2].ToObject<float>(),
-                    colorArray.Count > 3 ? colorArray[3].ToObject<float>() : 1.0f
-                );
-
-                if (!material.HasProperty(propertyName))
-                    return Response.Error($"Material does not have property '{propertyName}'.");
-
-                Undo.RecordObject(material, $"Set Color on Material '{Path.GetFileName(fullPath)}'");
-                material.SetColor(propertyName, newColor);
-                EditorUtility.SetDirty(material);
-                AssetDatabase.SaveAssets();
-
-                LogInfo($"[ManageMaterial] Set color {newColor} on property '{propertyName}' of material '{fullPath}'");
-                return Response.Success($"Color set on property '{propertyName}' of material '{fullPath}'.", GetMaterialData(fullPath));
-            }
-            catch (Exception e)
-            {
-                return Response.Error($"Error setting color on material '{fullPath}': {e.Message}");
-            }
-        }
-
-        private object SetMaterialTexture(JObject args)
-        {
-            string path = args["path"]?.ToString();
-            string propertyName = args["property_name"]?.ToString() ?? "_MainTex";
-            string texturePath = args["texture_path"]?.ToString();
-
-            if (string.IsNullOrEmpty(path))
-                return Response.Error("'path' is required for set_texture.");
-            if (string.IsNullOrEmpty(texturePath))
-                return Response.Error("'texture_path' is required for set_texture.");
-
-            string fullPath = SanitizeAssetPath(path);
-            string textureFullPath = SanitizeAssetPath(texturePath);
-
-            if (!AssetExists(fullPath))
-                return Response.Error($"Material not found at path: {fullPath}");
-            if (!AssetExists(textureFullPath))
-                return Response.Error($"Texture not found at path: {textureFullPath}");
-
-            try
-            {
-                Material material = AssetDatabase.LoadAssetAtPath<Material>(fullPath);
-                Texture texture = AssetDatabase.LoadAssetAtPath<Texture>(textureFullPath);
-
-                if (material == null)
-                    return Response.Error($"Failed to load material at path: {fullPath}");
-                if (texture == null)
-                    return Response.Error($"Failed to load texture at path: {textureFullPath}");
-
-                if (!material.HasProperty(propertyName))
-                    return Response.Error($"Material does not have property '{propertyName}'.");
-
-                Undo.RecordObject(material, $"Set Texture on Material '{Path.GetFileName(fullPath)}'");
-                material.SetTexture(propertyName, texture);
-                EditorUtility.SetDirty(material);
-                AssetDatabase.SaveAssets();
-
-                LogInfo($"[ManageMaterial] Set texture '{textureFullPath}' on property '{propertyName}' of material '{fullPath}'");
-                return Response.Success($"Texture set on property '{propertyName}' of material '{fullPath}'.", GetMaterialData(fullPath));
-            }
-            catch (Exception e)
-            {
-                return Response.Error($"Error setting texture on material '{fullPath}': {e.Message}");
-            }
-        }
-
-        private object SetMaterialFloat(JObject args)
-        {
-            string path = args["path"]?.ToString();
-            string propertyName = args["property_name"]?.ToString();
-            float value = args["value"]?.ToObject<float>() ?? 0f;
-
-            if (string.IsNullOrEmpty(path))
-                return Response.Error("'path' is required for set_float.");
-            if (string.IsNullOrEmpty(propertyName))
-                return Response.Error("'property_name' is required for set_float.");
-
-            string fullPath = SanitizeAssetPath(path);
-            if (!AssetExists(fullPath))
-                return Response.Error($"Material not found at path: {fullPath}");
-
-            try
-            {
-                Material material = AssetDatabase.LoadAssetAtPath<Material>(fullPath);
-                if (material == null)
-                    return Response.Error($"Failed to load material at path: {fullPath}");
-
-                if (!material.HasProperty(propertyName))
-                    return Response.Error($"Material does not have property '{propertyName}'.");
-
-                Undo.RecordObject(material, $"Set Float on Material '{Path.GetFileName(fullPath)}'");
-                material.SetFloat(propertyName, value);
-                EditorUtility.SetDirty(material);
-                AssetDatabase.SaveAssets();
-
-                LogInfo($"[ManageMaterial] Set float {value} on property '{propertyName}' of material '{fullPath}'");
-                return Response.Success($"Float value set on property '{propertyName}' of material '{fullPath}'.", GetMaterialData(fullPath));
-            }
-            catch (Exception e)
-            {
-                return Response.Error($"Error setting float on material '{fullPath}': {e.Message}");
-            }
-        }
-
-        private object SetMaterialVector(JObject args)
-        {
-            string path = args["path"]?.ToString();
-            string propertyName = args["property_name"]?.ToString();
-            JArray vectorArray = args["vector"] as JArray;
-
-            if (string.IsNullOrEmpty(path))
-                return Response.Error("'path' is required for set_vector.");
-            if (string.IsNullOrEmpty(propertyName))
-                return Response.Error("'property_name' is required for set_vector.");
-            if (vectorArray == null || vectorArray.Count < 4)
-                return Response.Error("'vector' array with 4 values (XYZW) is required for set_vector.");
-
-            string fullPath = SanitizeAssetPath(path);
-            if (!AssetExists(fullPath))
-                return Response.Error($"Material not found at path: {fullPath}");
-
-            try
-            {
-                Material material = AssetDatabase.LoadAssetAtPath<Material>(fullPath);
-                if (material == null)
-                    return Response.Error($"Failed to load material at path: {fullPath}");
-
-                Vector4 newVector = new Vector4(
-                    vectorArray[0].ToObject<float>(),
-                    vectorArray[1].ToObject<float>(),
-                    vectorArray[2].ToObject<float>(),
-                    vectorArray[3].ToObject<float>()
-                );
-
-                if (!material.HasProperty(propertyName))
-                    return Response.Error($"Material does not have property '{propertyName}'.");
-
-                Undo.RecordObject(material, $"Set Vector on Material '{Path.GetFileName(fullPath)}'");
-                material.SetVector(propertyName, newVector);
-                EditorUtility.SetDirty(material);
-                AssetDatabase.SaveAssets();
-
-                LogInfo($"[ManageMaterial] Set vector {newVector} on property '{propertyName}' of material '{fullPath}'");
-                return Response.Success($"Vector set on property '{propertyName}' of material '{fullPath}'.", GetMaterialData(fullPath));
-            }
-            catch (Exception e)
-            {
-                return Response.Error($"Error setting vector on material '{fullPath}': {e.Message}");
+                return Response.Error($"Error changing shader on material '{fullPath}': {e.Message}");
             }
         }
 
@@ -668,10 +488,11 @@ namespace UnityMcp.Tools
         /// </summary>
         private bool AssetExists(string sanitizedPath)
         {
-            if (!string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(sanitizedPath)))
-            {
-                return true;
-            }
+            // var guid = AssetDatabase.AssetPathToGUID(sanitizedPath);
+            // if (!string.IsNullOrEmpty(guid))
+            // {
+            //     return true;
+            // }
             if (Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), sanitizedPath)))
             {
                 return AssetDatabase.IsValidFolder(sanitizedPath);
@@ -818,11 +639,11 @@ namespace UnityMcp.Tools
                         case ShaderUtil.ShaderPropertyType.Range:
                             propertyValue = material.GetFloat(propertyName);
                             break;
-                        // 注意：ShaderPropertyType.Texture 在某些Unity版本中可能不可用
-                        // case ShaderUtil.ShaderPropertyType.Texture:
-                        //     Texture tex = material.GetTexture(propertyName);
-                        //     propertyValue = tex != null ? AssetDatabase.GetAssetPath(tex) : null;
-                        //     break;
+                            // 注意：ShaderPropertyType.Texture 在某些Unity版本中可能不可用
+                            // case ShaderUtil.ShaderPropertyType.Texture:
+                            //     Texture tex = material.GetTexture(propertyName);
+                            //     propertyValue = tex != null ? AssetDatabase.GetAssetPath(tex) : null;
+                            //     break;
                     }
 
                     properties.Add(new
@@ -849,4 +670,4 @@ namespace UnityMcp.Tools
             };
         }
     }
-} 
+}

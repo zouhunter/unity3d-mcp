@@ -465,7 +465,7 @@ namespace UnityMcp.Tools
 
             List<GameObject> instances = new List<GameObject>();
             GameObject[] allObjects = UnityEngine.Object.FindObjectsOfType<GameObject>();
-            
+
             foreach (GameObject go in allObjects)
             {
                 if (PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(go) == assetPath)
@@ -539,7 +539,7 @@ namespace UnityMcp.Tools
         private object DeleteMultipleGameObjectsByGuid(JToken targetToken, bool findAll)
         {
             List<string> guids = new List<string>();
-            
+
             if (targetToken.Type == JTokenType.Array)
             {
                 foreach (var guid in targetToken)
@@ -571,7 +571,7 @@ namespace UnityMcp.Tools
 
                 List<GameObject> instances = new List<GameObject>();
                 GameObject[] allObjects = UnityEngine.Object.FindObjectsOfType<GameObject>();
-                
+
                 foreach (GameObject go in allObjects)
                 {
                     if (PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(go) == assetPath)
@@ -611,4 +611,4 @@ namespace UnityMcp.Tools
             }
         }
     }
-} 
+}

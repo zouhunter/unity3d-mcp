@@ -14,8 +14,8 @@ namespace UnityMcp.Tools
     /// Handles CRUD operations for shader files within the Unity project.
     /// 对应方法名: manage_shader
     /// </summary>
-    [ToolName("manage_shader")]
-    public class ManageShader : StateMethodBase
+    [ToolName("edit_shader")]
+    public class EditShader : StateMethodBase
     {
         /// <summary>
         /// 创建当前方法支持的参数键列表
@@ -322,7 +322,7 @@ namespace UnityMcp.Tools
                     return null;
                 }
             }
-            
+
             return null;
         }
 

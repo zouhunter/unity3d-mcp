@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using UnityMcp.Tools;
 using System.Linq;
 using UnityMcp;
+using Newtonsoft.Json;
 
 namespace UnityMcp.Windows
 {
@@ -394,7 +395,24 @@ namespace UnityMcp.Windows
         private void DrawMethodsList()
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField("可用工具方法", EditorStyles.boldLabel);
+
+            // 标题栏：左侧显示标题，右侧显示调试按钮
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("可用工具方法", EditorStyles.boldLabel, GUILayout.ExpandWidth(true));
+
+            // 调试窗口按钮
+            GUIStyle titleDebugButtonStyle = new GUIStyle(EditorStyles.miniButton);
+            Color titleOriginalColor = GUI.backgroundColor;
+            GUI.backgroundColor = new Color(0.7f, 0.9f, 1f); // 淡蓝色背景
+
+            if (GUILayout.Button("调试窗口", titleDebugButtonStyle, GUILayout.Width(70)))
+            {
+                // 打开调试窗口（不预填充内容）
+                McpDebugWindow.ShowWindow();
+            }
+
+            GUI.backgroundColor = titleOriginalColor;
+            EditorGUILayout.EndHorizontal();
 
             // 确保方法已注册
             FunctionCall.EnsureMethodsRegisteredStatic();
@@ -476,30 +494,39 @@ namespace UnityMcp.Windows
                             fontStyle = FontStyle.Bold
                         };
 
-                        // 在一行中显示折叠标题和问号按钮
+                        // 在一行中显示折叠标题、问号按钮和调试按钮
                         EditorGUILayout.BeginHorizontal();
 
                         // 绘制折叠标题
                         Rect foldoutRect = EditorGUILayout.GetControlRect(true, EditorGUIUtility.singleLineHeight, GUILayout.ExpandWidth(true));
 
-                        // 计算问号按钮的位置
-                        float helpButtonWidth = 20f;
-                        float helpButtonHeight = 18f;
+                        // 计算按钮的位置
+                        float buttonWidth = 20f;
+                        float buttonHeight = 18f;
                         float padding = 2f;
+                        float totalButtonsWidth = (buttonWidth + padding) * 2; // 两个按钮的总宽度
+
+                        // 分离出调试按钮的区域
+                        Rect debugButtonRect = new Rect(
+                            foldoutRect.xMax - buttonWidth - padding,
+                            foldoutRect.y + (foldoutRect.height - buttonHeight) / 2,
+                            buttonWidth,
+                            buttonHeight
+                        );
 
                         // 分离出问号按钮的区域
                         Rect helpButtonRect = new Rect(
-                            foldoutRect.xMax - helpButtonWidth - padding,
-                            foldoutRect.y + (foldoutRect.height - helpButtonHeight) / 2,
-                            helpButtonWidth,
-                            helpButtonHeight
+                            foldoutRect.xMax - (buttonWidth + padding) * 2,
+                            foldoutRect.y + (foldoutRect.height - buttonHeight) / 2,
+                            buttonWidth,
+                            buttonHeight
                         );
 
                         // 留给折叠标题的区域
                         Rect actualFoldoutRect = new Rect(
                             foldoutRect.x,
                             foldoutRect.y,
-                            foldoutRect.width - helpButtonWidth - padding * 2,
+                            foldoutRect.width - totalButtonsWidth - padding,
                             foldoutRect.height
                         );
 
@@ -520,6 +547,19 @@ namespace UnityMcp.Windows
                             HandleMethodHelpClick(methodName, method);
                         }
 
+                        // 绘制调试按钮
+                        GUIStyle debugButtonStyle = new GUIStyle(EditorStyles.miniButton);
+                        Color originalColor = GUI.backgroundColor;
+                        GUI.backgroundColor = new Color(0.7f, 0.9f, 1f); // 淡蓝色背景
+
+                        if (GUI.Button(debugButtonRect, "T", debugButtonStyle))
+                        {
+                            // 处理调试按钮点击事件
+                            HandleMethodDebugClick(methodName, method);
+                        }
+
+                        GUI.backgroundColor = originalColor;
+
                         EditorGUILayout.EndHorizontal();
 
                         // 如果展开，显示预览信息
@@ -539,7 +579,7 @@ namespace UnityMcp.Windows
                                     EditorGUILayout.BeginHorizontal();
                                     // 参数名称 - 必需参数用粗体，可选参数用普通字体
                                     GUIStyle keyStyle = EditorStyles.miniBoldLabel;
-                                    Color originalColor = GUI.color;
+                                    originalColor = GUI.color;
 
                                     // 必需参数用红色标记，可选参数用灰色标记
                                     GUI.color = key.Optional ? Color.red : Color.green;
@@ -752,6 +792,199 @@ namespace UnityMcp.Windows
             }
 
             Debug.LogWarning($"无法打开脚本: {scriptName}");
+        }
+
+        /// <summary>
+        /// 处理方法调试按钮的点击事件
+        /// </summary>
+        /// <param name="methodName">方法名称</param>
+        /// <param name="method">方法实例</param>
+        private void HandleMethodDebugClick(string methodName, IToolMethod method)
+        {
+            try
+            {
+                // 生成方法调用的示例JSON
+                string exampleJson = GenerateMethodExampleJson(methodName, method);
+
+                // 打开McpDebugWindow并预填充示例
+                McpDebugWindow.ShowWindowWithContent(exampleJson);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[UnityMcpEditorWindow] 生成调试示例时发生错误: {e}");
+                EditorUtility.DisplayDialog("错误", $"无法生成调试示例: {e.Message}", "确定");
+            }
+        }
+
+        /// <summary>
+        /// 生成方法调用的示例JSON
+        /// </summary>
+        /// <param name="methodName">方法名称</param>
+        /// <param name="method">方法实例</param>
+        /// <returns>示例JSON字符串</returns>
+        private string GenerateMethodExampleJson(string methodName, IToolMethod method)
+        {
+            try
+            {
+                var exampleCall = new
+                {
+                    func = methodName,
+                    args = GenerateExampleArgs(method)
+                };
+
+                return JsonConvert.SerializeObject(exampleCall, Formatting.Indented);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"生成示例JSON失败，使用基础模板: {e.Message}");
+
+                // 如果生成失败，返回基础模板
+                var basicCall = new
+                {
+                    func = methodName,
+                    args = new { }
+                };
+
+                return JsonConvert.SerializeObject(basicCall, Formatting.Indented);
+            }
+        }
+
+        /// <summary>
+        /// 生成方法的示例参数
+        /// </summary>
+        /// <param name="method">方法实例</param>
+        /// <returns>示例参数对象</returns>
+        private object GenerateExampleArgs(IToolMethod method)
+        {
+            var exampleArgs = new Dictionary<string, object>();
+            var keys = method.Keys;
+
+            if (keys != null && keys.Length > 0)
+            {
+                foreach (var key in keys)
+                {
+                    // 根据参数名和描述生成示例值
+                    object exampleValue = GenerateExampleValue(key.Key, key.Desc, key.Optional);
+                    if (exampleValue != null)
+                    {
+                        exampleArgs[key.Key] = exampleValue;
+                    }
+                }
+            }
+
+            return exampleArgs;
+        }
+
+        /// <summary>
+        /// 根据参数信息生成示例值
+        /// </summary>
+        /// <param name="keyName">参数名</param>
+        /// <param name="description">参数描述</param>
+        /// <param name="isOptional">是否可选</param>
+        /// <returns>示例值</returns>
+        private object GenerateExampleValue(string keyName, string description, bool isOptional)
+        {
+            // 转换为小写用于模式匹配
+            string lowerKey = keyName.ToLower();
+            string lowerDesc = description?.ToLower() ?? "";
+
+            // 根据参数名和描述推断类型和示例值
+            switch (lowerKey)
+            {
+                case "action":
+                    return "modify"; // 默认操作
+
+                case "from":
+                    return "primitive";
+
+                case "primitive_type":
+                    return "Cube";
+
+                case "name":
+                    return "ExampleObject";
+
+                case "path":
+                    if (lowerDesc.Contains("material"))
+                        return "Assets/Materials/ExampleMaterial.mat";
+                    if (lowerDesc.Contains("prefab"))
+                        return "Assets/Prefabs/ExamplePrefab.prefab";
+                    if (lowerDesc.Contains("script"))
+                        return "Assets/Scripts/ExampleScript.cs";
+                    if (lowerDesc.Contains("texture"))
+                        return "Assets/Textures/ExampleTexture.png";
+                    return "Assets/Example.asset";
+
+                case "target":
+                    return "ExampleTarget";
+
+                case "position":
+                    return new float[] { 0, 0, 0 };
+
+                case "rotation":
+                    return new float[] { 0, 0, 0 };
+
+                case "scale":
+                    return new float[] { 1, 1, 1 };
+
+                case "shader":
+                    return "Standard";
+
+                case "properties":
+                    if (lowerDesc.Contains("color") || lowerKey.Contains("color"))
+                        return new { _Color = new { r = 1.0f, g = 0.0f, b = 0.0f, a = 1.0f } };
+                    return new { };
+
+                case "active":
+                    return true;
+
+                case "tag":
+                    return "Untagged";
+
+                case "layer":
+                    return "Default";
+
+                case "component_name":
+                    return "Rigidbody";
+
+                case "search_method":
+                    return "by_name";
+
+                case "url":
+                    return "https://httpbin.org/get";
+
+                case "timeout":
+                    return 30;
+
+                case "build_index":
+                    return 0;
+
+                case "texture_type":
+                    return "Sprite";
+
+                case "mesh_type":
+                    return "cube";
+
+                default:
+                    // 根据描述内容推断
+                    if (lowerDesc.Contains("bool") || lowerDesc.Contains("是否"))
+                        return !isOptional; // 必需参数默认true，可选参数默认false
+
+                    if (lowerDesc.Contains("array") || lowerDesc.Contains("list") || lowerDesc.Contains("数组"))
+                        return new object[] { };
+
+                    if (lowerDesc.Contains("number") || lowerDesc.Contains("int") || lowerDesc.Contains("数字"))
+                        return 0;
+
+                    if (lowerDesc.Contains("float") || lowerDesc.Contains("浮点"))
+                        return 0.0f;
+
+                    // 如果是可选参数且无法推断类型，返回null（不添加到参数中）
+                    if (isOptional)
+                        return null;
+
+                    // 必需参数默认返回空字符串
+                    return "";
+            }
         }
 
         /// <summary>

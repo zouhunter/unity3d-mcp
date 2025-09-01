@@ -75,7 +75,7 @@ namespace UnityMcp.Tools
         /// </summary>
         /// <param name="args">方法调用的参数对象</param>
         /// <returns>执行结果，若状态树执行失败则返回错误响应</returns>
-        public virtual object ExecuteMethod(JObject args)
+        public virtual object ExecuteMethod(StateTreeContext args)
         {
             // 确保状态树已初始化
             _stateTree = _stateTree ?? CreateStateTree();
@@ -94,7 +94,7 @@ namespace UnityMcp.Tools
         /// </summary>
         /// <param name="args">方法调用的参数对象</param>
         /// <returns>执行结果，若状态树执行失败则返回错误响应</returns>
-        public virtual async Task<object> ExecuteMethodAsync(JObject args)
+        public virtual async Task<object> ExecuteMethodAsync(StateTreeContext args)
         {
             try
             {
@@ -103,7 +103,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                LogError($"[StateMethodBase] Failed to execute method on main thread: {e}");
+                LogException(new Exception($"[StateMethodBase] Failed to execute method on main thread:", e));
                 return Response.Error($"Error executing method on main thread: {e.Message}");
             }
         }
@@ -126,6 +126,11 @@ namespace UnityMcp.Tools
         public virtual void LogError(string message)
         {
             Debug.LogError(message);
+        }
+
+        public virtual void LogException(Exception exception)
+        {
+            Debug.LogException(exception);
         }
     }
 }

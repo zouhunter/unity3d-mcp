@@ -7,7 +7,7 @@ alwaysApply: true
 
 本文档将工具按两类划分：
 - Tools: `function_call`, `functions_call`（调用/批量调用 Methods）。
-- Methods: `hierarchy_create`, `hierarchy_link`, `hierarchy_search`, `edit_asset`, `edit_component`, `manage_editor`, `edit_gameobject`, `edit_prefab`, `request_http`, `edit_scene`, `edit_script`, `edit_scriptableobject`, `edit_shader`, `edit_texture`, `edit_material`, `edit_mesh`, `console_read`（均作为 `func` 传给 Tools）。
+- Methods: `hierarchy_create`, `hierarchy_link`, `hierarchy_search`, `edit_asset`, `edit_component`, `manage_editor`, `edit_gameobject`, `ui_layout`, `edit_prefab`, `request_http`, `edit_scene`, `edit_script`, `edit_scriptableobject`, `edit_shader`, `edit_texture`, `edit_material`, `edit_mesh`, `console_read`（均作为 `func` 传给 Tools）。
 
 除 `function_call` 与 `functions_call` 外，其余均为 Methods 名称，不直接调用；请通过 Tools 调用，并把方法参数放入 `args`（字典类型）。
 
@@ -24,6 +24,7 @@ alwaysApply: true
   - `edit_component`
   - `manage_editor`
   - `edit_gameobject`
+  - `ui_layout`
   - `edit_prefab`
   - `request_http`
   - `edit_scene`
@@ -775,6 +776,128 @@ function_call(
 - **材质Shader属性**: 直接支持设置材质的Shader属性（以_开头的属性）
 - **组件属性批量设置**: 通过component_properties字典可一次设置多个属性
 - **标签自动创建**: 如果指定的标签不存在，会自动创建
+- **撤销支持**: 所有操作都支持Unity的撤销功能
+
+---
+
+### ui_layout - UGUI布局管理工具
+**功能**: 使用双状态树架构处理RectTransform修改操作，专门用于UGUI的布局调整，支持目标定位和多种UI布局操作。
+
+主要参数（放入 `args`）
+- `target` (string, 必需): 目标GameObject标识符（名称、ID或路径）
+- `search_method` (string, 可选): 搜索方法，支持 `by_name`、`by_id`、`by_tag`、`by_layer`等
+- `search_in_scene` (bool, 可选): 是否仅在场景中查找（默认true）
+- `select_many` (bool, 可选): 是否选择所有匹配的对象进行批量操作（默认false）
+- `action` (string, 可选): 操作类型，支持 `modify`、`set_anchors`、`set_size`、`set_position`、`set_property`、`get_property`
+
+**RectTransform基本属性**
+- `anchored_position` (list, 可选): 锚点位置 [x, y]
+- `size_delta` (list, 可选): 尺寸增量 [width, height]
+- `anchor_min` (list, 可选): 最小锚点 [x, y]
+- `anchor_max` (list, 可选): 最大锚点 [x, y]
+- `pivot` (list, 可选): 轴心点 [x, y]
+- `offset_min` (list, 可选): 最小偏移 [x, y]
+- `offset_max` (list, 可选): 最大偏移 [x, y]
+
+**Transform继承属性**
+- `local_position` (list, 可选): 本地位置 [x, y, z]
+- `local_rotation` (list, 可选): 本地旋转 [x, y, z]
+- `local_scale` (list, 可选): 本地缩放 [x, y, z]
+
+**便捷设置参数**
+- `width` (float, 可选): 宽度
+- `height` (float, 可选): 高度
+- `left` (float, 可选): 左边距
+- `right` (float, 可选): 右边距
+- `top` (float, 可选): 上边距
+- `bottom` (float, 可选): 下边距
+
+**预设锚点类型**
+- `anchor_preset` (string, 可选): 锚点预设，支持：
+  - `top_left`, `top_center`, `top_right`
+  - `middle_left`, `middle_center`, `middle_right`
+  - `bottom_left`, `bottom_center`, `bottom_right`
+  - `stretch_horizontal`, `stretch_vertical`, `stretch_all`
+
+**属性操作参数**
+- `property_name` (string, 可选): 属性名称（用于属性设置/获取）
+- `value` (any, 可选): 要设置的属性值
+
+支持的操作类型 (action)
+- `modify` - 修改RectTransform的各种属性（默认操作）
+- `set_anchors` - 专门设置锚点相关属性
+- `set_size` - 专门设置尺寸相关属性
+- `set_position` - 专门设置位置相关属性
+- `set_property` - 设置RectTransform属性（通用属性操作）
+- `get_property` - 获取RectTransform属性
+
+支持的搜索方法 (search_method)
+- `by_name` - 按名称搜索（默认）
+- `by_id` - 按ID搜索
+- `by_tag` - 按标签搜索
+- `by_layer` - 按层级搜索
+- `by_component` - 按组件类型搜索
+
+示例：修改UI元素的基本布局属性（默认操作）
+```python
+function_call(
+  func="ui_layout",
+  args={"target": "Button", "width": 200, "height": 50, "anchored_position": [0, 0]}
+)
+```
+
+示例：设置锚点预设
+```python
+function_call(
+  func="ui_layout",
+  args={"target": "Panel", "action": "set_anchors", "anchor_preset": "stretch_all"}
+)
+```
+
+示例：设置边距
+```python
+function_call(
+  func="ui_layout",
+  args={"target": "Content", "action": "set_position", "left": 10, "right": 10, "top": 10, "bottom": 10}
+)
+```
+
+示例：批量设置多个UI元素的尺寸
+```python
+function_call(
+  func="ui_layout",
+  args={"target": "Button", "select_many": true, "action": "set_size", "width": 150, "height": 40}
+)
+```
+
+示例：设置精确的锚点和偏移
+```python
+function_call(
+  func="ui_layout",
+  args={
+    "target": "InfoPanel", 
+    "anchor_min": [0, 0], 
+    "anchor_max": [1, 0.3], 
+    "offset_min": [10, 10], 
+    "offset_max": [-10, -10]
+  }
+)
+```
+
+示例：获取RectTransform属性
+```python
+function_call(
+  func="ui_layout",
+  args={"target": "ScrollView", "action": "get_property", "property_name": "anchoredPosition"}
+)
+```
+
+特点：
+- **UI专用**: 专门针对UGUI的RectTransform组件设计
+- **布局预设**: 支持常用的锚点预设，快速设置布局
+- **便捷参数**: 提供width、height、边距等便捷参数
+- **批量操作**: 支持select_many参数进行批量UI布局调整
+- **双状态树**: 先定位目标，再执行操作，确保操作准确性
 - **撤销支持**: 所有操作都支持Unity的撤销功能
 
 ---
@@ -1596,6 +1719,7 @@ function_call(
 - 使用Unity标准路径格式：`Assets/Folder/File.extension`
 - 路径分隔符使用正斜杠 `/`
 - 相对于项目根目录的Assets文件夹
+- UGUI菜单按TextMeshPro的规则为准，老的一些控件已经放到Leagcy中
 
 ### 4) 最佳实践
 - 在执行操作前使用 `console_read` 检查错误

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -26,8 +27,8 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
+                new MethodKey("name", "GameObject名称", false),
                 new MethodKey("from", "操作类型：menu, primitive, prefab", false),
-                new MethodKey("name", "GameObject名称", true),
                 new MethodKey("tag", "GameObject标签", true),
                 new MethodKey("layer", "GameObject所在层", true),
                 new MethodKey("parent", "父对象标识符", true),
@@ -39,7 +40,7 @@ namespace UnityMcp.Tools
                 new MethodKey("menu_path", "菜单路径", true),
                 new MethodKey("save_as_prefab", "是否保存为预制体", true),
                 new MethodKey("set_active", "设置激活状态", true),
-                new MethodKey("components_to_add", "要添加的组件列表", true)
+                new MethodKey("components", "要添加的组件列表", true)
             };
         }
 
@@ -48,7 +49,7 @@ namespace UnityMcp.Tools
             return StateTreeBuilder
                 .Create()
                 .Key("from")
-                    .Leaf("menu", MenuUtils.HandleExecuteMenu)
+                    .Leaf("menu", HandleCreateFromMenu)
                     .Branch("primitive")
                         .OptionalKey("primitive_type")
                             .Leaf("Cube", HandleCreateCube)
@@ -63,6 +64,87 @@ namespace UnityMcp.Tools
                     .Up()
                     .Leaf("prefab", HandleCreateFromPrefab)
                 .Build();
+        }
+
+
+
+        /// <summary>
+        /// 处理从菜单创建GameObject的操作
+        /// </summary>
+        private object HandleCreateFromMenu(JObject args)
+        {
+            string menuPath = args["menu_path"]?.ToString();
+            if (string.IsNullOrEmpty(menuPath))
+            {
+                return Response.Error("'menu_path' parameter is required for menu creation.");
+            }
+
+            LogInfo($"[HierarchyCreate] Creating GameObject from menu: '{menuPath}'");
+
+            // 记录创建前的选中对象
+            GameObject previousSelection = Selection.activeGameObject;
+            int previousSelectionID = previousSelection != null ? previousSelection.GetInstanceID() : 0;
+
+            // 执行菜单项
+            var menuResult = MenuUtils.TryExecuteMenuItem(menuPath);
+
+            // 检查菜单执行结果
+            string menuResultStr = menuResult?.ToString() ?? "";
+            if (menuResultStr.Contains("Failed") || menuResultStr.Contains("Error"))
+            {
+                LogInfo($"[HierarchyCreate] Menu execution failed: {menuResultStr}");
+                return menuResult;
+            }
+
+            LogInfo($"[HierarchyCreate] Menu executed successfully: {menuResultStr}");
+
+            // 等待Unity完成内部操作 - 使用EditorApplication.delayCall替代异步等待
+            //Thread.Sleep(50); // 给Unity时间完成菜单操作
+
+            // 多次尝试检测新创建的对象，因为菜单创建可能需要时间
+            GameObject newObject = null;
+            int maxRetries = 10;
+            int retryCount = 0;
+
+            while (retryCount < maxRetries)
+            {
+                newObject = Selection.activeGameObject;
+
+                // 检查是否找到了新对象
+                if (newObject != null &&
+                    (previousSelection == null || newObject.GetInstanceID() != previousSelectionID))
+                {
+                    LogInfo($"[HierarchyCreate] Found newly created object: '{newObject.name}' (ID: {newObject.GetInstanceID()}) after {retryCount} retries");
+                    break;
+                }
+
+                retryCount++;
+                if (retryCount < maxRetries)
+                {
+                    //Thread.Sleep(10); // 短暂等待后重试
+                }
+            }
+
+            // 如果找到了新对象，进行设置
+            if (newObject != null &&
+                (previousSelection == null || newObject.GetInstanceID() != previousSelectionID))
+            {
+                // 再次等待，确保对象完全初始化
+                //Thread.Sleep(25);
+
+                LogInfo($"[HierarchyCreate] Finalizing newly created object: '{newObject.name}' (ID: {newObject.GetInstanceID()})");
+
+                // 应用其他设置（名称、位置等）
+                var finalizeResult = FinalizeGameObjectCreation(args, newObject, false);
+                LogInfo($"[HierarchyCreate] Finalization result: {finalizeResult}");
+                return finalizeResult;
+            }
+            else
+            {
+                // 如果没有找到新对象，但菜单执行成功
+                LogInfo($"[HierarchyCreate] Menu executed but no new object was detected after {maxRetries} retries. Previous: {previousSelection?.name}, Current: {newObject?.name}");
+                return Response.Success($"Menu item '{menuPath}' executed successfully, but no new GameObject was detected.");
+            }
         }
 
         /// <summary>
@@ -183,6 +265,9 @@ namespace UnityMcp.Tools
                     return Response.Error($"Failed to instantiate prefab: '{resolvedPath}'");
                 }
 
+                // 等待Unity完成对象初始化
+                //Thread.Sleep(10);
+
                 // 设置名称
                 string name = args["name"]?.ToString();
                 if (!string.IsNullOrEmpty(name))
@@ -212,6 +297,9 @@ namespace UnityMcp.Tools
             {
                 PrimitiveType type = (PrimitiveType)Enum.Parse(typeof(PrimitiveType), primitiveType, true);
                 GameObject newGo = GameObject.CreatePrimitive(type);
+
+                // 等待Unity完成对象初始化
+                //Thread.Sleep(10);
 
                 // 设置名称
                 string name = args["name"]?.ToString();
@@ -248,6 +336,10 @@ namespace UnityMcp.Tools
             try
             {
                 GameObject newGo = new GameObject(name);
+
+                // 等待Unity完成对象初始化
+                //Thread.Sleep(10);
+
                 Undo.RegisterCreatedObjectUndo(newGo, $"Create GameObject '{newGo.name}'");
 
                 return FinalizeGameObjectCreation(args, newGo, true);
@@ -307,12 +399,22 @@ namespace UnityMcp.Tools
 
             try
             {
+                // 等待对象完全初始化
+                //Thread.Sleep(25);
+
+                LogInfo($"[HierarchyCreate] Starting finalization for '{newGo.name}' (ID: {newGo.GetInstanceID()})");
+
                 // 记录变换和属性的变更
                 Undo.RecordObject(newGo.transform, "Set GameObject Transform");
                 Undo.RecordObject(newGo, "Set GameObject Properties");
 
-                // 应用通用设置
+                // 应用通用设置（包括名称设置）
                 GameObjectUtils.ApplyCommonGameObjectSettings(args, newGo, LogInfo);
+
+                // 再次等待，确保所有设置都已应用
+                //Thread.Sleep(10);
+
+                LogInfo($"[HierarchyCreate] Applied settings to '{newGo.name}' (ID: {newGo.GetInstanceID()})");
 
                 // 处理预制体保存
                 GameObject finalInstance = newGo;
@@ -327,8 +429,13 @@ namespace UnityMcp.Tools
                     }
                 }
 
+                // 等待一下再选择对象
+                //Thread.Sleep(5);
+
                 // 选择对象
                 Selection.activeGameObject = finalInstance;
+
+                LogInfo($"[HierarchyCreate] Finalized '{finalInstance.name}' (ID: {finalInstance.GetInstanceID()})");
 
                 // 生成成功消息
                 string successMessage = GenerateCreationSuccessMessage(args, finalInstance, createdNewObject, saveAsPrefab);
@@ -336,6 +443,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
+                LogError($"[HierarchyCreate] Error finalizing GameObject creation: {e.Message}");
                 // 清理失败的对象
                 if (newGo != null)
                 {
@@ -344,16 +452,6 @@ namespace UnityMcp.Tools
                 return Response.Error($"Error finalizing GameObject creation: {e.Message}");
             }
         }
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -385,6 +483,9 @@ namespace UnityMcp.Tools
                     System.IO.Directory.CreateDirectory(directoryPath);
                     AssetDatabase.Refresh();
                     LogInfo($"[HierarchyCreate] Created directory for prefab: {directoryPath}");
+
+                    // 等待Unity完成目录创建
+                    //Thread.Sleep(50);
                 }
 
                 // 保存为预制体
@@ -399,6 +500,9 @@ namespace UnityMcp.Tools
                     UnityEngine.Object.DestroyImmediate(newGo);
                     return null;
                 }
+
+                // 等待预制体保存完成
+                //Thread.Sleep(10);
 
                 LogInfo($"[HierarchyCreate] GameObject '{newGo.name}' saved as prefab to '{finalPrefabPath}' and instance connected.");
                 return finalInstance;

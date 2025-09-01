@@ -11,12 +11,12 @@ using UnityMcp.Tools; // 添加这个引用
 
 namespace UnityMcp.Tools
 {
-            /// <summary>
-        /// Handles Unity asset management operations including import, modify, move, duplicate, etc.
-        /// 对应方法名: manage_asset
-        /// </summary>
-    [ToolName("manage_asset")]
-    public class ManageAsset : StateMethodBase
+    /// <summary>
+    /// Handles Unity asset management operations including import, modify, move, duplicate, etc.
+    /// 对应方法名: manage_asset
+    /// </summary>
+    [ToolName("project_operate")]
+    public class ProjectOperate : StateMethodBase
     {
         /// <summary>
         /// 创建当前方法支持的参数键列表

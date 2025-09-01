@@ -1,0 +1,1414 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using Newtonsoft.Json.Linq;
+using UnityEditor;
+using UnityEngine;
+using UnityMcp.Models; // For Response class
+
+namespace UnityMcp.Tools
+{
+    /// <summary>
+    /// Handles RectTransform modification operations using dual state tree architecture.
+    /// First tree: Target location (using GameObjectSelector)
+    /// Second tree: RectTransform property modification operations
+    /// 对应方法名: edit_recttransform
+    /// </summary>
+    [ToolName("ui_layout")]
+    public class UILayout : DualStateMethodBase
+    {
+        /// <summary>
+        /// 创建当前方法支持的参数键列表
+        /// </summary>
+        protected override MethodKey[] CreateKeys()
+        {
+            return new[]
+            {
+                // 目标定位参数
+                new MethodKey("target", "目标GameObject标识符（名称、ID或路径）", false),
+                new MethodKey("search_method", "搜索方法：by_name, by_id, by_tag, by_layer等", true),
+                new MethodKey("search_in_scene", "是否仅在场景中查找（默认true）", true),
+                new MethodKey("select_many", "是否选择所有匹配的对象进行批量操作（默认false）", true),
+                
+                // 操作参数
+                new MethodKey("action", "操作类型：modify, get_property, set_property, set_anchors, set_size, set_position", false),
+                
+                // RectTransform基本属性
+                new MethodKey("anchored_position", "锚点位置 [x, y]", true),
+                new MethodKey("size_delta", "尺寸增量 [width, height]", true),
+                new MethodKey("anchor_min", "最小锚点 [x, y]", true),
+                new MethodKey("anchor_max", "最大锚点 [x, y]", true),
+                new MethodKey("pivot", "轴心点 [x, y]", true),
+                new MethodKey("offset_min", "最小偏移 [x, y]", true),
+                new MethodKey("offset_max", "最大偏移 [x, y]", true),
+                
+                // Transform继承属性
+                new MethodKey("local_position", "本地位置 [x, y, z]", true),
+                new MethodKey("local_rotation", "本地旋转 [x, y, z]", true),
+                new MethodKey("local_scale", "本地缩放 [x, y, z]", true),
+                
+                // 便捷设置参数
+                new MethodKey("width", "宽度", true),
+                new MethodKey("height", "高度", true),
+                new MethodKey("left", "左边距", true),
+                new MethodKey("right", "右边距", true),
+                new MethodKey("top", "上边距", true),
+                new MethodKey("bottom", "下边距", true),
+                
+                // 预设锚点类型
+                new MethodKey("anchor_preset", "锚点预设：top_left, top_center, top_right, middle_left, middle_center, middle_right, bottom_left, bottom_center, bottom_right, stretch_horizontal, stretch_vertical, stretch_all", true),
+                
+                // 属性操作参数（兜底功能）
+                new MethodKey("property_name", "属性名称（用于属性设置/获取）", true),
+                new MethodKey("value", "要设置的属性值", true),
+            };
+        }
+
+        /// <summary>
+        /// 创建目标定位状态树（使用GameObjectSelector）
+        /// </summary>
+        protected override StateTree CreateTargetTree()
+        {
+            return new GameObjectSelector().BuildStateTree();
+        }
+
+        /// <summary>
+        /// 创建操作执行状态树
+        /// </summary>
+        protected override StateTree CreateActionTree()
+        {
+            return StateTreeBuilder
+                .Create()
+                .Key("action")
+                    .Leaf("modify", (Func<StateTreeContext, object>)HandleModifyAction)
+                    .Leaf("set_property", (Func<StateTreeContext, object>)HandleSetPropertyAction)
+                    .Leaf("get_property", (Func<StateTreeContext, object>)HandleGetPropertyAction)
+                    .Leaf("set_anchors", (Func<StateTreeContext, object>)HandleSetAnchorsAction)
+                    .Leaf("set_size", (Func<StateTreeContext, object>)HandleSetSizeAction)
+                    .Leaf("set_position", (Func<StateTreeContext, object>)HandleSetPositionAction)
+                    .DefaultLeaf((Func<StateTreeContext, object>)HandleDefaultAction)
+                .Build();
+        }
+
+        /// <summary>
+        /// 处理修改操作
+        /// </summary>
+        private object HandleModifyAction(StateTreeContext args)
+        {
+            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
+            if (targets.Length == 0)
+            {
+                return Response.Error("No target GameObjects found in execution context.");
+            }
+
+            if (targets.Length == 1)
+            {
+                return ApplyRectTransformModifications(targets[0], args);
+            }
+            else
+            {
+                return ApplyRectTransformModificationsToMultiple(targets, args);
+            }
+        }
+
+        /// <summary>
+        /// 默认操作处理（兼容性，不指定action时使用modify）
+        /// </summary>
+        private object HandleDefaultAction(StateTreeContext args)
+        {
+            LogInfo("[EditRectTransform] No action specified, using default modify action");
+            return HandleModifyAction(args);
+        }
+
+        /// <summary>
+        /// 处理设置锚点操作
+        /// </summary>
+        private object HandleSetAnchorsAction(StateTreeContext args)
+        {
+            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
+            if (targets.Length == 0)
+            {
+                return Response.Error("No target GameObjects found in execution context.");
+            }
+
+            if (targets.Length == 1)
+            {
+                return SetAnchorsOnTarget(targets[0], args);
+            }
+            else
+            {
+                return SetAnchorsOnMultipleTargets(targets, args);
+            }
+        }
+
+        /// <summary>
+        /// 处理设置尺寸操作
+        /// </summary>
+        private object HandleSetSizeAction(StateTreeContext args)
+        {
+            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
+            if (targets.Length == 0)
+            {
+                return Response.Error("No target GameObjects found in execution context.");
+            }
+
+            if (targets.Length == 1)
+            {
+                return SetSizeOnTarget(targets[0], args);
+            }
+            else
+            {
+                return SetSizeOnMultipleTargets(targets, args);
+            }
+        }
+
+        /// <summary>
+        /// 处理设置位置操作
+        /// </summary>
+        private object HandleSetPositionAction(StateTreeContext args)
+        {
+            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
+            if (targets.Length == 0)
+            {
+                return Response.Error("No target GameObjects found in execution context.");
+            }
+
+            if (targets.Length == 1)
+            {
+                return SetPositionOnTarget(targets[0], args);
+            }
+            else
+            {
+                return SetPositionOnMultipleTargets(targets, args);
+            }
+        }
+
+        /// <summary>
+        /// 处理属性设置操作
+        /// </summary>
+        private object HandleSetPropertyAction(StateTreeContext args)
+        {
+            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
+            if (targets.Length == 0)
+            {
+                return Response.Error("No target GameObjects found in execution context.");
+            }
+
+            if (!args.TryGetValue("property_name", out object propertyNameObj) || propertyNameObj == null)
+            {
+                return Response.Error("Property name is required for set_property action.");
+            }
+            string propertyName = propertyNameObj.ToString();
+
+            if (!args.TryGetValue("value", out object valueObj))
+            {
+                return Response.Error("Value is required for set_property action.");
+            }
+
+            if (targets.Length == 1)
+            {
+                return SetPropertyOnSingleTarget(targets[0], propertyName, valueObj);
+            }
+            else
+            {
+                return SetPropertyOnMultipleTargets(targets, propertyName, valueObj);
+            }
+        }
+
+        /// <summary>
+        /// 处理属性获取操作
+        /// </summary>
+        private object HandleGetPropertyAction(StateTreeContext args)
+        {
+            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
+            if (targets.Length == 0)
+            {
+                return Response.Error("No target GameObjects found in execution context.");
+            }
+
+            if (!args.TryGetValue("property_name", out object propertyNameObj) || propertyNameObj == null)
+            {
+                return Response.Error("Property name is required for get_property action.");
+            }
+            string propertyName = propertyNameObj.ToString();
+
+            if (targets.Length == 1)
+            {
+                return GetPropertyFromSingleTarget(targets[0], propertyName);
+            }
+            else
+            {
+                return GetPropertyFromMultipleTargets(targets, propertyName);
+            }
+        }
+
+        #region 核心修改方法
+
+        /// <summary>
+        /// 应用RectTransform修改到单个GameObject
+        /// </summary>
+        private object ApplyRectTransformModifications(GameObject targetGo, StateTreeContext args)
+        {
+            RectTransform rectTransform = targetGo.GetComponent<RectTransform>();
+            if (rectTransform == null)
+            {
+                return Response.Error($"GameObject '{targetGo.name}' does not have a RectTransform component.");
+            }
+
+            Undo.RecordObject(rectTransform, "Modify RectTransform");
+
+            bool modified = false;
+
+            // 处理锚点预设
+            modified |= ApplyAnchorPreset(rectTransform, args);
+
+            // 应用RectTransform特有属性
+            modified |= ApplyAnchoredPosition(rectTransform, args);
+            modified |= ApplySizeDelta(rectTransform, args);
+            modified |= ApplyAnchorMin(rectTransform, args);
+            modified |= ApplyAnchorMax(rectTransform, args);
+            modified |= ApplyPivot(rectTransform, args);
+            modified |= ApplyOffsetMin(rectTransform, args);
+            modified |= ApplyOffsetMax(rectTransform, args);
+
+            // 应用便捷尺寸设置
+            modified |= ApplyWidthHeight(rectTransform, args);
+            modified |= ApplyMargins(rectTransform, args);
+
+            // 应用Transform继承属性
+            modified |= ApplyLocalPosition(rectTransform, args);
+            modified |= ApplyLocalRotation(rectTransform, args);
+            modified |= ApplyLocalScale(rectTransform, args);
+
+            if (!modified)
+            {
+                return Response.Success(
+                    $"No modifications applied to RectTransform on '{targetGo.name}'.",
+                    GetRectTransformData(rectTransform)
+                );
+            }
+
+            EditorUtility.SetDirty(rectTransform);
+            return Response.Success(
+                $"RectTransform on '{targetGo.name}' modified successfully.",
+                GetRectTransformData(rectTransform)
+            );
+        }
+
+        /// <summary>
+        /// 应用RectTransform修改到多个GameObject
+        /// </summary>
+        private object ApplyRectTransformModificationsToMultiple(GameObject[] targets, StateTreeContext args)
+        {
+            var results = new List<Dictionary<string, object>>();
+            var errors = new List<string>();
+            int successCount = 0;
+
+            foreach (GameObject targetGo in targets)
+            {
+                if (targetGo == null) continue;
+
+                try
+                {
+                    var result = ApplyRectTransformModifications(targetGo, args);
+
+                    if (IsSuccessResponse(result, out object data, out string responseMessage))
+                    {
+                        successCount++;
+                        if (data is Dictionary<string, object> dictData)
+                        {
+                            results.Add(dictData);
+                        }
+                        else
+                        {
+                            var rectTransform = targetGo.GetComponent<RectTransform>();
+                            if (rectTransform != null)
+                            {
+                                results.Add(GetRectTransformData(rectTransform));
+                            }
+                        }
+                    }
+                    else
+                    {
+                        errors.Add($"[{targetGo.name}] {responseMessage ?? "Unknown error"}");
+                    }
+                }
+                catch (Exception e)
+                {
+                    errors.Add($"[{targetGo.name}] Error: {e.Message}");
+                }
+            }
+
+            return CreateBatchOperationResponse("modify RectTransform", successCount, targets.Length, results, errors);
+        }
+
+        #endregion
+
+        #region RectTransform属性应用方法
+
+        /// <summary>
+        /// 应用锚点预设
+        /// </summary>
+        private bool ApplyAnchorPreset(RectTransform rectTransform, StateTreeContext args)
+        {
+            if (args.TryGetValue("anchor_preset", out object presetObj) && presetObj != null)
+            {
+                string preset = presetObj.ToString().ToLower();
+                Vector2 anchorMin, anchorMax, pivot;
+
+                switch (preset)
+                {
+                    case "top_left":
+                        anchorMin = new Vector2(0, 1);
+                        anchorMax = new Vector2(0, 1);
+                        pivot = new Vector2(0, 1);
+                        break;
+                    case "top_center":
+                        anchorMin = new Vector2(0.5f, 1);
+                        anchorMax = new Vector2(0.5f, 1);
+                        pivot = new Vector2(0.5f, 1);
+                        break;
+                    case "top_right":
+                        anchorMin = new Vector2(1, 1);
+                        anchorMax = new Vector2(1, 1);
+                        pivot = new Vector2(1, 1);
+                        break;
+                    case "middle_left":
+                        anchorMin = new Vector2(0, 0.5f);
+                        anchorMax = new Vector2(0, 0.5f);
+                        pivot = new Vector2(0, 0.5f);
+                        break;
+                    case "middle_center":
+                        anchorMin = new Vector2(0.5f, 0.5f);
+                        anchorMax = new Vector2(0.5f, 0.5f);
+                        pivot = new Vector2(0.5f, 0.5f);
+                        break;
+                    case "middle_right":
+                        anchorMin = new Vector2(1, 0.5f);
+                        anchorMax = new Vector2(1, 0.5f);
+                        pivot = new Vector2(1, 0.5f);
+                        break;
+                    case "bottom_left":
+                        anchorMin = new Vector2(0, 0);
+                        anchorMax = new Vector2(0, 0);
+                        pivot = new Vector2(0, 0);
+                        break;
+                    case "bottom_center":
+                        anchorMin = new Vector2(0.5f, 0);
+                        anchorMax = new Vector2(0.5f, 0);
+                        pivot = new Vector2(0.5f, 0);
+                        break;
+                    case "bottom_right":
+                        anchorMin = new Vector2(1, 0);
+                        anchorMax = new Vector2(1, 0);
+                        pivot = new Vector2(1, 0);
+                        break;
+                    case "stretch_horizontal":
+                        anchorMin = new Vector2(0, 0.5f);
+                        anchorMax = new Vector2(1, 0.5f);
+                        pivot = new Vector2(0.5f, 0.5f);
+                        break;
+                    case "stretch_vertical":
+                        anchorMin = new Vector2(0.5f, 0);
+                        anchorMax = new Vector2(0.5f, 1);
+                        pivot = new Vector2(0.5f, 0.5f);
+                        break;
+                    case "stretch_all":
+                        anchorMin = new Vector2(0, 0);
+                        anchorMax = new Vector2(1, 1);
+                        pivot = new Vector2(0.5f, 0.5f);
+                        break;
+                    default:
+                        return false;
+                }
+
+                if (rectTransform.anchorMin != anchorMin || rectTransform.anchorMax != anchorMax || rectTransform.pivot != pivot)
+                {
+                    rectTransform.anchorMin = anchorMin;
+                    rectTransform.anchorMax = anchorMax;
+                    rectTransform.pivot = pivot;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 应用锚点位置修改
+        /// </summary>
+        private bool ApplyAnchoredPosition(RectTransform rectTransform, StateTreeContext args)
+        {
+            if (args.TryGetValue("anchored_position", out object positionObj))
+            {
+                Vector2? position = ParseVector2(positionObj);
+                if (position.HasValue && rectTransform.anchoredPosition != position.Value)
+                {
+                    rectTransform.anchoredPosition = position.Value;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 应用尺寸增量修改
+        /// </summary>
+        private bool ApplySizeDelta(RectTransform rectTransform, StateTreeContext args)
+        {
+            if (args.TryGetValue("size_delta", out object sizeObj))
+            {
+                Vector2? size = ParseVector2(sizeObj);
+                if (size.HasValue && rectTransform.sizeDelta != size.Value)
+                {
+                    rectTransform.sizeDelta = size.Value;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 应用最小锚点修改
+        /// </summary>
+        private bool ApplyAnchorMin(RectTransform rectTransform, StateTreeContext args)
+        {
+            if (args.TryGetValue("anchor_min", out object anchorObj))
+            {
+                Vector2? anchor = ParseVector2(anchorObj);
+                if (anchor.HasValue && rectTransform.anchorMin != anchor.Value)
+                {
+                    rectTransform.anchorMin = anchor.Value;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 应用最大锚点修改
+        /// </summary>
+        private bool ApplyAnchorMax(RectTransform rectTransform, StateTreeContext args)
+        {
+            if (args.TryGetValue("anchor_max", out object anchorObj))
+            {
+                Vector2? anchor = ParseVector2(anchorObj);
+                if (anchor.HasValue && rectTransform.anchorMax != anchor.Value)
+                {
+                    rectTransform.anchorMax = anchor.Value;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 应用轴心点修改
+        /// </summary>
+        private bool ApplyPivot(RectTransform rectTransform, StateTreeContext args)
+        {
+            if (args.TryGetValue("pivot", out object pivotObj))
+            {
+                Vector2? pivot = ParseVector2(pivotObj);
+                if (pivot.HasValue && rectTransform.pivot != pivot.Value)
+                {
+                    rectTransform.pivot = pivot.Value;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 应用最小偏移修改
+        /// </summary>
+        private bool ApplyOffsetMin(RectTransform rectTransform, StateTreeContext args)
+        {
+            if (args.TryGetValue("offset_min", out object offsetObj))
+            {
+                Vector2? offset = ParseVector2(offsetObj);
+                if (offset.HasValue && rectTransform.offsetMin != offset.Value)
+                {
+                    rectTransform.offsetMin = offset.Value;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 应用最大偏移修改
+        /// </summary>
+        private bool ApplyOffsetMax(RectTransform rectTransform, StateTreeContext args)
+        {
+            if (args.TryGetValue("offset_max", out object offsetObj))
+            {
+                Vector2? offset = ParseVector2(offsetObj);
+                if (offset.HasValue && rectTransform.offsetMax != offset.Value)
+                {
+                    rectTransform.offsetMax = offset.Value;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 应用宽度和高度修改
+        /// </summary>
+        private bool ApplyWidthHeight(RectTransform rectTransform, StateTreeContext args)
+        {
+            bool modified = false;
+            Vector2 sizeDelta = rectTransform.sizeDelta;
+
+            if (args.TryGetValue("width", out object widthObj) && widthObj != null)
+            {
+                if (float.TryParse(widthObj.ToString(), out float width))
+                {
+                    if (sizeDelta.x != width)
+                    {
+                        sizeDelta.x = width;
+                        modified = true;
+                    }
+                }
+            }
+
+            if (args.TryGetValue("height", out object heightObj) && heightObj != null)
+            {
+                if (float.TryParse(heightObj.ToString(), out float height))
+                {
+                    if (sizeDelta.y != height)
+                    {
+                        sizeDelta.y = height;
+                        modified = true;
+                    }
+                }
+            }
+
+            if (modified)
+            {
+                rectTransform.sizeDelta = sizeDelta;
+            }
+
+            return modified;
+        }
+
+        /// <summary>
+        /// 应用边距修改
+        /// </summary>
+        private bool ApplyMargins(RectTransform rectTransform, StateTreeContext args)
+        {
+            bool modified = false;
+            Vector2 offsetMin = rectTransform.offsetMin;
+            Vector2 offsetMax = rectTransform.offsetMax;
+
+            if (args.TryGetValue("left", out object leftObj) && leftObj != null)
+            {
+                if (float.TryParse(leftObj.ToString(), out float left))
+                {
+                    if (offsetMin.x != left)
+                    {
+                        offsetMin.x = left;
+                        modified = true;
+                    }
+                }
+            }
+
+            if (args.TryGetValue("bottom", out object bottomObj) && bottomObj != null)
+            {
+                if (float.TryParse(bottomObj.ToString(), out float bottom))
+                {
+                    if (offsetMin.y != bottom)
+                    {
+                        offsetMin.y = bottom;
+                        modified = true;
+                    }
+                }
+            }
+
+            if (args.TryGetValue("right", out object rightObj) && rightObj != null)
+            {
+                if (float.TryParse(rightObj.ToString(), out float right))
+                {
+                    if (offsetMax.x != -right)
+                    {
+                        offsetMax.x = -right;
+                        modified = true;
+                    }
+                }
+            }
+
+            if (args.TryGetValue("top", out object topObj) && topObj != null)
+            {
+                if (float.TryParse(topObj.ToString(), out float top))
+                {
+                    if (offsetMax.y != -top)
+                    {
+                        offsetMax.y = -top;
+                        modified = true;
+                    }
+                }
+            }
+
+            if (modified)
+            {
+                rectTransform.offsetMin = offsetMin;
+                rectTransform.offsetMax = offsetMax;
+            }
+
+            return modified;
+        }
+
+        /// <summary>
+        /// 应用本地位置修改
+        /// </summary>
+        private bool ApplyLocalPosition(RectTransform rectTransform, StateTreeContext args)
+        {
+            if (args.TryGetValue("local_position", out object positionObj))
+            {
+                Vector3? position = ParseVector3(positionObj);
+                if (position.HasValue && rectTransform.localPosition != position.Value)
+                {
+                    rectTransform.localPosition = position.Value;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 应用本地旋转修改
+        /// </summary>
+        private bool ApplyLocalRotation(RectTransform rectTransform, StateTreeContext args)
+        {
+            if (args.TryGetValue("local_rotation", out object rotationObj))
+            {
+                Vector3? rotation = ParseVector3(rotationObj);
+                if (rotation.HasValue && rectTransform.localEulerAngles != rotation.Value)
+                {
+                    rectTransform.localEulerAngles = rotation.Value;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 应用本地缩放修改
+        /// </summary>
+        private bool ApplyLocalScale(RectTransform rectTransform, StateTreeContext args)
+        {
+            if (args.TryGetValue("local_scale", out object scaleObj))
+            {
+                Vector3? scale = ParseVector3(scaleObj);
+                if (scale.HasValue && rectTransform.localScale != scale.Value)
+                {
+                    rectTransform.localScale = scale.Value;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        #endregion
+
+        #region 专用操作方法
+
+        /// <summary>
+        /// 在单个目标上设置锚点
+        /// </summary>
+        private object SetAnchorsOnTarget(GameObject targetGo, StateTreeContext args)
+        {
+            RectTransform rectTransform = targetGo.GetComponent<RectTransform>();
+            if (rectTransform == null)
+            {
+                return Response.Error($"GameObject '{targetGo.name}' does not have a RectTransform component.");
+            }
+
+            Undo.RecordObject(rectTransform, "Set Anchors");
+
+            bool modified = false;
+            modified |= ApplyAnchorPreset(rectTransform, args);
+            modified |= ApplyAnchorMin(rectTransform, args);
+            modified |= ApplyAnchorMax(rectTransform, args);
+            modified |= ApplyPivot(rectTransform, args);
+
+            if (modified)
+            {
+                EditorUtility.SetDirty(rectTransform);
+                return Response.Success(
+                    $"Anchors set successfully on '{targetGo.name}'.",
+                    GetRectTransformData(rectTransform)
+                );
+            }
+            else
+            {
+                return Response.Success(
+                    $"No anchor changes applied to '{targetGo.name}'.",
+                    GetRectTransformData(rectTransform)
+                );
+            }
+        }
+
+        /// <summary>
+        /// 在单个目标上设置尺寸
+        /// </summary>
+        private object SetSizeOnTarget(GameObject targetGo, StateTreeContext args)
+        {
+            RectTransform rectTransform = targetGo.GetComponent<RectTransform>();
+            if (rectTransform == null)
+            {
+                return Response.Error($"GameObject '{targetGo.name}' does not have a RectTransform component.");
+            }
+
+            Undo.RecordObject(rectTransform, "Set Size");
+
+            bool modified = false;
+            modified |= ApplySizeDelta(rectTransform, args);
+            modified |= ApplyWidthHeight(rectTransform, args);
+
+            if (modified)
+            {
+                EditorUtility.SetDirty(rectTransform);
+                return Response.Success(
+                    $"Size set successfully on '{targetGo.name}'.",
+                    GetRectTransformData(rectTransform)
+                );
+            }
+            else
+            {
+                return Response.Success(
+                    $"No size changes applied to '{targetGo.name}'.",
+                    GetRectTransformData(rectTransform)
+                );
+            }
+        }
+
+        /// <summary>
+        /// 在单个目标上设置位置
+        /// </summary>
+        private object SetPositionOnTarget(GameObject targetGo, StateTreeContext args)
+        {
+            RectTransform rectTransform = targetGo.GetComponent<RectTransform>();
+            if (rectTransform == null)
+            {
+                return Response.Error($"GameObject '{targetGo.name}' does not have a RectTransform component.");
+            }
+
+            Undo.RecordObject(rectTransform, "Set Position");
+
+            bool modified = false;
+            modified |= ApplyAnchoredPosition(rectTransform, args);
+            modified |= ApplyLocalPosition(rectTransform, args);
+            modified |= ApplyMargins(rectTransform, args);
+            modified |= ApplyOffsetMin(rectTransform, args);
+            modified |= ApplyOffsetMax(rectTransform, args);
+
+            if (modified)
+            {
+                EditorUtility.SetDirty(rectTransform);
+                return Response.Success(
+                    $"Position set successfully on '{targetGo.name}'.",
+                    GetRectTransformData(rectTransform)
+                );
+            }
+            else
+            {
+                return Response.Success(
+                    $"No position changes applied to '{targetGo.name}'.",
+                    GetRectTransformData(rectTransform)
+                );
+            }
+        }
+
+        #endregion
+
+        #region 属性操作方法
+
+        /// <summary>
+        /// 在单个目标上设置属性
+        /// </summary>
+        private object SetPropertyOnSingleTarget(GameObject targetGo, string propertyName, object valueObj)
+        {
+            RectTransform rectTransform = targetGo.GetComponent<RectTransform>();
+            if (rectTransform == null)
+            {
+                return Response.Error($"GameObject '{targetGo.name}' does not have a RectTransform component.");
+            }
+
+            try
+            {
+                Undo.RecordObject(rectTransform, $"Set RectTransform Property {propertyName}");
+
+                if (valueObj is JToken valueToken)
+                {
+                    SetPropertyValue(rectTransform, propertyName, valueToken);
+                }
+                else
+                {
+                    JToken convertedToken = JToken.FromObject(valueObj);
+                    SetPropertyValue(rectTransform, propertyName, convertedToken);
+                }
+
+                EditorUtility.SetDirty(rectTransform);
+
+                LogInfo($"[EditRectTransform] Set property '{propertyName}' on {targetGo.name}");
+
+                return Response.Success(
+                    $"RectTransform property '{propertyName}' set successfully on {targetGo.name}.",
+                    new Dictionary<string, object>
+                    {
+                        { "target", targetGo.name },
+                        { "property", propertyName },
+                        { "value", valueObj?.ToString() }
+                    }
+                );
+            }
+            catch (Exception e)
+            {
+                return Response.Error($"Failed to set RectTransform property '{propertyName}': {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 从单个目标获取属性
+        /// </summary>
+        private object GetPropertyFromSingleTarget(GameObject targetGo, string propertyName)
+        {
+            RectTransform rectTransform = targetGo.GetComponent<RectTransform>();
+            if (rectTransform == null)
+            {
+                return Response.Error($"GameObject '{targetGo.name}' does not have a RectTransform component.");
+            }
+
+            try
+            {
+                var value = GetPropertyValue(rectTransform, propertyName);
+                LogInfo($"[EditRectTransform] Got property '{propertyName}' from {targetGo.name}: {value}");
+
+                return Response.Success(
+                    $"RectTransform property '{propertyName}' retrieved successfully from {targetGo.name}.",
+                    new Dictionary<string, object>
+                    {
+                        { "target", targetGo.name },
+                        { "property", propertyName },
+                        { "value", value }
+                    }
+                );
+            }
+            catch (Exception e)
+            {
+                return Response.Error($"Failed to get RectTransform property '{propertyName}': {e.Message}");
+            }
+        }
+
+        #endregion
+
+        #region 批量操作方法
+
+        /// <summary>
+        /// 在多个目标上设置锚点
+        /// </summary>
+        private object SetAnchorsOnMultipleTargets(GameObject[] targets, StateTreeContext args)
+        {
+            var results = new List<Dictionary<string, object>>();
+            var errors = new List<string>();
+            int successCount = 0;
+
+            foreach (GameObject target in targets)
+            {
+                if (target == null) continue;
+
+                try
+                {
+                    var result = SetAnchorsOnTarget(target, args);
+
+                    if (IsSuccessResponse(result, out object data, out string message))
+                    {
+                        successCount++;
+                        if (data is Dictionary<string, object> dictData)
+                        {
+                            results.Add(dictData);
+                        }
+                    }
+                    else
+                    {
+                        errors.Add($"[{target.name}] {message ?? "Unknown error"}");
+                    }
+                }
+                catch (Exception e)
+                {
+                    errors.Add($"[{target.name}] Error: {e.Message}");
+                }
+            }
+
+            return CreateBatchOperationResponse("set anchors", successCount, targets.Length, results, errors);
+        }
+
+        /// <summary>
+        /// 在多个目标上设置尺寸
+        /// </summary>
+        private object SetSizeOnMultipleTargets(GameObject[] targets, StateTreeContext args)
+        {
+            var results = new List<Dictionary<string, object>>();
+            var errors = new List<string>();
+            int successCount = 0;
+
+            foreach (GameObject target in targets)
+            {
+                if (target == null) continue;
+
+                try
+                {
+                    var result = SetSizeOnTarget(target, args);
+
+                    if (IsSuccessResponse(result, out object data, out string message))
+                    {
+                        successCount++;
+                        if (data is Dictionary<string, object> dictData)
+                        {
+                            results.Add(dictData);
+                        }
+                    }
+                    else
+                    {
+                        errors.Add($"[{target.name}] {message ?? "Unknown error"}");
+                    }
+                }
+                catch (Exception e)
+                {
+                    errors.Add($"[{target.name}] Error: {e.Message}");
+                }
+            }
+
+            return CreateBatchOperationResponse("set size", successCount, targets.Length, results, errors);
+        }
+
+        /// <summary>
+        /// 在多个目标上设置位置
+        /// </summary>
+        private object SetPositionOnMultipleTargets(GameObject[] targets, StateTreeContext args)
+        {
+            var results = new List<Dictionary<string, object>>();
+            var errors = new List<string>();
+            int successCount = 0;
+
+            foreach (GameObject target in targets)
+            {
+                if (target == null) continue;
+
+                try
+                {
+                    var result = SetPositionOnTarget(target, args);
+
+                    if (IsSuccessResponse(result, out object data, out string message))
+                    {
+                        successCount++;
+                        if (data is Dictionary<string, object> dictData)
+                        {
+                            results.Add(dictData);
+                        }
+                    }
+                    else
+                    {
+                        errors.Add($"[{target.name}] {message ?? "Unknown error"}");
+                    }
+                }
+                catch (Exception e)
+                {
+                    errors.Add($"[{target.name}] Error: {e.Message}");
+                }
+            }
+
+            return CreateBatchOperationResponse("set position", successCount, targets.Length, results, errors);
+        }
+
+        /// <summary>
+        /// 在多个目标上设置属性
+        /// </summary>
+        private object SetPropertyOnMultipleTargets(GameObject[] targets, string propertyName, object valueObj)
+        {
+            var results = new List<Dictionary<string, object>>();
+            var errors = new List<string>();
+            int successCount = 0;
+
+            foreach (GameObject target in targets)
+            {
+                if (target == null) continue;
+
+                try
+                {
+                    var result = SetPropertyOnSingleTarget(target, propertyName, valueObj);
+
+                    if (IsSuccessResponse(result, out object data, out string message))
+                    {
+                        successCount++;
+                        if (data is Dictionary<string, object> dictData)
+                        {
+                            results.Add(dictData);
+                        }
+                    }
+                    else
+                    {
+                        errors.Add($"[{target.name}] {message ?? "Unknown error"}");
+                    }
+                }
+                catch (Exception e)
+                {
+                    errors.Add($"[{target.name}] Error: {e.Message}");
+                }
+            }
+
+            return CreateBatchOperationResponse($"set property '{propertyName}'", successCount, targets.Length, results, errors);
+        }
+
+        /// <summary>
+        /// 从多个目标获取属性
+        /// </summary>
+        private object GetPropertyFromMultipleTargets(GameObject[] targets, string propertyName)
+        {
+            var results = new List<Dictionary<string, object>>();
+            var errors = new List<string>();
+            int successCount = 0;
+
+            foreach (GameObject target in targets)
+            {
+                if (target == null) continue;
+
+                try
+                {
+                    var result = GetPropertyFromSingleTarget(target, propertyName);
+
+                    if (IsSuccessResponse(result, out object data, out string message))
+                    {
+                        successCount++;
+                        if (data is Dictionary<string, object> dictData)
+                        {
+                            results.Add(dictData);
+                        }
+                    }
+                    else
+                    {
+                        errors.Add($"[{target.name}] {message ?? "Unknown error"}");
+                    }
+                }
+                catch (Exception e)
+                {
+                    errors.Add($"[{target.name}] Error: {e.Message}");
+                }
+            }
+
+            return CreateBatchOperationResponse($"get property '{propertyName}'", successCount, targets.Length, results, errors);
+        }
+
+        #endregion
+
+        #region 辅助方法
+
+        /// <summary>
+        /// 从执行上下文中提取目标GameObject数组
+        /// </summary>
+        private GameObject[] ExtractTargetsFromContext(StateTreeContext context)
+        {
+            // 先尝试从ObjectReferences获取（避免序列化问题）
+            if (context.TryGetObjectReference("_resolved_targets", out object targetsObj))
+            {
+                if (targetsObj is GameObject[] gameObjectArray)
+                {
+                    return gameObjectArray;
+                }
+                else if (targetsObj is GameObject singleGameObject)
+                {
+                    return new GameObject[] { singleGameObject };
+                }
+                else if (targetsObj is System.Collections.IList list)
+                {
+                    var gameObjects = new List<GameObject>();
+                    foreach (var item in list)
+                    {
+                        if (item is GameObject go)
+                            gameObjects.Add(go);
+                    }
+                    return gameObjects.ToArray();
+                }
+            }
+
+            // 如果ObjectReferences中没有，尝试从JsonData获取（向后兼容）
+            if (context.TryGetJsonValue("_resolved_targets", out JToken targetToken))
+            {
+                if (targetToken is JArray targetArray)
+                {
+                    return targetArray.ToObject<GameObject[]>();
+                }
+                else
+                {
+                    // 单个对象的情况
+                    GameObject single = targetToken.ToObject<GameObject>();
+                    return single != null ? new GameObject[] { single } : new GameObject[0];
+                }
+            }
+
+            return new GameObject[0];
+        }
+
+        /// <summary>
+        /// 检查是否应该进行批量操作
+        /// </summary>
+        private bool ShouldSelectMany(StateTreeContext context)
+        {
+            if (context.TryGetValue("select_many", out object selectManyObj))
+            {
+                if (selectManyObj is bool selectMany)
+                    return selectMany;
+                if (bool.TryParse(selectManyObj?.ToString(), out bool parsedSelectMany))
+                    return parsedSelectMany;
+            }
+            return false; // 默认为false
+        }
+
+        /// <summary>
+        /// 根据select_many参数获取目标对象（单个或多个）
+        /// </summary>
+        private GameObject[] GetTargetsBasedOnSelectMany(StateTreeContext context)
+        {
+            GameObject[] targets = ExtractTargetsFromContext(context);
+
+            if (ShouldSelectMany(context))
+            {
+                return targets; // 返回所有匹配的对象
+            }
+            else
+            {
+                // 只返回第一个对象（如果存在）
+                return targets.Length > 0 ? new GameObject[] { targets[0] } : new GameObject[0];
+            }
+        }
+
+        /// <summary>
+        /// 解析Vector2
+        /// </summary>
+        private Vector2? ParseVector2(object obj)
+        {
+            if (obj == null) return null;
+
+            if (obj is JArray jArray && jArray.Count >= 2)
+            {
+                try
+                {
+                    return new Vector2(
+                        jArray[0].ToObject<float>(),
+                        jArray[1].ToObject<float>()
+                    );
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            if (obj is Vector2 vector2)
+            {
+                return vector2;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 解析Vector3
+        /// </summary>
+        private Vector3? ParseVector3(object obj)
+        {
+            if (obj == null) return null;
+
+            if (obj is JArray jArray && jArray.Count >= 3)
+            {
+                try
+                {
+                    return new Vector3(
+                        jArray[0].ToObject<float>(),
+                        jArray[1].ToObject<float>(),
+                        jArray[2].ToObject<float>()
+                    );
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            if (obj is Vector3 vector3)
+            {
+                return vector3;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 获取属性值
+        /// </summary>
+        private object GetPropertyValue(object target, string propertyName)
+        {
+            Type type = target.GetType();
+            PropertyInfo propInfo = type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+
+            if (propInfo != null && propInfo.CanRead)
+            {
+                return propInfo.GetValue(target);
+            }
+
+            FieldInfo fieldInfo = type.GetField(propertyName, BindingFlags.Public | BindingFlags.Instance);
+            if (fieldInfo != null)
+            {
+                return fieldInfo.GetValue(target);
+            }
+
+            throw new ArgumentException($"Property or field '{propertyName}' not found on type '{type.Name}'");
+        }
+
+        /// <summary>
+        /// 设置属性值
+        /// </summary>
+        private void SetPropertyValue(object target, string propertyName, JToken value)
+        {
+            Type type = target.GetType();
+            PropertyInfo propInfo = type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+
+            if (propInfo != null && propInfo.CanWrite)
+            {
+                object convertedValue = ConvertValue(value, propInfo.PropertyType);
+                propInfo.SetValue(target, convertedValue);
+                return;
+            }
+
+            FieldInfo fieldInfo = type.GetField(propertyName, BindingFlags.Public | BindingFlags.Instance);
+            if (fieldInfo != null)
+            {
+                object convertedValue = ConvertValue(value, fieldInfo.FieldType);
+                fieldInfo.SetValue(target, convertedValue);
+                return;
+            }
+
+            throw new ArgumentException($"Property or field '{propertyName}' not found or is read-only on type '{type.Name}'");
+        }
+
+        /// <summary>
+        /// 转换JToken值到指定类型
+        /// </summary>
+        private object ConvertValue(JToken token, Type targetType)
+        {
+            if (targetType == typeof(string))
+                return token.ToObject<string>();
+            if (targetType == typeof(int))
+                return token.ToObject<int>();
+            if (targetType == typeof(float))
+                return token.ToObject<float>();
+            if (targetType == typeof(bool))
+                return token.ToObject<bool>();
+            if (targetType == typeof(Vector2) && token is JArray arr2 && arr2.Count == 2)
+                return new Vector2(arr2[0].ToObject<float>(), arr2[1].ToObject<float>());
+            if (targetType == typeof(Vector3) && token is JArray arr3 && arr3.Count == 3)
+                return new Vector3(arr3[0].ToObject<float>(), arr3[1].ToObject<float>(), arr3[2].ToObject<float>());
+
+            // 尝试直接转换
+            return token.ToObject(targetType);
+        }
+
+        /// <summary>
+        /// 检查Response对象是否表示成功
+        /// </summary>
+        private bool IsSuccessResponse(object response, out object data, out string message)
+        {
+            data = null;
+            message = null;
+
+            var resultType = response.GetType();
+            var successProperty = resultType.GetProperty("success");
+            var dataProperty = resultType.GetProperty("data");
+            var messageProperty = resultType.GetProperty("message");
+            var errorProperty = resultType.GetProperty("error");
+
+            bool isSuccess = successProperty != null && (bool)successProperty.GetValue(response);
+            data = dataProperty?.GetValue(response);
+            message = isSuccess ?
+                messageProperty?.GetValue(response)?.ToString() :
+                (errorProperty?.GetValue(response)?.ToString() ?? messageProperty?.GetValue(response)?.ToString());
+
+            return isSuccess;
+        }
+
+        /// <summary>
+        /// 创建批量操作响应
+        /// </summary>
+        private object CreateBatchOperationResponse(string operation, int successCount, int totalCount,
+            List<Dictionary<string, object>> results, List<string> errors)
+        {
+            string message;
+            if (successCount == totalCount)
+            {
+                message = $"Successfully completed {operation} on {successCount} RectTransform(s).";
+            }
+            else if (successCount > 0)
+            {
+                message = $"Completed {operation} on {successCount} of {totalCount} RectTransform(s). {errors.Count} failed.";
+            }
+            else
+            {
+                message = $"Failed to complete {operation} on any of the {totalCount} RectTransform(s).";
+            }
+
+            var responseData = new Dictionary<string, object>
+            {
+                { "operation", operation },
+                { "success_count", successCount },
+                { "total_count", totalCount },
+                { "success_rate", (double)successCount / totalCount },
+                { "affected_objects", results }
+            };
+
+            if (errors.Count > 0)
+            {
+                responseData["errors"] = errors;
+            }
+
+            if (successCount > 0)
+            {
+                return Response.Success(message, responseData);
+            }
+            else
+            {
+                return Response.Error(message, responseData);
+            }
+        }
+
+        /// <summary>
+        /// 获取RectTransform的数据表示
+        /// </summary>
+        private Dictionary<string, object> GetRectTransformData(RectTransform rectTransform)
+        {
+            if (rectTransform == null) return null;
+
+            var data = new Dictionary<string, object>
+            {
+                { "name", rectTransform.name },
+                { "instanceID", rectTransform.GetInstanceID() },
+                { "anchoredPosition", new { x = rectTransform.anchoredPosition.x, y = rectTransform.anchoredPosition.y } },
+                { "sizeDelta", new { x = rectTransform.sizeDelta.x, y = rectTransform.sizeDelta.y } },
+                { "anchorMin", new { x = rectTransform.anchorMin.x, y = rectTransform.anchorMin.y } },
+                { "anchorMax", new { x = rectTransform.anchorMax.x, y = rectTransform.anchorMax.y } },
+                { "pivot", new { x = rectTransform.pivot.x, y = rectTransform.pivot.y } },
+                { "offsetMin", new { x = rectTransform.offsetMin.x, y = rectTransform.offsetMin.y } },
+                { "offsetMax", new { x = rectTransform.offsetMax.x, y = rectTransform.offsetMax.y } },
+                { "localPosition", new { x = rectTransform.localPosition.x, y = rectTransform.localPosition.y, z = rectTransform.localPosition.z } },
+                { "localRotation", new { x = rectTransform.localRotation.x, y = rectTransform.localRotation.y, z = rectTransform.localRotation.z, w = rectTransform.localRotation.w } },
+                { "localScale", new { x = rectTransform.localScale.x, y = rectTransform.localScale.y, z = rectTransform.localScale.z } },
+                { "rect", new { x = rectTransform.rect.x, y = rectTransform.rect.y, width = rectTransform.rect.width, height = rectTransform.rect.height } }
+            };
+
+            return data;
+        }
+
+        #endregion
+    }
+}

@@ -15,14 +15,7 @@ namespace UnityMcp.Tools
         /// </summary>
         /// <param name="args">参数对象</param>
         /// <returns>执行结果</returns>
-        object ExecuteMethod(StateTreeContext args);
-
-        /// <summary>
-        /// 执行工具方法（异步版本）
-        /// </summary>
-        /// <param name="args">参数对象</param>
-        /// <returns>执行结果</returns>
-        Task<object> ExecuteMethodAsync(StateTreeContext args);
+        void ExecuteMethod(StateTreeContext args);
 
         /// <summary>
         /// 预览方法

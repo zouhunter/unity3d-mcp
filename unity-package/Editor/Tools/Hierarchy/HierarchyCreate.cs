@@ -40,7 +40,6 @@ namespace UnityMcp.Tools
                 new MethodKey("menu_path", "菜单路径", true),
                 new MethodKey("save_as_prefab", "是否保存为预制体", true),
                 new MethodKey("set_active", "设置激活状态", true),
-                new MethodKey("components", "要添加的组件列表", true)
             };
         }
 
@@ -66,17 +65,18 @@ namespace UnityMcp.Tools
                 .Build();
         }
 
-
-
         /// <summary>
-        /// 处理从菜单创建GameObject的操作
+        /// 异步下载 
         /// </summary>
-        private object HandleCreateFromMenu(JObject args)
+        /// <param name="ctx"></param>
+        /// <returns></returns>
+        private IEnumerator HandleCreateFromMenuAsync(StateTreeContext ctx)
         {
-            string menuPath = args["menu_path"]?.ToString();
+            string menuPath = ctx["menu_path"]?.ToString();
             if (string.IsNullOrEmpty(menuPath))
             {
-                return Response.Error("'menu_path' parameter is required for menu creation.");
+                yield return Response.Error("'menu_path' parameter is required for menu creation.");
+                yield break;
             }
 
             LogInfo($"[HierarchyCreate] Creating GameObject from menu: '{menuPath}'");
@@ -93,13 +93,11 @@ namespace UnityMcp.Tools
             if (menuResultStr.Contains("Failed") || menuResultStr.Contains("Error"))
             {
                 LogInfo($"[HierarchyCreate] Menu execution failed: {menuResultStr}");
-                return menuResult;
+                yield return menuResult;
+                yield break;
             }
 
             LogInfo($"[HierarchyCreate] Menu executed successfully: {menuResultStr}");
-
-            // 等待Unity完成内部操作 - 使用EditorApplication.delayCall替代异步等待
-            //Thread.Sleep(50); // 给Unity时间完成菜单操作
 
             // 多次尝试检测新创建的对象，因为菜单创建可能需要时间
             GameObject newObject = null;
@@ -121,7 +119,8 @@ namespace UnityMcp.Tools
                 retryCount++;
                 if (retryCount < maxRetries)
                 {
-                    //Thread.Sleep(10); // 短暂等待后重试
+                    // 优化携程调用：每次重试之间yield return null，等待一帧
+                    yield return null;
                 }
             }
 
@@ -129,22 +128,32 @@ namespace UnityMcp.Tools
             if (newObject != null &&
                 (previousSelection == null || newObject.GetInstanceID() != previousSelectionID))
             {
-                // 再次等待，确保对象完全初始化
-                //Thread.Sleep(25);
+                // 再次等待一帧，确保对象完全初始化
+                yield return null;
 
                 LogInfo($"[HierarchyCreate] Finalizing newly created object: '{newObject.name}' (ID: {newObject.GetInstanceID()})");
 
                 // 应用其他设置（名称、位置等）
-                var finalizeResult = FinalizeGameObjectCreation(args, newObject, false);
+                var finalizeResult = FinalizeGameObjectCreation(ctx.Args, newObject, false);
                 LogInfo($"[HierarchyCreate] Finalization result: {finalizeResult}");
-                return finalizeResult;
+                yield return finalizeResult;
+                yield break;
             }
             else
             {
                 // 如果没有找到新对象，但菜单执行成功
                 LogInfo($"[HierarchyCreate] Menu executed but no new object was detected after {maxRetries} retries. Previous: {previousSelection?.name}, Current: {newObject?.name}");
-                return Response.Success($"Menu item '{menuPath}' executed successfully, but no new GameObject was detected.");
+                yield return Response.Success($"Menu item '{menuPath}' executed successfully, but no new GameObject was detected.");
+                yield break;
             }
+        }
+
+        /// <summary>
+        /// 处理从菜单创建GameObject的操作
+        /// </summary>
+        private object HandleCreateFromMenu(StateTreeContext ctx)
+        {
+            return ctx.StartAsync(HandleCreateFromMenuAsync(ctx));
         }
 
         /// <summary>

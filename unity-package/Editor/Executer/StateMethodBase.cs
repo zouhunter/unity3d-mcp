@@ -73,38 +73,26 @@ namespace UnityMcp.Tools
         /// 执行工具方法，实现 IToolMethod 接口（同步版本）。
         /// 通过状态树路由到对应的处理方法。
         /// </summary>
-        /// <param name="args">方法调用的参数对象</param>
+        /// <param name="ctx">方法调用的参数对象</param>
         /// <returns>执行结果，若状态树执行失败则返回错误响应</returns>
-        public virtual object ExecuteMethod(StateTreeContext args)
+        public virtual void ExecuteMethod(StateTreeContext ctx)
         {
             // 确保状态树已初始化
             _stateTree = _stateTree ?? CreateStateTree();
-            var result = _stateTree.Run(args);
+            var result = _stateTree.Run(ctx);
             // 如果结果为空且有错误信息，返回错误响应
             if (result == null && !string.IsNullOrEmpty(_stateTree.ErrorMessage))
             {
-                return Response.Error(_stateTree.ErrorMessage);
+                ctx.Complete(Response.Error(_stateTree.ErrorMessage));
             }
-            return result;
-        }
-
-        /// <summary>
-        /// 执行工具方法，实现 IToolMethod 接口（异步版本）。
-        /// 通过主线程执行器确保状态树在Unity主线程上执行。
-        /// </summary>
-        /// <param name="args">方法调用的参数对象</param>
-        /// <returns>执行结果，若状态树执行失败则返回错误响应</returns>
-        public virtual async Task<object> ExecuteMethodAsync(StateTreeContext args)
-        {
-            try
+            else if (result != null && result != ctx)
             {
-                // 使用MainThreadExecutor确保在主线程执行
-                return await MainThreadExecutor.ExecuteAsync(() => ExecuteMethod(args));
+                ctx.Complete(result);
             }
-            catch (Exception e)
+            else
             {
-                LogException(new Exception($"[StateMethodBase] Failed to execute method on main thread:", e));
-                return Response.Error($"Error executing method on main thread: {e.Message}");
+                //异步执行
+                LogInfo("[StateMethodBase] Async executing!");
             }
         }
 

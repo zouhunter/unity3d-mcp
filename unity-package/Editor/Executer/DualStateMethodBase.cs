@@ -168,17 +168,68 @@ namespace UnityMcp.Tools
         /// </summary>
         /// <param name="args">方法调用的参数对象</param>
         /// <returns>执行结果，若任一阶段失败则返回错误响应</returns>
-        public virtual async Task<object> ExecuteMethodAsync(StateTreeContext args)
+        public virtual void ExecuteMethodAsync(StateTreeContext args)
         {
             try
             {
-                // 使用MainThreadExecutor确保在主线程执行
-                return await MainThreadExecutor.ExecuteAsync(() => ExecuteMethod(args));
+                // 确保状态树已初始化
+                _targetTree = _targetTree ?? CreateTargetTree();
+                _actionTree = _actionTree ?? CreateActionTree();
+
+                // 第一阶段：使用目标定位树找到目标
+                LogInfo("[DualStateMethodBase] Phase 1: Target Location (Async)");
+                var targetResult = _targetTree.Run(args);
+
+                // 检查目标定位阶段的错误
+                if (targetResult == null && !string.IsNullOrEmpty(_targetTree.ErrorMessage))
+                {
+                    LogError($"[DualStateMethodBase] Target location failed: {_targetTree.ErrorMessage}");
+                    args.Complete(Response.Error($"Target location failed: {_targetTree.ErrorMessage}"));
+                    return;
+                }
+
+                // 处理目标定位结果
+                var processedTarget = ProcessTargetResult(targetResult, args);
+                if (processedTarget == null)
+                {
+                    LogError("[DualStateMethodBase] Target processing failed or returned null");
+                    args.Complete(Response.Error("Target could not be located or processed"));
+                    return;
+                }
+
+                LogInfo($"[DualStateMethodBase] Target located successfully: {processedTarget?.GetType()?.Name ?? "Unknown"}");
+
+                // 第二阶段：创建执行上下文并执行操作
+                LogInfo("[DualStateMethodBase] Phase 2: Action Execution (Async)");
+                args.SetObjectReference("_resolved_targets", processedTarget);
+
+                var actionResult = _actionTree.Run(args);
+
+                // 检查执行操作阶段的错误
+                if (actionResult == null && !string.IsNullOrEmpty(_actionTree.ErrorMessage))
+                {
+                    LogError($"[DualStateMethodBase] Action execution failed: {_actionTree.ErrorMessage}");
+                    args.Complete(Response.Error($"Action execution failed: {_actionTree.ErrorMessage}"));
+                    return;
+                }
+
+                LogInfo("[DualStateMethodBase] Action executed successfully (Async)");
+                
+                // 完成异步执行
+                if (actionResult != null && actionResult != args)
+                {
+                    args.Complete(actionResult);
+                }
+                else
+                {
+                    // 异步执行完成
+                    LogInfo("[DualStateMethodBase] Async execution completed!");
+                }
             }
             catch (Exception e)
             {
-                LogException(new Exception($"[DualStateMethodBase] Failed to execute method on main thread:", e));
-                return Response.Error($"Error executing method on main thread: {e.Message}");
+                LogException(new Exception("[DualStateMethodBase] Unexpected error during async dual-tree execution:", e));
+                args.Complete(Response.Error($"Unexpected error during async execution: {e.Message}"));
             }
         }
 

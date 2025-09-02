@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System;
 using Newtonsoft.Json.Linq;
+using System.Collections;
+using System.Threading.Tasks;
 
 namespace UnityMcp.Tools
 {
@@ -20,6 +22,8 @@ namespace UnityMcp.Tools
         public Dictionary<string, object> ObjectReferences { get; }
 
         public Action<object> CompleteAction { get; private set; }
+
+        public object Result { get; private set; }
         /// <summary>
         /// 构造函数，基于现有JObject创建上下文
         /// </summary>
@@ -44,7 +48,11 @@ namespace UnityMcp.Tools
         /// <param name="result"></param>
         public void Complete(object result)
         {
-            CompleteAction?.Invoke(result);
+            if (Result == null)
+            {
+                Result = result;
+                CompleteAction?.Invoke(Result);
+            }
         }
         /// <summary>
         /// 获取JSON字段值
@@ -324,6 +332,25 @@ namespace UnityMcp.Tools
             {
                 return false;
             }
+        }
+
+        /// <summary>
+        /// 启动异步协程
+        /// </summary>
+        /// <param name="coroutine">协程</param>
+        /// <returns>当前上下文实例</returns>
+        public StateTreeContext StartAsync(IEnumerator coroutine)
+        {
+            if (coroutine == null)
+                return this;
+
+            // 使用MainThreadExecutor来启动协程
+            CoroutineRunner.StartCoroutine(coroutine, (result) =>
+            {
+                // 调用完成回调
+                CompleteAction?.Invoke(result);
+            });
+            return this;
         }
     }
 }

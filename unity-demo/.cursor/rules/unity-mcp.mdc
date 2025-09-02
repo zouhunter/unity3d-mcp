@@ -7,7 +7,7 @@ alwaysApply: true
 
 本文档将工具按两类划分：
 - Tools: `function_call`, `functions_call`（调用/批量调用 Methods）。
-- Methods: `hierarchy_create`, `hierarchy_link`, `hierarchy_search`, `edit_asset`, `edit_component`, `manage_editor`, `edit_gameobject`, `ui_layout`, `edit_prefab`, `request_http`, `edit_scene`, `edit_script`, `edit_scriptableobject`, `edit_shader`, `edit_texture`, `edit_material`, `edit_mesh`, `console_read`（均作为 `func` 传给 Tools）。
+- Methods: `hierarchy_create`, `hierarchy_link`, `hierarchy_search`, `edit_asset`, `edit_component`, `manage_editor`, `edit_gameobject`, `ugui_layout`, `edit_prefab`, `request_http`, `edit_scene`, `edit_script`, `edit_scriptableobject`, `edit_shader`, `edit_texture`, `edit_material`, `edit_mesh`, `console_read`（均作为 `func` 传给 Tools）。
 
 除 `function_call` 与 `functions_call` 外，其余均为 Methods 名称，不直接调用；请通过 Tools 调用，并把方法参数放入 `args`（字典类型）。
 
@@ -24,7 +24,7 @@ alwaysApply: true
   - `edit_component`
   - `manage_editor`
   - `edit_gameobject`
-  - `ui_layout`
+  - `ugui_layout`
   - `edit_prefab`
   - `request_http`
   - `edit_scene`
@@ -203,7 +203,6 @@ function_call(
   args={"from": "primitive", "primitive_type": "Cylinder", "name": "Pillar", "parent": "Environment", "position": [10, 0, 10], "scale": [2, 5, 2]}
 )
 ```
-
 ---
 
 ### hierarchy_link - 层级预制体链接工具
@@ -780,7 +779,7 @@ function_call(
 
 ---
 
-### ui_layout - UGUI布局管理工具
+### ugui_layout - UGUI布局管理工具
 **功能**: 使用双状态树架构处理RectTransform修改操作，专门用于UGUI的布局调整，支持目标定位和多种UI布局操作。
 
 主要参数（放入 `args`）
@@ -841,7 +840,7 @@ function_call(
 示例：修改UI元素的基本布局属性（默认操作）
 ```python
 function_call(
-  func="ui_layout",
+  func="ugui_layout",
   args={"target": "Button", "width": 200, "height": 50, "anchored_position": [0, 0]}
 )
 ```
@@ -849,7 +848,7 @@ function_call(
 示例：设置锚点预设
 ```python
 function_call(
-  func="ui_layout",
+  func="ugui_layout",
   args={"target": "Panel", "action": "set_anchors", "anchor_preset": "stretch_all"}
 )
 ```
@@ -857,7 +856,7 @@ function_call(
 示例：设置边距
 ```python
 function_call(
-  func="ui_layout",
+  func="ugui_layout",
   args={"target": "Content", "action": "set_position", "left": 10, "right": 10, "top": 10, "bottom": 10}
 )
 ```
@@ -865,7 +864,7 @@ function_call(
 示例：批量设置多个UI元素的尺寸
 ```python
 function_call(
-  func="ui_layout",
+  func="ugui_layout",
   args={"target": "Button", "select_many": true, "action": "set_size", "width": 150, "height": 40}
 )
 ```
@@ -873,7 +872,7 @@ function_call(
 示例：设置精确的锚点和偏移
 ```python
 function_call(
-  func="ui_layout",
+  func="ugui_layout",
   args={
     "target": "InfoPanel", 
     "anchor_min": [0, 0], 
@@ -887,7 +886,7 @@ function_call(
 示例：获取RectTransform属性
 ```python
 function_call(
-  func="ui_layout",
+  func="ugui_layout",
   args={"target": "ScrollView", "action": "get_property", "property_name": "anchoredPosition"}
 )
 ```

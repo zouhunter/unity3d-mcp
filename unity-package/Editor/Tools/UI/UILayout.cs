@@ -15,8 +15,8 @@ namespace UnityMcp.Tools
     /// Second tree: RectTransform property modification operations
     /// 对应方法名: edit_recttransform
     /// </summary>
-    [ToolName("ui_layout")]
-    public class UILayout : DualStateMethodBase
+    [ToolName("ugui_layout")]
+    public class UGUILayout : DualStateMethodBase
     {
         /// <summary>
         /// 创建当前方法支持的参数键列表

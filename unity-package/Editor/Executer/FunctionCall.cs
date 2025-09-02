@@ -29,7 +29,7 @@ namespace UnityMcp.Tools
         /// <summary>
         /// Main handler for function calls (同步版本).
         /// </summary>
-        public override object HandleCommand(JObject cmd)
+        public override void HandleCommand(JObject cmd,Action<JObject> callback)
         {
             try
             {
@@ -38,48 +38,27 @@ namespace UnityMcp.Tools
 
                 if (string.IsNullOrWhiteSpace(functionName))
                 {
-                    return Response.Error("Required parameter 'func' is missing or empty.");
+                    callback(Response.Error("Required parameter 'func' is missing or empty."));
+                    return;
                 }
 
-                return ExecuteFunction(functionName, argsJson);
+                ExecuteFunction(functionName, argsJson,callback);
             }
             catch (Exception e)
             {
                 if (McpConnect.EnableLog) Debug.LogError($"[FunctionCall] Command execution failed: {e}");
-                return Response.Error($"Internal error processing function call: {e.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Main handler for function calls (异步版本).
-        /// </summary>
-        public override async Task<object> HandleCommandAsync(JObject cmd)
-        {
-            try
-            {
-                string functionName = cmd["func"]?.ToString();
-                string argsJson = cmd["args"]?.ToString() ?? "{}";
-
-                if (string.IsNullOrWhiteSpace(functionName))
-                {
-                    return Response.Error("Required parameter 'func' is missing or empty.");
-                }
-
-                return await ExecuteFunctionAsync(functionName, argsJson);
-            }
-            catch (Exception e)
-            {
-                if (McpConnect.EnableLog) Debug.LogError($"[FunctionCall] Async command execution failed: {e}");
-                return Response.Error($"Internal error processing async function call: {e.Message}");
+                callback(Response.Error($"Internal error processing function call: {e.Message}"));
+                return;
             }
         }
 
         /// <summary>
         /// Executes a specific function by routing to the appropriate method (同步版本).
         /// </summary>
-        private object ExecuteFunction(string functionName, string argsJson)
+        private void ExecuteFunction(string functionName, string argsJson,Action<JObject> callback)
         {
-            if (McpConnect.EnableLog) Debug.Log($"[FunctionCall] Executing function: {functionName}->{argsJson}");
+            if (McpConnect.EnableLog)
+                Debug.Log($"[FunctionCall] Executing function: {functionName}->{argsJson}");
             try
             {
                 // 确保方法已注册
@@ -95,45 +74,14 @@ namespace UnityMcp.Tools
                 }
 
                 // 调用工具的ExecuteMethod方法
-                return method.ExecuteMethod(new StateTreeContext(args, new System.Collections.Generic.Dictionary<string, object>()));
+                var state = new StateTreeContext(args, new System.Collections.Generic.Dictionary<string, object>())
+                method.ExecuteMethod(state);
+                state.RegistComplete(callback);
             }
             catch (Exception e)
             {
                 if (McpConnect.EnableLog) Debug.LogError($"[FunctionCall] Failed to execute function '{functionName}': {e}");
-                return Response.Error($"Error executing function '{functionName}->{argsJson}': {e.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Executes a specific function by routing to the appropriate method (异步版本).
-        /// </summary>
-        private async Task<object> ExecuteFunctionAsync(string functionName, string argsJson)
-        {
-            if (McpConnect.EnableLog)
-            {
-                Debug.Log($"[FunctionCall] Executing async function: {functionName}->{argsJson}");
-            }
-            try
-            {
-                // 确保方法已注册
-                EnsureMethodsRegistered();
-
-                // 解析参数
-                JObject args = JObject.Parse(argsJson);
-
-                // 查找对应的工具方法
-                if (!_registeredMethods.TryGetValue(functionName, out IToolMethod method))
-                {
-                    return Response.Error($"Unknown method: '{functionName}'. Available methods: {string.Join(", ", _registeredMethods.Keys)}");
-                }
-
-                // 调用工具的ExecuteMethodAsync方法（主线程转移在StateMethodBase中处理）
-                return await method.ExecuteMethodAsync(new StateTreeContext(args, new System.Collections.Generic.Dictionary<string, object>()));
-            }
-            catch (Exception e)
-            {
-                if (McpConnect.EnableLog) Debug.LogError($"[FunctionCall] Failed to execute async function '{functionName}': {e}");
-                return Response.Error($"Error executing async function '{functionName}->{argsJson}': {e.Message}");
+                callback(Response.Error($"Error executing function '{functionName}->{argsJson}': {e.Message}"));
             }
         }
 

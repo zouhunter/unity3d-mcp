@@ -73,73 +73,73 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 处理GET请求
         /// </summary>
-        private object HandleGetRequest(JObject args)
+        private object HandleGetRequest(StateTreeContext ctx)
         {
             LogInfo("[RequestHttp] Executing GET request");
-            return ExecuteHttpRequest(args, "GET");
+            return ExecuteHttpRequest(ctx, "GET");
         }
 
         /// <summary>
         /// 处理POST请求
         /// </summary>
-        private object HandlePostRequest(JObject args)
+        private object HandlePostRequest(StateTreeContext ctx)
         {
             LogInfo("[RequestHttp] Executing POST request");
-            return ExecuteHttpRequest(args, "POST");
+            return ExecuteHttpRequest(ctx, "POST");
         }
 
         /// <summary>
         /// 处理PUT请求
         /// </summary>
-        private object HandlePutRequest(JObject args)
+        private object HandlePutRequest(StateTreeContext ctx)
         {
             LogInfo("[RequestHttp] Executing PUT request");
-            return ExecuteHttpRequest(args, "PUT");
+            return ExecuteHttpRequest(ctx, "PUT");
         }
 
         /// <summary>
         /// 处理DELETE请求
         /// </summary>
-        private object HandleDeleteRequest(JObject args)
+        private object HandleDeleteRequest(StateTreeContext ctx)
         {
             LogInfo("[RequestHttp] Executing DELETE request");
-            return ExecuteHttpRequest(args, "DELETE");
+            return ExecuteHttpRequest(ctx, "DELETE");
         }
 
         /// <summary>
         /// 处理文件下载
         /// </summary>
-        private object HandleDownloadFile(JObject args)
+        private object HandleDownloadFile(StateTreeContext ctx)
         {
             LogInfo("[RequestHttp] Starting file download");
-            return DownloadFile(args);
+            return DownloadFile(ctx);
         }
 
         /// <summary>
         /// 处理文件上传
         /// </summary>
-        private object HandleUploadFile(JObject args)
+        private object HandleUploadFile(StateTreeContext ctx)
         {
             LogInfo("[RequestHttp] Starting file upload");
-            return UploadFile(args);
+            return UploadFile(ctx);
         }
 
         /// <summary>
         /// 处理PING请求
         /// </summary>
-        private object HandlePingRequest(JObject args)
+        private object HandlePingRequest(StateTreeContext ctx)
         {
             LogInfo("[RequestHttp] Executing PING request");
-            return PingHost(args);
+            return PingHost(ctx);
         }
 
         /// <summary>
         /// 处理批量下载
         /// </summary>
-        private object HandleBatchDownload(JObject args)
+        private object HandleBatchDownload(StateTreeContext ctx)
         {
             LogInfo("[RequestHttp] Starting batch download");
-            return BatchDownload(args);
+            return BatchDownload(ctx);
         }
 
         // --- 核心实现方法 ---
@@ -147,31 +147,31 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 执行HTTP请求的通用方法
         /// </summary>
-        private object ExecuteHttpRequest(JObject args, string defaultMethod)
+        private object ExecuteHttpRequest(StateTreeContext ctx, string defaultMethod)
         {
             try
             {
-                string url = args["url"]?.ToString();
+                string url = ctx["url"]?.ToString();
                 if (string.IsNullOrEmpty(url))
                 {
                     return Response.Error("URL参数是必需的");
                 }
 
                 // 解析参数
-                string method = args["method"]?.ToString() ?? defaultMethod;
-                int timeout = args["timeout"]?.ToObject<int>() ?? 30;
-                string contentType = args["content_type"]?.ToString() ?? "application/json";
-                string userAgent = args["user_agent"]?.ToString() ?? "Unity-MCP-Network-Manager/1.0";
-                bool acceptCertificates = args["accept_certificates"]?.ToObject<bool>() ?? true;
-                bool followRedirects = args["follow_redirects"]?.ToObject<bool>() ?? true;
-                int retryCount = args["retry_count"]?.ToObject<int>() ?? 0;
-                float retryDelay = args["retry_delay"]?.ToObject<float>() ?? 1f;
+                string method = ctx["method"]?.ToString() ?? defaultMethod;
+                int timeout = ctx.TryGetValue<int>("timeout", out var timeoutValue) ? timeoutValue : 30;
+                string contentType = ctx["content_type"]?.ToString() ?? "application/json";
+                string userAgent = ctx["user_agent"]?.ToString() ?? "Unity-MCP-Network-Manager/1.0";
+                bool acceptCertificates = ctx.TryGetValue<bool>("accept_certificates", out var acceptCerts) ? acceptCerts : true;
+                bool followRedirects = ctx.TryGetValue<bool>("follow_redirects", out var followRedirects) ? followRedirects : true;
+                int retryCount = ctx.TryGetValue<int>("retry_count", out var retryCountValue) ? retryCountValue : 0;
+                float retryDelay = ctx.TryGetValue<float>("retry_delay", out var retryDelayValue) ? retryDelayValue : 1f;
 
                 // 构建完整URL（包含查询参数）
-                string fullUrl = BuildUrlWithQueryParams(url, args["query_params"] as JObject);
+                string fullUrl = BuildUrlWithQueryParams(url, ctx["query_params"] as JObject);
 
                 // 执行请求（带重试机制）
-                return ExecuteWithRetry(() => PerformHttpRequest(fullUrl, method, args, timeout, contentType, userAgent, acceptCertificates, followRedirects), retryCount, retryDelay);
+                return ExecuteWithRetry(() => PerformHttpRequest(fullUrl, method, ctx, timeout, contentType, userAgent, acceptCertificates, followRedirects), retryCount, retryDelay);
             }
             catch (Exception e)
             {
@@ -183,7 +183,7 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 执行具体的HTTP请求
         /// </summary>
-        private object PerformHttpRequest(string url, string method, JObject args, int timeout, string contentType, string userAgent, bool acceptCertificates, bool followRedirects)
+        private object PerformHttpRequest(string url, string method, StateTreeContext ctx, int timeout, string contentType, string userAgent, bool acceptCertificates, bool followRedirects)
         {
             UnityWebRequest request = null;
 
@@ -196,10 +196,10 @@ namespace UnityMcp.Tools
                         request = UnityWebRequest.Get(url);
                         break;
                     case "POST":
-                        request = CreatePostRequest(url, args, contentType);
+                        request = CreatePostRequest(url, ctx, contentType);
                         break;
                     case "PUT":
-                        request = CreatePutRequest(url, args, contentType);
+                        request = CreatePutRequest(url, ctx, contentType);
                         break;
                     case "DELETE":
                         request = UnityWebRequest.Delete(url);
@@ -211,7 +211,7 @@ namespace UnityMcp.Tools
                 }
 
                 // 配置请求
-                ConfigureRequest(request, args, timeout, userAgent, acceptCertificates, followRedirects);
+                ConfigureRequest(request, ctx, timeout, userAgent, acceptCertificates, followRedirects);
 
                 // 同步执行请求
                 var asyncOp = request.SendWebRequest();
@@ -248,12 +248,13 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 创建POST请求
         /// </summary>
-        private UnityWebRequest CreatePostRequest(string url, JObject args, string contentType)
+        private UnityWebRequest CreatePostRequest(string url, StateTreeContext ctx, string contentType)
         {
             UnityWebRequest request;
 
             // 检查是否使用表单数据
-            if (args["form_data"] is JObject formData)
+            var formData = ctx["form_data"] as JObject;
+            if (formData != null)
             {
                 var form = new WWWForm();
                 foreach (var pair in formData.Properties())
@@ -265,7 +266,7 @@ namespace UnityMcp.Tools
             else
             {
                 // 使用JSON数据
-                string jsonData = GetRequestBodyData(args);
+                string jsonData = GetRequestBodyData(ctx);
                 byte[] bodyRaw = string.IsNullOrEmpty(jsonData) ? null : Encoding.UTF8.GetBytes(jsonData);
                 request = new UnityWebRequest(url, "POST");
                 request.uploadHandler = new UploadHandlerRaw(bodyRaw);
@@ -279,9 +280,9 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 创建PUT请求
         /// </summary>
-        private UnityWebRequest CreatePutRequest(string url, JObject args, string contentType)
+        private UnityWebRequest CreatePutRequest(string url, StateTreeContext ctx, string contentType)
         {
-            string jsonData = GetRequestBodyData(args);
+            string jsonData = GetRequestBodyData(ctx);
             byte[] bodyRaw = string.IsNullOrEmpty(jsonData) ? null : Encoding.UTF8.GetBytes(jsonData);
             var request = UnityWebRequest.Put(url, bodyRaw);
             request.SetRequestHeader("Content-Type", contentType);
@@ -291,7 +292,7 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 配置请求参数
         /// </summary>
-        private void ConfigureRequest(UnityWebRequest request, JObject args, int timeout, string userAgent, bool acceptCertificates, bool followRedirects)
+        private void ConfigureRequest(UnityWebRequest request, StateTreeContext ctx, int timeout, string userAgent, bool acceptCertificates, bool followRedirects)
         {
             // 基本配置
             request.timeout = timeout;
@@ -307,7 +308,8 @@ namespace UnityMcp.Tools
             request.redirectLimit = followRedirects ? 10 : 0;
 
             // 添加自定义请求头
-            if (args["headers"] is JObject headers)
+            var headers = ctx["headers"] as JObject;
+            if (headers != null)
             {
                 foreach (var header in headers.Properties())
                 {
@@ -316,23 +318,23 @@ namespace UnityMcp.Tools
             }
 
             // 认证
-            SetAuthentication(request, args);
+            SetAuthentication(request, ctx);
         }
 
         /// <summary>
         /// 设置认证信息
         /// </summary>
-        private void SetAuthentication(UnityWebRequest request, JObject args)
+        private void SetAuthentication(UnityWebRequest request, StateTreeContext ctx)
         {
             // Bearer Token认证
-            string authToken = args["auth_token"]?.ToString();
+            string authToken = ctx["auth_token"]?.ToString();
             if (!string.IsNullOrEmpty(authToken))
             {
                 request.SetRequestHeader("Authorization", $"Bearer {authToken}");
             }
 
             // Basic认证
-            string basicAuth = args["basic_auth"]?.ToString();
+            string basicAuth = ctx["basic_auth"]?.ToString();
             if (!string.IsNullOrEmpty(basicAuth))
             {
                 string encodedAuth = Convert.ToBase64String(Encoding.UTF8.GetBytes(basicAuth));
@@ -343,9 +345,9 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 获取请求体数据
         /// </summary>
-        private string GetRequestBodyData(JObject args)
+        private string GetRequestBodyData(StateTreeContext ctx)
         {
-            var data = args["data"];
+            var data = ctx["data"];
             if (data == null) return null;
 
             if (data is JObject || data is JArray)
@@ -443,12 +445,12 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 下载文件
         /// </summary>
-        private object DownloadFile(JObject args)
+        private object DownloadFile(StateTreeContext ctx)
         {
             try
             {
-                string url = args["url"]?.ToString();
-                string savePath = args["save_path"]?.ToString();
+                string url = ctx["url"]?.ToString();
+                string savePath = ctx["save_path"]?.ToString();
 
                 if (string.IsNullOrEmpty(url))
                 {
@@ -470,12 +472,12 @@ namespace UnityMcp.Tools
                     Directory.CreateDirectory(directory);
                 }
 
-                int timeout = args["timeout"]?.ToObject<int>() ?? 60;
+                int timeout = ctx.TryGetValue<int>("timeout", out var timeoutValue) ? timeoutValue : 60;
 
                 using (var request = UnityWebRequest.Get(url))
                 {
                     request.timeout = timeout;
-                    ConfigureRequest(request, args, timeout, "Unity-MCP-Downloader/1.0", true, true);
+                    ConfigureRequest(request, ctx, timeout, "Unity-MCP-Downloader/1.0", true, true);
 
                     var asyncOp = request.SendWebRequest();
 
@@ -531,12 +533,12 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 上传文件
         /// </summary>
-        private object UploadFile(JObject args)
+        private object UploadFile(StateTreeContext ctx)
         {
             try
             {
-                string url = args["url"]?.ToString();
-                string filePath = args["file_path"]?.ToString();
+                string url = ctx["url"]?.ToString();
+                string filePath = ctx["file_path"]?.ToString();
 
                 if (string.IsNullOrEmpty(url))
                 {
@@ -561,20 +563,20 @@ namespace UnityMcp.Tools
                 form.AddBinaryData("file", fileData, fileName);
 
                 // 添加额外的表单字段
-                if (args["form_data"] is JObject formData)
+                if (ctx["form_data"] as JObject != null)
                 {
-                    foreach (var pair in formData.Properties())
+                    foreach (var pair in (ctx["form_data"] as JObject).Properties())
                     {
                         form.AddField(pair.Name, pair.Value.ToString());
                     }
                 }
 
-                int timeout = args["timeout"]?.ToObject<int>() ?? 60;
+                int timeout = ctx.TryGetValue<int>("timeout", out var timeoutValue) ? timeoutValue : 60;
 
                 using (var request = UnityWebRequest.Post(url, form))
                 {
                     request.timeout = timeout;
-                    ConfigureRequest(request, args, timeout, "Unity-MCP-Uploader/1.0", true, true);
+                    ConfigureRequest(request, ctx, timeout, "Unity-MCP-Uploader/1.0", true, true);
 
                     var asyncOp = request.SendWebRequest();
 
@@ -604,11 +606,11 @@ namespace UnityMcp.Tools
         /// <summary>
         /// PING主机
         /// </summary>
-        private object PingHost(JObject args)
+        private object PingHost(StateTreeContext ctx)
         {
             try
             {
-                string url = args["url"]?.ToString();
+                string url = ctx["url"]?.ToString();
                 if (string.IsNullOrEmpty(url))
                 {
                     return Response.Error("URL参数是必需的");
@@ -617,7 +619,7 @@ namespace UnityMcp.Tools
                 // 简单的连通性测试，使用HEAD请求
                 using (var request = UnityWebRequest.Head(url))
                 {
-                    request.timeout = args["timeout"]?.ToObject<int>() ?? 10;
+                    request.timeout = ctx.TryGetValue<int>("timeout", out var timeoutValue) ? timeoutValue : 10;
 
                     var startTime = EditorApplication.timeSinceStartup;
                     var asyncOp = request.SendWebRequest();
@@ -734,12 +736,12 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 批量下载文件（支持实时控制台刷新）
         /// </summary>
-        private object BatchDownload(JObject args)
+        private object BatchDownload(StateTreeContext ctx)
         {
             try
             {
-                var urlsToken = args["urls"];
-                string saveDirectory = args["save_directory"]?.ToString() ?? args["save_path"]?.ToString();
+                var urlsToken = ctx["urls"];
+                string saveDirectory = ctx["save_directory"]?.ToString() ?? ctx["save_path"]?.ToString();
 
                 if (urlsToken == null)
                 {
@@ -779,7 +781,7 @@ namespace UnityMcp.Tools
                     Directory.CreateDirectory(fullSaveDirectory);
                 }
 
-                int timeout = args["timeout"]?.ToObject<int>() ?? 60;
+                int timeout = ctx.TryGetValue<int>("timeout", out var timeoutValue) ? timeoutValue : 60;
                 var downloadResults = new List<object>();
                 var errors = new List<string>();
 
@@ -809,10 +811,10 @@ namespace UnityMcp.Tools
                         };
 
                         // 复制认证和请求头参数
-                        if (args["headers"] != null) downloadArgs["headers"] = args["headers"];
-                        if (args["auth_token"] != null) downloadArgs["auth_token"] = args["auth_token"];
-                        if (args["basic_auth"] != null) downloadArgs["basic_auth"] = args["basic_auth"];
-                        if (args["user_agent"] != null) downloadArgs["user_agent"] = args["user_agent"];
+                        if (ctx["headers"] as JObject != null) downloadArgs["headers"] = ctx["headers"];
+                        if (ctx["auth_token"]?.ToString() != null) downloadArgs["auth_token"] = ctx["auth_token"];
+                        if (ctx["basic_auth"]?.ToString() != null) downloadArgs["basic_auth"] = ctx["basic_auth"];
+                        if (ctx["user_agent"]?.ToString() != null) downloadArgs["user_agent"] = ctx["user_agent"];
 
                         LogInfo($"[RequestHttp] 下载文件 {i + 1}/{urls.Length}: {url}");
 

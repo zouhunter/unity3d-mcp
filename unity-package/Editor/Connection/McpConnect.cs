@@ -443,41 +443,23 @@ namespace UnityMcp
                         {
                             Log($"[UnityMcp] 执行命令 ID: {id}, Type: {command.type}");
                             // 异步执行命令，但不等待结果，让它在后台执行
-                            _ = Task.Run(async () =>
+                            try
                             {
-                                try
+                                ExecuteCommand(command,tcs);
+                            }
+                            catch (Exception asyncEx)
+                            {
+                                LogError($"[UnityMcp] 异步执行命令时发生错误 ID: {id}: {asyncEx.Message}\n{asyncEx.StackTrace}");
+                                var response = new
                                 {
-                                    object response = await ExecuteCommand(command);
-                                    if (response is StateTreeContext context)
-                                    {
-                                        context.RegistComplete((result) =>
-                                        {
-                                            response = new { status = "success", result };
-                                            tcs.SetResult(JsonConvert.SerializeObject(response));
-                                            Log($"[UnityMcp] 命令执行完成 ID: {id}, Type: {command.type}");
-                                        });
-                                    }
-                                    else
-                                    {
-                                        var responseJson = JsonConvert.SerializeObject(response);
-                                        tcs.SetResult(responseJson);
-                                        Log($"[UnityMcp] 命令执行完成 ID: {id}, Type: {command.type}");
-                                    }
-                                }
-                                catch (Exception asyncEx)
-                                {
-                                    LogError($"[UnityMcp] 异步执行命令时发生错误 ID: {id}: {asyncEx.Message}\n{asyncEx.StackTrace}");
-                                    var response = new
-                                    {
-                                        status = "error",
-                                        error = asyncEx.Message,
-                                        commandType = command?.type ?? "Unknown",
-                                        details = "Error occurred during async command execution"
-                                    };
-                                    string responseJson = JsonConvert.SerializeObject(response);
-                                    tcs.SetResult(responseJson);
-                                }
-                            });
+                                    status = "error",
+                                    error = asyncEx.Message,
+                                    commandType = command?.type ?? "Unknown",
+                                    details = "Error occurred during async command execution"
+                                };
+                                string responseJson = JsonConvert.SerializeObject(response);
+                                tcs.SetResult(responseJson);
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -542,7 +524,7 @@ namespace UnityMcp
             return false;
         }
 
-        private static async Task<object> ExecuteCommand(Command command)
+        private static void ExecuteCommand(Command command, TaskCompletionSource<string> tcs)
         {
             Log($"[UnityMcp] 开始执行命令: Type={command.type}");
 
@@ -557,7 +539,8 @@ namespace UnityMcp
                         error = "Command type cannot be empty",
                         details = "A valid command type is required for processing",
                     };
-                    return errorResponse;
+                    tcs.SetResult(JsonConvert.SerializeObject(errorResponse));
+                    return;
                 }
 
                 // Handle ping command for connection verification
@@ -570,7 +553,8 @@ namespace UnityMcp
                         result = new { message = "pong" },
                     };
                     Log($"[UnityMcp] ping命令执行成功");
-                    return pingResponse;
+                    tcs.SetResult(JsonConvert.SerializeObject(pingResponse));
+                    return;
                 }
 
                 // Use JObject for args as the new handlers likely expect this
@@ -586,19 +570,14 @@ namespace UnityMcp
                 }
 
                 Log($"[UnityMcp] 找到工具: {tool.GetType().Name}，开始异步处理命令");
-                object result = await tool.HandleCommandAsync(paramsObject);
-                if (result is StateTreeContext context)
+                tool.HandleCommand(paramsObject,(result)=>
                 {
-                    return context;
-                }
-                else
-                {
-                    Log($"[UnityMcp] 工具执行完成，结果类型: {result?.GetType().Name ?? "null"}");
-                    // Standard success response format
-                    var response = new { status = "success", result };
-                    Log($"[UnityMcp] 命令执行成功: Type={command.type}");
-                    return response;
-                }
+                   Log($"[UnityMcp] 工具执行完成，结果类型: {result?.GetType().Name ?? "null"}");
+                   // Standard success response format
+                   var response = new { status = "success", result };
+                   Log($"[UnityMcp] 命令执行成功: Type={command.type}");
+                   tcs.SetResult(JsonConvert.SerializeObject(response));
+                });
 
             }
             catch (Exception ex)
@@ -620,7 +599,8 @@ namespace UnityMcp
                         : "No args", // Summarize args for context
                 };
                 Log($"[UnityMcp] 错误响应已生成: Type={command?.type ?? "Unknown"}");
-                return response;
+                tcs.SetResult(JsonConvert.SerializeObject(response));
+                return;
             }
         }
         /// <summary>

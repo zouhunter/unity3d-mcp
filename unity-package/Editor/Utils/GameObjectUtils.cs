@@ -323,62 +323,92 @@ namespace UnityMcp.Tools
                 active_in_hierarchy = go.activeInHierarchy,
                 is_static = go.isStatic,
                 scene_path = go.scene.path,
+                path = GetHierarchyPath(go),
                 transform = new
                 {
-                    position = new
-                    {
-                        x = go.transform.position.x,
-                        y = go.transform.position.y,
-                        z = go.transform.position.z,
-                    },
-                    local_position = new
-                    {
-                        x = go.transform.localPosition.x,
-                        y = go.transform.localPosition.y,
-                        z = go.transform.localPosition.z,
-                    },
-                    rotation = new
-                    {
-                        x = go.transform.rotation.eulerAngles.x,
-                        y = go.transform.rotation.eulerAngles.y,
-                        z = go.transform.rotation.eulerAngles.z,
-                    },
-                    local_rotation = new
-                    {
-                        x = go.transform.localRotation.eulerAngles.x,
-                        y = go.transform.localRotation.eulerAngles.y,
-                        z = go.transform.localRotation.eulerAngles.z,
-                    },
-                    scale = new
-                    {
-                        x = go.transform.localScale.x,
-                        y = go.transform.localScale.y,
-                        z = go.transform.localScale.z,
-                    },
-                    forward = new
-                    {
-                        x = go.transform.forward.x,
-                        y = go.transform.forward.y,
-                        z = go.transform.forward.z,
-                    },
-                    up = new
-                    {
-                        x = go.transform.up.x,
-                        y = go.transform.up.y,
-                        z = go.transform.up.z,
-                    },
-                    right = new
-                    {
-                        x = go.transform.right.x,
-                        y = go.transform.right.y,
-                        z = go.transform.right.z,
-                    },
+                    position = $"({go.transform.position.x},{go.transform.position.y},{go.transform.position.z})",
+                    local_position = $"({go.transform.localPosition.x},{go.transform.localPosition.y},{go.transform.localPosition.z})",
+                    rotation = $"({go.transform.rotation.eulerAngles.x},{go.transform.rotation.eulerAngles.y},{go.transform.rotation.eulerAngles.z})",
+                    local_rotation = $"({go.transform.localRotation.eulerAngles.x},{go.transform.localRotation.eulerAngles.y},{go.transform.localRotation.eulerAngles.z})",
+                    scale = $"({go.transform.localScale.x},{go.transform.localScale.y},{go.transform.localScale.z})",
+                    forward = $"({go.transform.forward.x},{go.transform.forward.y},{go.transform.forward.z})",
+                    up = $"({go.transform.up.x},{go.transform.up.y},{go.transform.up.z})",
+                    right = $"({go.transform.right.x},{go.transform.right.y},{go.transform.right.z})",
                 },
                 parent_instance_id = go.transform.parent?.gameObject.GetInstanceID() ?? 0,
-                component_names = go.GetComponents<Component>()
+                component_names = JToken.FromObject(go.GetComponents<Component>()
                     .Select(c => c.GetType().FullName)
-                    .ToList(),
+                    .ToList()),
+                children = JToken.FromObject(CreateChildIdMap(go)),
             };
+        }
+
+        /// <summary>
+        /// 创建子对象列表，递归记录所有层级的子物体信息
+        /// </summary>
+        private static List<object> CreateChildIdMap(GameObject go)
+        {
+            var childList = new List<object>();
+
+            if (go == null || go.transform == null)
+                return childList;
+
+            // 递归遍历所有子对象
+            CollectChildrenRecursively(go.transform, childList);
+
+            return childList;
+        }
+
+        /// <summary>
+        /// 递归收集子对象信息
+        /// </summary>
+        private static void CollectChildrenRecursively(Transform parent, List<object> childList)
+        {
+            if (parent == null)
+                return;
+
+            // 遍历所有直接子对象
+            for (int i = 0; i < parent.childCount; i++)
+            {
+                Transform child = parent.GetChild(i);
+                if (child != null && child.gameObject != null)
+                {
+                    var childInfo = new
+                    {
+                        name = child.gameObject.name,
+                        instance_id = child.gameObject.GetInstanceID(),
+                        hierarchy_path = GetHierarchyPath(child.gameObject)
+                    };
+
+                    childList.Add(childInfo);
+
+                    // 递归处理子对象的子对象
+                    if (child.childCount > 0)
+                    {
+                        CollectChildrenRecursively(child, childList);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 获取GameObject的完整层级路径
+        /// </summary>
+        private static string GetHierarchyPath(GameObject go)
+        {
+            if (go == null)
+                return string.Empty;
+
+            string path = go.name;
+            Transform current = go.transform.parent;
+
+            while (current != null)
+            {
+                path = current.name + "/" + path;
+                current = current.parent;
+            }
+
+            return path;
         }
 
         // --- GameObject Configuration Methods ---

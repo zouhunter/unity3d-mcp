@@ -12,7 +12,17 @@ namespace UnityMcp.Tools
     /// <summary>
     /// Handles RectTransform modification operations using dual state tree architecture.
     /// First tree: Target location (using GameObjectSelector)
-    /// Second tree: RectTransform property modification operations
+    /// Second tree: Layout operations based on action type
+    /// 
+    /// 使用方式：
+    /// - do_layout: 执行布局修改 (可通过property_name+value设置特定属性，或直接传递各种属性参数)
+    /// - set_props: 设置RectTransform属性 (可通过property_name+value设置特定属性，或直接传递各种属性参数)
+    /// - get_layout: 获取RectTransform属性 (可指定property_name获取特定属性，否则获取所有属性)
+    /// 
+    /// 例如：
+    /// action="do_layout", anchor_preset="middle_center", width=100, height=50
+    /// action="get_layout", property_name="anchoredPosition"
+    /// 
     /// 对应方法名: edit_recttransform
     /// </summary>
     [ToolName("ugui_layout")]
@@ -25,12 +35,12 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                         // 目标查找参数
+                // 目标查找参数
                 new MethodKey("id", "对象的InstanceID", true),
                 new MethodKey("path", "对象的Hierachy路径", false),
                 
                 // 操作参数
-                new MethodKey("action", "操作类型：modify, get_property, set_property, set_anchors, set_size, set_position", false),
+                new MethodKey("action", "操作类型：do_layout(执行布局修改), set_props(设置属性), get_layout(获取属性)", true),
                 
                 // RectTransform基本属性
                 new MethodKey("anchored_position", "锚点位置 [x, y]", true),
@@ -79,20 +89,17 @@ namespace UnityMcp.Tools
             return StateTreeBuilder
                 .Create()
                 .Key("action")
-                    .Leaf("modify", (Func<StateTreeContext, object>)HandleModifyAction)
-                    .Leaf("set_property", (Func<StateTreeContext, object>)HandleSetPropertyAction)
-                    .Leaf("get_property", (Func<StateTreeContext, object>)HandleGetPropertyAction)
-                    .Leaf("set_anchors", (Func<StateTreeContext, object>)HandleSetAnchorsAction)
-                    .Leaf("set_size", (Func<StateTreeContext, object>)HandleSetSizeAction)
-                    .Leaf("set_position", (Func<StateTreeContext, object>)HandleSetPositionAction)
+                    .Leaf("do_layout", (Func<StateTreeContext, object>)HandleDoLayoutAction)
+                    .Leaf("set_props", (Func<StateTreeContext, object>)HandleSetPropsAction)
+                    .Leaf("get_layout", (Func<StateTreeContext, object>)HandleGetLayoutAction)
                     .DefaultLeaf((Func<StateTreeContext, object>)HandleDefaultAction)
                 .Build();
         }
 
         /// <summary>
-        /// 处理修改操作
+        /// 处理布局操作（执行RectTransform修改）
         /// </summary>
-        private object HandleModifyAction(StateTreeContext args)
+        private object HandleDoLayoutAction(StateTreeContext args)
         {
             GameObject[] targets = GetTargetsBasedOnSelectMany(args);
             if (targets.Length == 0)
@@ -100,6 +107,23 @@ namespace UnityMcp.Tools
                 return Response.Error("No target GameObjects found in execution context.");
             }
 
+            // 如果指定了 property_name 和 value，设置特定属性
+            if (args.TryGetValue("property_name", out object propertyNameObj) && propertyNameObj != null &&
+                args.TryGetValue("value", out object valueObj))
+            {
+                string propertyName = propertyNameObj.ToString();
+
+                if (targets.Length == 1)
+                {
+                    return SetPropertyOnSingleTarget(targets[0], propertyName, valueObj);
+                }
+                else
+                {
+                    return SetPropertyOnMultipleTargets(targets, propertyName, valueObj);
+                }
+            }
+
+            // 否则根据传入的各种属性参数执行 RectTransform 修改
             if (targets.Length == 1)
             {
                 return ApplyRectTransformModifications(targets[0], args);
@@ -111,135 +135,90 @@ namespace UnityMcp.Tools
         }
 
         /// <summary>
-        /// 默认操作处理（兼容性，不指定action时使用modify）
+        /// 处理获取布局信息操作
+        /// </summary>
+        private object HandleGetLayoutAction(StateTreeContext args)
+        {
+            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
+            if (targets.Length == 0)
+            {
+                return Response.Error("No target GameObjects found in execution context.");
+            }
+
+            // 如果指定了 property_name，获取特定属性
+            if (args.TryGetValue("property_name", out object propertyNameObj) && propertyNameObj != null)
+            {
+                string propertyName = propertyNameObj.ToString();
+
+                if (targets.Length == 1)
+                {
+                    return GetPropertyFromSingleTarget(targets[0], propertyName);
+                }
+                else
+                {
+                    return GetPropertyFromMultipleTargets(targets, propertyName);
+                }
+            }
+
+            // 否则获取所有 RectTransform 属性信息
+            if (targets.Length == 1)
+            {
+                return GetAllRectTransformProperties(targets[0]);
+            }
+            else
+            {
+                return GetAllRectTransformPropertiesFromMultiple(targets);
+            }
+        }
+
+        /// <summary>
+        /// 处理设置属性操作
+        /// </summary>
+        private object HandleSetPropsAction(StateTreeContext args)
+        {
+            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
+            if (targets.Length == 0)
+            {
+                return Response.Error("No target GameObjects found in execution context.");
+            }
+
+            // 如果指定了 property_name 和 value，设置特定属性
+            if (args.TryGetValue("property_name", out object propertyNameObj) && propertyNameObj != null &&
+                args.TryGetValue("value", out object valueObj))
+            {
+                string propertyName = propertyNameObj.ToString();
+
+                if (targets.Length == 1)
+                {
+                    return SetPropertyOnSingleTarget(targets[0], propertyName, valueObj);
+                }
+                else
+                {
+                    return SetPropertyOnMultipleTargets(targets, propertyName, valueObj);
+                }
+            }
+
+            // 否则根据传入的各种属性参数执行 RectTransform 修改
+            if (targets.Length == 1)
+            {
+                return ApplyRectTransformModifications(targets[0], args);
+            }
+            else
+            {
+                return ApplyRectTransformModificationsToMultiple(targets, args);
+            }
+        }
+
+        /// <summary>
+        /// 默认操作处理（不指定 action 时默认为 do_layout）
         /// </summary>
         private object HandleDefaultAction(StateTreeContext args)
         {
-            LogInfo("[EditRectTransform] No action specified, using default modify action");
-            return HandleModifyAction(args);
+            LogInfo("[UGUILayout] No action specified, using default do_layout action");
+            return HandleDoLayoutAction(args);
         }
 
-        /// <summary>
-        /// 处理设置锚点操作
-        /// </summary>
-        private object HandleSetAnchorsAction(StateTreeContext args)
-        {
-            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
-            if (targets.Length == 0)
-            {
-                return Response.Error("No target GameObjects found in execution context.");
-            }
 
-            if (targets.Length == 1)
-            {
-                return SetAnchorsOnTarget(targets[0], args);
-            }
-            else
-            {
-                return SetAnchorsOnMultipleTargets(targets, args);
-            }
-        }
-
-        /// <summary>
-        /// 处理设置尺寸操作
-        /// </summary>
-        private object HandleSetSizeAction(StateTreeContext args)
-        {
-            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
-            if (targets.Length == 0)
-            {
-                return Response.Error("No target GameObjects found in execution context.");
-            }
-
-            if (targets.Length == 1)
-            {
-                return SetSizeOnTarget(targets[0], args);
-            }
-            else
-            {
-                return SetSizeOnMultipleTargets(targets, args);
-            }
-        }
-
-        /// <summary>
-        /// 处理设置位置操作
-        /// </summary>
-        private object HandleSetPositionAction(StateTreeContext args)
-        {
-            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
-            if (targets.Length == 0)
-            {
-                return Response.Error("No target GameObjects found in execution context.");
-            }
-
-            if (targets.Length == 1)
-            {
-                return SetPositionOnTarget(targets[0], args);
-            }
-            else
-            {
-                return SetPositionOnMultipleTargets(targets, args);
-            }
-        }
-
-        /// <summary>
-        /// 处理属性设置操作
-        /// </summary>
-        private object HandleSetPropertyAction(StateTreeContext args)
-        {
-            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
-            if (targets.Length == 0)
-            {
-                return Response.Error("No target GameObjects found in execution context.");
-            }
-
-            if (!args.TryGetValue("property_name", out object propertyNameObj) || propertyNameObj == null)
-            {
-                return Response.Error("Property name is required for set_property action.");
-            }
-            string propertyName = propertyNameObj.ToString();
-
-            if (!args.TryGetValue("value", out object valueObj))
-            {
-                return Response.Error("Value is required for set_property action.");
-            }
-
-            if (targets.Length == 1)
-            {
-                return SetPropertyOnSingleTarget(targets[0], propertyName, valueObj);
-            }
-            else
-            {
-                return SetPropertyOnMultipleTargets(targets, propertyName, valueObj);
-            }
-        }
-
-        /// <summary>
-        /// 处理属性获取操作
-        /// </summary>
-        private object HandleGetPropertyAction(StateTreeContext args)
-        {
-            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
-            if (targets.Length == 0)
-            {
-                return Response.Error("No target GameObjects found in execution context.");
-            }
-
-            if (!args.TryGetValue("property_name", out object propertyNameObj) || propertyNameObj == null)
-            {
-                return Response.Error("Property name is required for get_property action.");
-            }
-            string propertyName = propertyNameObj.ToString();
-
-            if (targets.Length == 1)
-            {
-                return GetPropertyFromSingleTarget(targets[0], propertyName);
-            }
-            else
-            {
-                return GetPropertyFromMultipleTargets(targets, propertyName);
-            }
-        }
 
         #region 核心修改方法
 
@@ -710,116 +689,7 @@ namespace UnityMcp.Tools
 
         #endregion
 
-        #region 专用操作方法
 
-        /// <summary>
-        /// 在单个目标上设置锚点
-        /// </summary>
-        private object SetAnchorsOnTarget(GameObject targetGo, StateTreeContext args)
-        {
-            RectTransform rectTransform = targetGo.GetComponent<RectTransform>();
-            if (rectTransform == null)
-            {
-                return Response.Error($"GameObject '{targetGo.name}' does not have a RectTransform component.");
-            }
-
-            Undo.RecordObject(rectTransform, "Set Anchors");
-
-            bool modified = false;
-            modified |= ApplyAnchorPreset(rectTransform, args);
-            modified |= ApplyAnchorMin(rectTransform, args);
-            modified |= ApplyAnchorMax(rectTransform, args);
-            modified |= ApplyPivot(rectTransform, args);
-
-            if (modified)
-            {
-                EditorUtility.SetDirty(rectTransform);
-                return Response.Success(
-                    $"Anchors set successfully on '{targetGo.name}'.",
-                    GetRectTransformData(rectTransform)
-                );
-            }
-            else
-            {
-                return Response.Success(
-                    $"No anchor changes applied to '{targetGo.name}'.",
-                    GetRectTransformData(rectTransform)
-                );
-            }
-        }
-
-        /// <summary>
-        /// 在单个目标上设置尺寸
-        /// </summary>
-        private object SetSizeOnTarget(GameObject targetGo, StateTreeContext args)
-        {
-            RectTransform rectTransform = targetGo.GetComponent<RectTransform>();
-            if (rectTransform == null)
-            {
-                return Response.Error($"GameObject '{targetGo.name}' does not have a RectTransform component.");
-            }
-
-            Undo.RecordObject(rectTransform, "Set Size");
-
-            bool modified = false;
-            modified |= ApplySizeDelta(rectTransform, args);
-            modified |= ApplyWidthHeight(rectTransform, args);
-
-            if (modified)
-            {
-                EditorUtility.SetDirty(rectTransform);
-                return Response.Success(
-                    $"Size set successfully on '{targetGo.name}'.",
-                    GetRectTransformData(rectTransform)
-                );
-            }
-            else
-            {
-                return Response.Success(
-                    $"No size changes applied to '{targetGo.name}'.",
-                    GetRectTransformData(rectTransform)
-                );
-            }
-        }
-
-        /// <summary>
-        /// 在单个目标上设置位置
-        /// </summary>
-        private object SetPositionOnTarget(GameObject targetGo, StateTreeContext args)
-        {
-            RectTransform rectTransform = targetGo.GetComponent<RectTransform>();
-            if (rectTransform == null)
-            {
-                return Response.Error($"GameObject '{targetGo.name}' does not have a RectTransform component.");
-            }
-
-            Undo.RecordObject(rectTransform, "Set Position");
-
-            bool modified = false;
-            modified |= ApplyAnchoredPosition(rectTransform, args);
-            modified |= ApplyLocalPosition(rectTransform, args);
-            modified |= ApplyMargins(rectTransform, args);
-            modified |= ApplyOffsetMin(rectTransform, args);
-            modified |= ApplyOffsetMax(rectTransform, args);
-
-            if (modified)
-            {
-                EditorUtility.SetDirty(rectTransform);
-                return Response.Success(
-                    $"Position set successfully on '{targetGo.name}'.",
-                    GetRectTransformData(rectTransform)
-                );
-            }
-            else
-            {
-                return Response.Success(
-                    $"No position changes applied to '{targetGo.name}'.",
-                    GetRectTransformData(rectTransform)
-                );
-            }
-        }
-
-        #endregion
 
         #region 属性操作方法
 
@@ -900,126 +770,65 @@ namespace UnityMcp.Tools
             }
         }
 
+        /// <summary>
+        /// 获取单个目标的所有RectTransform属性
+        /// </summary>
+        private object GetAllRectTransformProperties(GameObject targetGo)
+        {
+            RectTransform rectTransform = targetGo.GetComponent<RectTransform>();
+            if (rectTransform == null)
+            {
+                return Response.Error($"GameObject '{targetGo.name}' does not have a RectTransform component.");
+            }
+
+            return Response.Success(
+                $"RectTransform properties retrieved successfully from '{targetGo.name}'.",
+                GetRectTransformData(rectTransform)
+            );
+        }
+
+        /// <summary>
+        /// 获取多个目标的所有RectTransform属性
+        /// </summary>
+        private object GetAllRectTransformPropertiesFromMultiple(GameObject[] targets)
+        {
+            var results = new List<Dictionary<string, object>>();
+            var errors = new List<string>();
+            int successCount = 0;
+
+            foreach (GameObject target in targets)
+            {
+                if (target == null) continue;
+
+                try
+                {
+                    var result = GetAllRectTransformProperties(target);
+
+                    if (IsSuccessResponse(result, out object data, out string message))
+                    {
+                        successCount++;
+                        if (data is Dictionary<string, object> dictData)
+                        {
+                            results.Add(dictData);
+                        }
+                    }
+                    else
+                    {
+                        errors.Add($"[{target.name}] {message ?? "Unknown error"}");
+                    }
+                }
+                catch (Exception e)
+                {
+                    errors.Add($"[{target.name}] Error: {e.Message}");
+                }
+            }
+
+            return CreateBatchOperationResponse("get all properties", successCount, targets.Length, results, errors);
+        }
+
         #endregion
 
         #region 批量操作方法
-
-        /// <summary>
-        /// 在多个目标上设置锚点
-        /// </summary>
-        private object SetAnchorsOnMultipleTargets(GameObject[] targets, StateTreeContext args)
-        {
-            var results = new List<Dictionary<string, object>>();
-            var errors = new List<string>();
-            int successCount = 0;
-
-            foreach (GameObject target in targets)
-            {
-                if (target == null) continue;
-
-                try
-                {
-                    var result = SetAnchorsOnTarget(target, args);
-
-                    if (IsSuccessResponse(result, out object data, out string message))
-                    {
-                        successCount++;
-                        if (data is Dictionary<string, object> dictData)
-                        {
-                            results.Add(dictData);
-                        }
-                    }
-                    else
-                    {
-                        errors.Add($"[{target.name}] {message ?? "Unknown error"}");
-                    }
-                }
-                catch (Exception e)
-                {
-                    errors.Add($"[{target.name}] Error: {e.Message}");
-                }
-            }
-
-            return CreateBatchOperationResponse("set anchors", successCount, targets.Length, results, errors);
-        }
-
-        /// <summary>
-        /// 在多个目标上设置尺寸
-        /// </summary>
-        private object SetSizeOnMultipleTargets(GameObject[] targets, StateTreeContext args)
-        {
-            var results = new List<Dictionary<string, object>>();
-            var errors = new List<string>();
-            int successCount = 0;
-
-            foreach (GameObject target in targets)
-            {
-                if (target == null) continue;
-
-                try
-                {
-                    var result = SetSizeOnTarget(target, args);
-
-                    if (IsSuccessResponse(result, out object data, out string message))
-                    {
-                        successCount++;
-                        if (data is Dictionary<string, object> dictData)
-                        {
-                            results.Add(dictData);
-                        }
-                    }
-                    else
-                    {
-                        errors.Add($"[{target.name}] {message ?? "Unknown error"}");
-                    }
-                }
-                catch (Exception e)
-                {
-                    errors.Add($"[{target.name}] Error: {e.Message}");
-                }
-            }
-
-            return CreateBatchOperationResponse("set size", successCount, targets.Length, results, errors);
-        }
-
-        /// <summary>
-        /// 在多个目标上设置位置
-        /// </summary>
-        private object SetPositionOnMultipleTargets(GameObject[] targets, StateTreeContext args)
-        {
-            var results = new List<Dictionary<string, object>>();
-            var errors = new List<string>();
-            int successCount = 0;
-
-            foreach (GameObject target in targets)
-            {
-                if (target == null) continue;
-
-                try
-                {
-                    var result = SetPositionOnTarget(target, args);
-
-                    if (IsSuccessResponse(result, out object data, out string message))
-                    {
-                        successCount++;
-                        if (data is Dictionary<string, object> dictData)
-                        {
-                            results.Add(dictData);
-                        }
-                    }
-                    else
-                    {
-                        errors.Add($"[{target.name}] {message ?? "Unknown error"}");
-                    }
-                }
-                catch (Exception e)
-                {
-                    errors.Add($"[{target.name}] Error: {e.Message}");
-                }
-            }
-
-            return CreateBatchOperationResponse("set position", successCount, targets.Length, results, errors);
-        }
 
         /// <summary>
         /// 在多个目标上设置属性
@@ -1410,3 +1219,4 @@ namespace UnityMcp.Tools
         #endregion
     }
 }
+

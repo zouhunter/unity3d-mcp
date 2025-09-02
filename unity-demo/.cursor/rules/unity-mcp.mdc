@@ -997,7 +997,7 @@ function_call(
 - `select_many` (bool, 可选): 是否选择所有匹配的对象进行批量操作（默认false）
 
 **操作类型参数**
-- `action` (string, 可选): 操作类型，支持 `modify`、`set_anchors`、`set_size`、`set_position`、`set_property`、`get_property`（默认为modify）
+- `action` (string, 可选): 操作类型，支持 `do_layout`、`set_props`、`get_layout`（默认为do_layout）
 
 **RectTransform基本属性**
 - `anchored_position` (list, 可选): 锚点位置 [x, y]
@@ -1029,18 +1029,15 @@ function_call(
   - `stretch_horizontal`, `stretch_vertical`, `stretch_all`
 
 **属性操作参数**
-- `property_name` (string, 可选): 属性名称（用于set_property/get_property操作）
+- `property_name` (string, 可选): 属性名称（用于属性设置/获取操作）
 - `value` (any, 可选): 要设置的属性值
 
 支持的操作类型 (action)
-- `modify` - 修改RectTransform的各种属性（默认操作）
-- `set_anchors` - 专门设置锚点相关属性（anchor_preset, anchor_min, anchor_max, pivot）
-- `set_size` - 专门设置尺寸相关属性（size_delta, width, height）
-- `set_position` - 专门设置位置相关属性（anchored_position, local_position, 边距, offset）
-- `set_property` - 设置RectTransform指定属性（通用属性操作）
-- `get_property` - 获取RectTransform指定属性
+- `do_layout` - 执行布局修改操作，可通过property_name+value设置特定属性，或直接传递各种属性参数（默认操作）
+- `set_props` - 设置RectTransform属性，可通过property_name+value设置特定属性，或直接传递各种属性参数
+- `get_layout` - 获取RectTransform属性信息，可指定property_name获取特定属性，否则获取所有属性
 
-示例：修改UI元素的基本布局属性（默认操作）
+示例：执行布局修改（默认操作）
 ```python
 function_call(
   func="ugui_layout",
@@ -1048,11 +1045,11 @@ function_call(
 )
 ```
 
-示例：通过InstanceID定位并修改
+示例：通过InstanceID定位并执行布局修改
 ```python
 function_call(
   func="ugui_layout",
-  args={"id": "12345", "action": "modify", "width": 150, "height": 40}
+  args={"id": "12345", "action": "do_layout", "width": 150, "height": 40}
 )
 ```
 
@@ -1060,7 +1057,7 @@ function_call(
 ```python
 function_call(
   func="ugui_layout",
-  args={"path": "Canvas/Panel", "action": "set_anchors", "anchor_preset": "stretch_all"}
+  args={"path": "Canvas/Panel", "action": "do_layout", "anchor_preset": "stretch_all"}
 )
 ```
 
@@ -1068,7 +1065,7 @@ function_call(
 ```python
 function_call(
   func="ugui_layout",
-  args={"path": "Canvas/Content", "action": "set_position", "left": 10, "right": 10, "top": 10, "bottom": 10}
+  args={"path": "Canvas/Content", "action": "do_layout", "left": 10, "right": 10, "top": 10, "bottom": 10}
 )
 ```
 
@@ -1076,7 +1073,23 @@ function_call(
 ```python
 function_call(
   func="ugui_layout",
-  args={"path": "Canvas/Button", "select_many": true, "action": "set_size", "width": 150, "height": 40}
+  args={"path": "Canvas/Button", "select_many": true, "action": "do_layout", "width": 150, "height": 40}
+)
+```
+
+示例：获取所有布局属性
+```python
+function_call(
+  func="ugui_layout",
+  args={"path": "Canvas/Button", "action": "get_layout"}
+)
+```
+
+示例：获取特定布局属性
+```python
+function_call(
+  func="ugui_layout",
+  args={"path": "Canvas/Button", "action": "get_layout", "property_name": "anchoredPosition"}
 )
 ```
 
@@ -1094,19 +1107,19 @@ function_call(
 )
 ```
 
-示例：设置RectTransform属性
+示例：设置特定RectTransform属性
 ```python
 function_call(
   func="ugui_layout",
-  args={"path": "Canvas/ScrollView", "action": "set_property", "property_name": "anchoredPosition", "value": [100, 50]}
+  args={"path": "Canvas/ScrollView", "action": "set_props", "property_name": "anchoredPosition", "value": [100, 50]}
 )
 ```
 
-示例：获取RectTransform属性
+示例：获取特定RectTransform属性
 ```python
 function_call(
   func="ugui_layout",
-  args={"path": "Canvas/ScrollView", "action": "get_property", "property_name": "anchoredPosition"}
+  args={"path": "Canvas/ScrollView", "action": "get_layout", "property_name": "anchoredPosition"}
 )
 ```
 
@@ -1152,7 +1165,7 @@ function_call(
 - **智能类型转换**: 自动处理Vector2、Vector3等Unity数据类型转换
 - **撤销支持**: 所有操作都支持Unity的撤销功能，便于调试和修改
 - **详细返回数据**: 返回完整的RectTransform状态信息，便于验证操作结果
-- **专用操作**: 提供set_anchors、set_size、set_position等专用操作，针对不同布局需求优化
+- **灵活的操作模式**: do_layout执行布局修改、set_props设置属性、get_layout获取布局信息，满足不同场景需求
 
 ---
 
@@ -1974,6 +1987,7 @@ function_call(
 - 路径分隔符使用正斜杠 `/`
 - 相对于项目根目录的Assets文件夹
 - UGUI菜单按TextMeshPro的规则为准，老的一些控件已经放到Leagcy中
+- 注意菜单命名间隔: GameObject/UI/Input Field (TMP)
 
 ### 4) 最佳实践
 - 在执行操作前使用 `console_read` 检查错误

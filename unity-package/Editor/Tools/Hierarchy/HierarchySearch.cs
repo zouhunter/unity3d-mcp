@@ -77,23 +77,11 @@ namespace UnityMcp.Tools
 
             if (findAll || foundObjects.Count == 0)
             {
-                // 使用Unity内置API搜索所有GameObject
-                GameObject[] allObjects;
-                if (searchInInactive)
-                {
-                    // 包括非激活对象
-                    allObjects = Resources.FindObjectsOfTypeAll<GameObject>();
-                }
-                else
-                {
-                    // 只搜索激活对象
-                    allObjects = UnityEngine.Object.FindObjectsOfType<GameObject>();
-                }
+                // 从当前场景搜索所有GameObject
+                GameObject[] allObjects = GetAllGameObjectsInActiveScene(searchInInactive);
 
                 foreach (GameObject go in allObjects)
                 {
-                    if (go.scene.name == null) continue; // 跳过预制体资源
-
                     bool nameMatches = string.IsNullOrEmpty(target) ||
                                      go.name.Contains(target, StringComparison.OrdinalIgnoreCase);
 
@@ -158,11 +146,10 @@ namespace UnityMcp.Tools
 
             if (searchInInactive)
             {
-                // 搜索非激活对象 - 使用Unity内置API
-                GameObject[] allObjects = Resources.FindObjectsOfTypeAll<GameObject>();
+                // 搜索非激活对象 - 从当前场景获取
+                GameObject[] allObjects = GetAllGameObjectsInActiveScene(true);
                 foreach (GameObject go in allObjects)
                 {
-                    if (go.scene.name == null) continue;
                     if (!go.activeInHierarchy && go.CompareTag(searchTerm))
                     {
                         foundObjects.Add(go);
@@ -196,14 +183,11 @@ namespace UnityMcp.Tools
                 return Response.Error($"Layer '{searchTerm}' not found.");
             }
 
-            // 搜索所有GameObject
-            GameObject[] allObjects = searchInInactive ?
-                Resources.FindObjectsOfTypeAll<GameObject>() :
-                UnityEngine.Object.FindObjectsOfType<GameObject>();
+            // 从当前场景搜索GameObject
+            GameObject[] allObjects = GetAllGameObjectsInActiveScene(searchInInactive);
 
             foreach (GameObject go in allObjects)
             {
-                if (go.scene.name == null) continue;
                 if (go.layer == layerIndex)
                 {
                     foundObjects.Add(go);
@@ -236,23 +220,15 @@ namespace UnityMcp.Tools
                 return Response.Error($"Component type '{searchTerm}' not found.");
             }
 
-            // 使用Unity内置API搜索包含指定组件的GameObject
-            Component[] components;
-            if (searchInInactive)
-            {
-                // 包括非激活对象
-                components = Resources.FindObjectsOfTypeAll(componentType).Cast<Component>().ToArray();
-            }
-            else
-            {
-                // 只搜索激活对象
-                components = UnityEngine.Object.FindObjectsOfType(componentType).Cast<Component>().ToArray();
-            }
+            // 从当前场景搜索包含指定组件的GameObject
+            GameObject[] allObjects = GetAllGameObjectsInActiveScene(searchInInactive);
 
-            foreach (Component component in components)
+            foreach (GameObject go in allObjects)
             {
-                if (component.gameObject.scene.name == null) continue;
-                foundObjects.Add(component.gameObject);
+                if (go.GetComponent(componentType) != null)
+                {
+                    foundObjects.Add(go);
+                }
             }
 
             return CreateSearchResult(foundObjects, "component");
@@ -337,35 +313,30 @@ namespace UnityMcp.Tools
                     return Response.Error($"Component type '{typeName}' not found.");
                 }
 
-                Component[] components = searchInInactive ?
-                    Resources.FindObjectsOfTypeAll(targetType).Cast<Component>().ToArray() :
-                    UnityEngine.Object.FindObjectsOfType(targetType).Cast<Component>().ToArray();
+                GameObject[] sceneObjects = GetAllGameObjectsInActiveScene(searchInInactive);
 
-                foreach (Component component in components)
+                foreach (GameObject go in sceneObjects)
                 {
-                    if (component.gameObject.scene.name == null) continue; // 跳过预制体资源
-
                     // 检查是否仅搜索根对象
-                    if (rootOnly && component.gameObject.transform.parent != null) continue;
+                    if (rootOnly && go.transform.parent != null) continue;
 
-                    if (uniqueObjects.Add(component.gameObject))
+                    if (go.GetComponent(targetType) != null)
                     {
-                        foundObjects.Add(component.gameObject);
+                        if (uniqueObjects.Add(go))
+                        {
+                            foundObjects.Add(go);
+                        }
                     }
                 }
 
                 return CreateSearchResult(foundObjects, "type");
             }
 
-            // 搜索所有GameObject
-            GameObject[] allObjects = searchInInactive ?
-                Resources.FindObjectsOfTypeAll<GameObject>() :
-                UnityEngine.Object.FindObjectsOfType<GameObject>();
+            // 从当前场景搜索所有GameObject
+            GameObject[] allObjects = GetAllGameObjectsInActiveScene(searchInInactive);
 
             foreach (GameObject go in allObjects)
             {
-                if (go.scene.name == null) continue; // 跳过预制体资源
-
                 // 检查是否仅搜索根对象
                 if (rootOnly && go.transform.parent != null) continue;
 
@@ -506,6 +477,50 @@ namespace UnityMcp.Tools
         // --- Helper Methods ---
 
         /// <summary>
+        /// 获取当前激活场景中的所有GameObject
+        /// </summary>
+        private GameObject[] GetAllGameObjectsInActiveScene(bool includeInactive)
+        {
+            List<GameObject> allObjects = new List<GameObject>();
+
+            // 获取当前激活场景的根对象
+            Scene activeScene = SceneManager.GetActiveScene();
+            if (!activeScene.IsValid())
+            {
+                return allObjects.ToArray();
+            }
+
+            GameObject[] rootObjects = activeScene.GetRootGameObjects();
+
+            foreach (GameObject rootObj in rootObjects)
+            {
+                if (includeInactive)
+                {
+                    // 包含非激活对象，获取所有子对象（包括非激活的）
+                    Transform[] allTransforms = rootObj.GetComponentsInChildren<Transform>(true);
+                    foreach (Transform t in allTransforms)
+                    {
+                        allObjects.Add(t.gameObject);
+                    }
+                }
+                else
+                {
+                    // 只包含激活对象
+                    if (rootObj.activeInHierarchy)
+                    {
+                        Transform[] activeTransforms = rootObj.GetComponentsInChildren<Transform>(false);
+                        foreach (Transform t in activeTransforms)
+                        {
+                            allObjects.Add(t.gameObject);
+                        }
+                    }
+                }
+            }
+
+            return allObjects.ToArray();
+        }
+
+        /// <summary>
         /// 创建搜索结果
         /// </summary>
         private object CreateSearchResult(List<GameObject> foundObjects, string searchType)
@@ -542,24 +557,48 @@ namespace UnityMcp.Tools
         /// </summary>
         private Type GetComponentType(string typeName)
         {
+            // 尝试从常见的Unity命名空间获取
+            string[] commonNamespaces = {
+                "UnityEngine",
+                "UnityEngine.UI",
+                "UnityEngine.EventSystems",
+                "UnityEditor"
+            };
+
+            foreach (string ns in commonNamespaces)
+            {
+                Type type = Type.GetType($"{ns}.{typeName}");
+                if (type != null && typeof(UnityEngine.Object).IsAssignableFrom(type))
+                    return type;
+            }
+
             // 尝试直接获取类型
-            Type type = Type.GetType(typeName);
-            if (type != null) return type;
-            // 尝试从Unity命名空间获取
-            type = Type.GetType($"UnityEngine.{typeName}");
-            if (type != null) return type;
+            Type directType = Type.GetType(typeName);
+            if (directType != null && typeof(UnityEngine.Object).IsAssignableFrom(directType))
+                return directType;
 
             // 尝试从所有已加载的程序集中查找
             foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
-                // 先尝试全名匹配
-                type = assembly.GetType(typeName);
-                if (type != null) return type;
-                // 再遍历所有类型，尝试短名匹配
-                foreach (var t in assembly.GetTypes())
+                try
                 {
-                    if (t.Name == typeName || t.FullName == typeName)
-                        return t;
+                    // 先尝试全名匹配
+                    Type type = assembly.GetType(typeName);
+                    if (type != null && typeof(UnityEngine.Object).IsAssignableFrom(type))
+                        return type;
+
+                    // 再遍历所有类型，尝试短名匹配
+                    foreach (var t in assembly.GetTypes())
+                    {
+                        if ((t.Name == typeName || t.FullName == typeName) &&
+                            typeof(UnityEngine.Object).IsAssignableFrom(t))
+                            return t;
+                    }
+                }
+                catch
+                {
+                    // 忽略无法访问的程序集
+                    continue;
                 }
             }
 

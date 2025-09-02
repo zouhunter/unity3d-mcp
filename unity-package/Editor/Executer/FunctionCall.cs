@@ -29,7 +29,7 @@ namespace UnityMcp.Tools
         /// <summary>
         /// Main handler for function calls (同步版本).
         /// </summary>
-        public override void HandleCommand(JObject cmd,Action<JObject> callback)
+        public override void HandleCommand(JObject cmd, Action<object> callback)
         {
             try
             {
@@ -42,7 +42,7 @@ namespace UnityMcp.Tools
                     return;
                 }
 
-                ExecuteFunction(functionName, argsJson,callback);
+                ExecuteFunction(functionName, argsJson, callback);
             }
             catch (Exception e)
             {
@@ -55,7 +55,7 @@ namespace UnityMcp.Tools
         /// <summary>
         /// Executes a specific function by routing to the appropriate method (同步版本).
         /// </summary>
-        private void ExecuteFunction(string functionName, string argsJson,Action<JObject> callback)
+        private void ExecuteFunction(string functionName, string argsJson, Action<object> callback)
         {
             if (McpConnect.EnableLog)
                 Debug.Log($"[FunctionCall] Executing function: {functionName}->{argsJson}");
@@ -70,11 +70,12 @@ namespace UnityMcp.Tools
                 // 查找对应的工具方法
                 if (!_registeredMethods.TryGetValue(functionName, out IToolMethod method))
                 {
-                    return Response.Error($"Unknown method: '{functionName}'. Available methods: {string.Join(", ", _registeredMethods.Keys)}");
+                    callback(Response.Error($"Unknown method: '{functionName}'. Available methods: {string.Join(", ", _registeredMethods.Keys)}"));
+                    return;
                 }
 
                 // 调用工具的ExecuteMethod方法
-                var state = new StateTreeContext(args, new System.Collections.Generic.Dictionary<string, object>())
+                var state = new StateTreeContext(args, new System.Collections.Generic.Dictionary<string, object>());
                 method.ExecuteMethod(state);
                 state.RegistComplete(callback);
             }

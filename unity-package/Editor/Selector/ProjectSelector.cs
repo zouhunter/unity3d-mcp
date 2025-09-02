@@ -14,463 +14,264 @@ namespace UnityMcp.Tools
     /// 支持各种Unity资产类型的查找
     /// </summary>
     /// <typeparam name="T">要查找的Unity对象类型</typeparam>
-    public class ProjectSelector<T> : BaseObjectSelector<T> where T : UnityEngine.Object
+    public class ProjectSelector<T> : IObjectSelector where T : UnityEngine.Object
     {
-        /// <summary>
-        /// 创建当前方法支持的参数键列表
-        /// </summary>
-        public override MethodKey[] CreateKeys()
+        public MethodKey[] CreateKeys()
         {
-            return new[]
+            return new MethodKey[]
             {
-                new MethodKey("target", "搜索目标（可以是名称、GUID、路径、扩展名或标签）", false),
-                new MethodKey("search_method", "搜索方法：by_name, by_type, by_guid, by_path, by_extension, by_label", false),
-                new MethodKey("select_many", "是否查找所有匹配项", true),
-                new MethodKey("search_term", "搜索条件（支持通配符*）", true),
-                new MethodKey("use_regex", "是否使用正则表达式", true)
+                new MethodKey("instance_id", "对象的InstanceID", true),
+                new MethodKey("path", "对象的Project路径", true)
             };
         }
 
-        /// <summary>
-        /// 构建项目资产对象查找状态树
-        /// </summary>
-        public override StateTree BuildStateTree()
+        public StateTree BuildStateTree()
         {
             return StateTreeBuilder.Create()
-                .Key("search_method")
-                .Leaf("by_name", (Func<StateTreeContext, object>)HandleByNameSearch)
-                .Leaf("by_type", (Func<StateTreeContext, object>)HandleByTypeSearch)
-                .Leaf("by_guid", (Func<StateTreeContext, object>)HandleByGuidSearch)
-                .Leaf("by_path", (Func<StateTreeContext, object>)HandleByPathSearch)
-                .Leaf("by_extension", (Func<StateTreeContext, object>)HandleByExtensionSearch)
-                .Leaf("by_label", (Func<StateTreeContext, object>)HandleByLabelSearch)
-                .Leaf("find_all", (Func<StateTreeContext, object>)HandleFindAllSearch)
+                .OptionalLeaf("instance_id", (Func<StateTreeContext, object>)HandleByIdSearch)
+                .OptionalLeaf("path", (Func<StateTreeContext, object>)HandleByPathSearch)
                 .DefaultLeaf((Func<StateTreeContext, object>)HandleDefaultSearch)
                 .Build();
         }
 
-        /// <summary>
-        /// 按名称查找指定类型的对象数组
-        /// </summary>
-        public override T[] FindObjectsByName(string name)
+        private object HandleByIdSearch(StateTreeContext context)
         {
-            List<T> foundObjects = new List<T>();
-
-            // 使用AssetDatabase查找指定类型的资产
-            string typeName = GetTypeNameForAssetDatabase();
-            string[] assetGUIDs = AssetDatabase.FindAssets($"t:{typeName} {name}");
-
-            foreach (string guid in assetGUIDs)
+            // 获取ID参数
+            if (!context.TryGetValue("instance_id", out object idObj) || idObj == null)
             {
-                string assetPath = AssetDatabase.GUIDToAssetPath(guid);
-                T asset = AssetDatabase.LoadAssetAtPath<T>(assetPath);
-
-                if (asset != null && asset.name == name)
-                {
-                    foundObjects.Add(asset);
-                }
+                return Response.Error("参数'id'是必需的。");
             }
 
-            return foundObjects.ToArray();
+            // 解析ID
+            if (!int.TryParse(idObj.ToString(), out int instanceId))
+            {
+                return Response.Error($"无效的ID格式：'{idObj}'。ID必须是整数。");
+            }
+
+            try
+            {
+                // 使用EditorUtility.InstanceIDToObject查找对象
+                var foundObject = UnityEditor.EditorUtility.InstanceIDToObject(instanceId);
+
+                if (foundObject == null)
+                {
+                    return Response.Error($"未找到ID为'{instanceId}'的对象。");
+                }
+
+                // 检查对象是否是项目资产
+                if (!IsProjectAsset(foundObject))
+                {
+                    return Response.Error($"ID为'{instanceId}'的对象不是项目资产。");
+                }
+
+                // 检查对象类型是否匹配
+                if (foundObject is T typedObject)
+                {
+                    return typedObject;
+                }
+                else
+                {
+                    return Response.Error($"找到ID为'{instanceId}'的对象，但类型不匹配。期望类型：'{typeof(T).Name}'，实际类型：'{foundObject.GetType().Name}'。");
+                }
+            }
+            catch (Exception ex)
+            {
+                return Response.Error($"查找对象时发生错误：{ex.Message}");
+            }
         }
 
-        /// <summary>
-        /// 查找所有指定类型的对象
-        /// </summary>
-        public override T[] FindAllObjects()
+        private object HandleByPathSearch(StateTreeContext context)
         {
-            List<T> foundObjects = new List<T>();
-
-            // 获取类型名称
-            string typeName = GetTypeNameForAssetDatabase();
-
-            // 查找指定类型的所有资产
-            string[] assetGUIDs = AssetDatabase.FindAssets($"t:{typeName}");
-            foreach (string guid in assetGUIDs)
+            // 获取path参数
+            if (!context.TryGetValue("path", out object pathObj) || pathObj == null)
             {
-                string assetPath = AssetDatabase.GUIDToAssetPath(guid);
-                T asset = AssetDatabase.LoadAssetAtPath<T>(assetPath);
+                return Response.Error("参数'path'是必需的。");
+            }
 
+            string path = pathObj.ToString();
+
+            try
+            {
+                // 只在项目资产中查找
+                T asset = UnityEditor.AssetDatabase.LoadAssetAtPath<T>(path);
                 if (asset != null)
                 {
-                    foundObjects.Add(asset);
+                    return asset;
                 }
+
+                return Response.Error($"未找到路径为'{path}'的{typeof(T).Name}类型资产。");
+            }
+            catch (Exception ex)
+            {
+                return Response.Error($"查找路径'{path}'时发生错误：{ex.Message}");
+            }
+        }
+
+        private object HandleDefaultSearch(StateTreeContext context)
+        {
+            // 检查是否至少提供了id或path参数之一
+            bool hasId = context.TryGetValue("instance_id", out object idObj) && idObj != null;
+            bool hasPath = context.TryGetValue("path", out object pathObj) && pathObj != null;
+
+            if (!hasId && !hasPath)
+            {
+                return Response.Error("必须提供'id'或'path'参数之一。");
             }
 
-            return foundObjects.ToArray();
+            // 优先使用id查找
+            if (hasId)
+            {
+                return HandleByIdSearch(context);
+            }
+
+            // 使用path查找
+            if (hasPath)
+            {
+                return HandleByPathSearch(context);
+            }
+
+            return Response.Error("未找到匹配的资产。");
         }
 
         /// <summary>
-        /// 按ID查找指定类型的对象（项目资产中通常使用GUID而不是InstanceID）
+        /// 检查对象是否是项目资产
         /// </summary>
-        public override T[] FindObjectsById(int instanceId)
+        /// <param name="obj">要检查的对象</param>
+        /// <returns>如果对象是项目资产返回true，否则返回false</returns>
+        private bool IsProjectAsset(UnityEngine.Object obj)
         {
-            List<T> foundObjects = new List<T>();
+            if (obj == null) return false;
 
-            // 查找所有指定类型的资产
-            string typeName = GetTypeNameForAssetDatabase();
-            string[] assetGUIDs = AssetDatabase.FindAssets($"t:{typeName}");
+            // 使用AssetDatabase.Contains检查对象是否是资产
+            return UnityEditor.AssetDatabase.Contains(obj);
+        }
 
-            foreach (string guid in assetGUIDs)
+        /// <summary>
+        /// 通用的按ID查找方法，只在项目资产中查找
+        /// </summary>
+        /// <param name="instanceId">对象的InstanceID</param>
+        /// <returns>找到的对象，如果未找到或类型不匹配则返回null</returns>
+        public T FindById(int instanceId)
+        {
+            try
             {
-                string assetPath = AssetDatabase.GUIDToAssetPath(guid);
-                T asset = AssetDatabase.LoadAssetAtPath<T>(assetPath);
-
-                if (asset != null && asset.GetInstanceID() == instanceId)
+                var foundObject = UnityEditor.EditorUtility.InstanceIDToObject(instanceId);
+                if (foundObject != null && IsProjectAsset(foundObject) && foundObject is T typedObject)
                 {
-                    foundObjects.Add(asset);
+                    return typedObject;
                 }
+                return null;
             }
-
-            return foundObjects.ToArray();
+            catch
+            {
+                return null;
+            }
         }
 
         /// <summary>
-        /// 按GUID查找指定类型的对象
+        /// 通用的按路径查找方法，只在项目资产中查找
         /// </summary>
-        public override T[] FindObjectsByGuid(string guid)
+        /// <param name="path">资产路径</param>
+        /// <returns>找到的对象，如果未找到或类型不匹配则返回null</returns>
+        public T FindByPath(string path)
         {
-            List<T> foundObjects = new List<T>();
-
-            string assetPath = AssetDatabase.GUIDToAssetPath(guid);
-            if (!string.IsNullOrEmpty(assetPath))
+            if (string.IsNullOrEmpty(path))
             {
-                T asset = AssetDatabase.LoadAssetAtPath<T>(assetPath);
-                if (asset != null)
+                return null;
+            }
+
+            try
+            {
+                return UnityEditor.AssetDatabase.LoadAssetAtPath<T>(path);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 获取对象的详细信息
+        /// </summary>
+        /// <param name="obj">要获取信息的对象</param>
+        /// <returns>对象信息字符串</returns>
+        public string GetObjectInfo(T obj)
+        {
+            if (obj == null) return "null";
+
+            string type = typeof(T).Name;
+            string name = obj.name;
+            string instanceId = obj.GetInstanceID().ToString();
+            string assetPath = UnityEditor.AssetDatabase.GetAssetPath(obj);
+
+            return $"类型: {type}, 名称: {name}, InstanceID: {instanceId}, 资产路径: {assetPath}";
+        }
+
+        /// <summary>
+        /// 获取指定类型的所有项目资产
+        /// </summary>
+        /// <returns>找到的所有T类型资产列表</returns>
+        public List<T> FindAllAssets()
+        {
+            var assets = new List<T>();
+            try
+            {
+                // 使用AssetDatabase.FindAssets查找所有T类型的资产
+                string[] guids = UnityEditor.AssetDatabase.FindAssets($"t:{typeof(T).Name}");
+
+                foreach (string guid in guids)
                 {
-                    foundObjects.Add(asset);
-                }
-            }
-
-            return foundObjects.ToArray();
-        }
-
-        #region 项目特有的查找方法
-
-        /// <summary>
-        /// 按路径搜索处理
-        /// </summary>
-        private object HandleByPathSearch(StateTreeContext args)
-        {
-            if (!args.TryGetValue("target", out object target) || target == null)
-            {
-                return Response.Error("Target parameter is required for by_path search method.");
-            }
-
-            string targetPath = target.ToString();
-            T[] foundObjects = FindObjectsByPath(targetPath);
-
-            if (foundObjects.Length == 0)
-            {
-                return Response.Error($"No objects of type '{typeof(T).Name}' at path '{targetPath}' found.");
-            }
-
-            return foundObjects;
-        }
-
-        /// <summary>
-        /// 按扩展名搜索处理
-        /// </summary>
-        private object HandleByExtensionSearch(StateTreeContext args)
-        {
-            if (!args.TryGetValue("target", out object target) || target == null)
-            {
-                return Response.Error("Target parameter is required for by_extension search method.");
-            }
-
-            string extension = target.ToString();
-            T[] foundObjects = FindObjectsByExtension(extension);
-
-            if (foundObjects.Length == 0)
-            {
-                return Response.Error($"No objects of type '{typeof(T).Name}' with extension '{extension}' found.");
-            }
-
-            return foundObjects;
-        }
-
-        /// <summary>
-        /// 按标签搜索处理
-        /// </summary>
-        private object HandleByLabelSearch(StateTreeContext args)
-        {
-            if (!args.TryGetValue("target", out object target) || target == null)
-            {
-                return Response.Error("Target parameter is required for by_label search method.");
-            }
-
-            string label = target.ToString();
-            T[] foundObjects = FindObjectsByLabel(label);
-
-            if (foundObjects.Length == 0)
-            {
-                return Response.Error($"No objects of type '{typeof(T).Name}' with label '{label}' found.");
-            }
-
-            return foundObjects;
-        }
-
-        /// <summary>
-        /// 按路径查找对象
-        /// </summary>
-        private T[] FindObjectsByPath(string path)
-        {
-            List<T> foundObjects = new List<T>();
-
-            // 直接加载指定路径的资产
-            T asset = AssetDatabase.LoadAssetAtPath<T>(path);
-            if (asset != null)
-            {
-                foundObjects.Add(asset);
-            }
-
-            // 也查找路径中包含指定字符串的资产
-            string typeName = GetTypeNameForAssetDatabase();
-            string[] assetGUIDs = AssetDatabase.FindAssets($"t:{typeName}");
-
-            foreach (string guid in assetGUIDs)
-            {
-                string assetPath = AssetDatabase.GUIDToAssetPath(guid);
-                if (assetPath.Contains(path))
-                {
-                    T pathAsset = AssetDatabase.LoadAssetAtPath<T>(assetPath);
-                    if (pathAsset != null && !foundObjects.Contains(pathAsset))
-                    {
-                        foundObjects.Add(pathAsset);
-                    }
-                }
-            }
-
-            return foundObjects.ToArray();
-        }
-
-        /// <summary>
-        /// 按扩展名查找对象
-        /// </summary>
-        private T[] FindObjectsByExtension(string extension)
-        {
-            List<T> foundObjects = new List<T>();
-
-            // 确保扩展名以点开头
-            if (!extension.StartsWith("."))
-            {
-                extension = "." + extension;
-            }
-
-            string typeName = GetTypeNameForAssetDatabase();
-            string[] assetGUIDs = AssetDatabase.FindAssets($"t:{typeName}");
-
-            foreach (string guid in assetGUIDs)
-            {
-                string assetPath = AssetDatabase.GUIDToAssetPath(guid);
-                if (assetPath.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
-                {
-                    T asset = AssetDatabase.LoadAssetAtPath<T>(assetPath);
+                    string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+                    T asset = UnityEditor.AssetDatabase.LoadAssetAtPath<T>(path);
                     if (asset != null)
                     {
-                        foundObjects.Add(asset);
+                        assets.Add(asset);
                     }
                 }
             }
+            catch (Exception ex)
+            {
+                Debug.LogError($"查找所有{typeof(T).Name}资产时发生错误：{ex.Message}");
+            }
 
-            return foundObjects.ToArray();
+            return assets;
         }
 
         /// <summary>
-        /// 按标签查找对象
+        /// 在指定文件夹中查找资产
         /// </summary>
-        private T[] FindObjectsByLabel(string label)
+        /// <param name="folderPath">文件夹路径，如"Assets/Scripts"</param>
+        /// <returns>找到的T类型资产列表</returns>
+        public List<T> FindAssetsInFolder(string folderPath)
         {
-            List<T> foundObjects = new List<T>();
-
-            // 使用AssetDatabase查找带指定标签的资产
-            string[] assetGUIDs = AssetDatabase.FindAssets($"l:{label}");
-            foreach (string guid in assetGUIDs)
+            var assets = new List<T>();
+            if (string.IsNullOrEmpty(folderPath))
             {
-                string assetPath = AssetDatabase.GUIDToAssetPath(guid);
-                T asset = AssetDatabase.LoadAssetAtPath<T>(assetPath);
-                if (asset != null)
+                return assets;
+            }
+
+            try
+            {
+                // 在指定文件夹中查找资产
+                string[] guids = UnityEditor.AssetDatabase.FindAssets($"t:{typeof(T).Name}", new[] { folderPath });
+
+                foreach (string guid in guids)
                 {
-                    foundObjects.Add(asset);
-                }
-            }
-
-            return foundObjects.ToArray();
-        }
-
-        #endregion
-
-        #region 项目特有的默认搜索
-
-        /// <summary>
-        /// 项目资产默认搜索方法
-        /// </summary>
-        protected override object HandleDefaultSearch(StateTreeContext args)
-        {
-            if (!args.TryGetValue("target", out object targetObj) || targetObj == null)
-            {
-                return Response.Error("Target parameter is required.");
-            }
-
-            string target = targetObj.ToString();
-            List<T> allFound = new List<T>();
-
-            // 尝试按名称查找
-            allFound.AddRange(FindObjectsByName(target));
-
-            // 尝试按GUID查找
-            allFound.AddRange(FindObjectsByGuid(target));
-
-            // 尝试按路径查找
-            allFound.AddRange(FindObjectsByPath(target));
-
-            // 尝试按扩展名查找（如果包含点）
-            if (target.Contains("."))
-            {
-                allFound.AddRange(FindObjectsByExtension(target));
-            }
-
-            // 尝试按标签查找
-            allFound.AddRange(FindObjectsByLabel(target));
-
-            // 去重
-            T[] uniqueObjects = allFound.Distinct().ToArray();
-
-            if (uniqueObjects.Length == 0)
-            {
-                return Response.Error($"No objects of type '{typeof(T).Name}' matching '{target}' found using default search method.");
-            }
-
-            return uniqueObjects;
-        }
-
-        #endregion
-
-        #region 工具方法
-
-        /// <summary>
-        /// 获取用于AssetDatabase查询的类型名称
-        /// </summary>
-        private string GetTypeNameForAssetDatabase()
-        {
-            Type type = typeof(T);
-
-            // 对于常见的Unity类型，使用简短名称
-            if (type == typeof(UnityEngine.Object))
-                return "Object";
-            else if (type == typeof(GameObject))
-                return "GameObject";
-            else if (type == typeof(Texture2D))
-                return "Texture2D";
-            else if (type == typeof(Texture))
-                return "Texture";
-            else if (type == typeof(AudioClip))
-                return "AudioClip";
-            else if (type == typeof(Material))
-                return "Material";
-            else if (type == typeof(Mesh))
-                return "Mesh";
-            else if (type == typeof(AnimationClip))
-                return "AnimationClip";
-            else if (type == typeof(ScriptableObject))
-                return "ScriptableObject";
-            else if (type == typeof(MonoScript))
-                return "MonoScript";
-            else if (type == typeof(Shader))
-                return "Shader";
-            else if (type == typeof(Font))
-                return "Font";
-            else
-                return type.Name;
-        }
-
-        /// <summary>
-        /// 获取资产的详细信息（重写）
-        /// </summary>
-        public override string GetObjectInfo(T asset)
-        {
-            if (asset == null) return "null";
-
-            string baseInfo = base.GetObjectInfo(asset);
-            string assetPath = AssetDatabase.GetAssetPath(asset);
-            string guid = AssetDatabase.AssetPathToGUID(assetPath);
-
-            return $"{baseInfo}, Path: {assetPath}, GUID: {guid}";
-        }
-
-        /// <summary>
-        /// 获取资产的依赖关系
-        /// </summary>
-        public T[] GetAssetDependencies(T asset)
-        {
-            List<T> dependencies = new List<T>();
-
-            string assetPath = AssetDatabase.GetAssetPath(asset);
-            if (!string.IsNullOrEmpty(assetPath))
-            {
-                string[] dependencyPaths = AssetDatabase.GetDependencies(assetPath, false);
-                foreach (string depPath in dependencyPaths)
-                {
-                    T depAsset = AssetDatabase.LoadAssetAtPath<T>(depPath);
-                    if (depAsset != null && !depAsset.Equals(asset))
+                    string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+                    T asset = UnityEditor.AssetDatabase.LoadAssetAtPath<T>(path);
+                    if (asset != null)
                     {
-                        dependencies.Add(depAsset);
+                        assets.Add(asset);
                     }
                 }
             }
-
-            return dependencies.ToArray();
-        }
-
-        /// <summary>
-        /// 获取引用指定资产的所有资产
-        /// </summary>
-        public T[] GetAssetReferences(T asset)
-        {
-            List<T> references = new List<T>();
-
-            string assetPath = AssetDatabase.GetAssetPath(asset);
-            if (!string.IsNullOrEmpty(assetPath))
+            catch (Exception ex)
             {
-                string[] allAssetPaths = AssetDatabase.GetAllAssetPaths();
-                foreach (string checkPath in allAssetPaths)
-                {
-                    string[] dependencies = AssetDatabase.GetDependencies(checkPath, false);
-                    if (dependencies.Contains(assetPath))
-                    {
-                        T refAsset = AssetDatabase.LoadAssetAtPath<T>(checkPath);
-                        if (refAsset != null && !refAsset.Equals(asset))
-                        {
-                            references.Add(refAsset);
-                        }
-                    }
-                }
+                Debug.LogError($"在文件夹'{folderPath}'中查找{typeof(T).Name}资产时发生错误：{ex.Message}");
             }
 
-            return references.ToArray();
+            return assets;
         }
 
-        /// <summary>
-        /// 获取资产的标签
-        /// </summary>
-        public string[] GetAssetLabels(T asset)
-        {
-            string assetPath = AssetDatabase.GetAssetPath(asset);
-            if (!string.IsNullOrEmpty(assetPath))
-            {
-                return AssetDatabase.GetLabels(asset);
-            }
-            return new string[0];
-        }
-
-        /// <summary>
-        /// 设置资产的标签
-        /// </summary>
-        public void SetAssetLabels(T asset, string[] labels)
-        {
-            AssetDatabase.SetLabels(asset, labels);
-        }
-
-        #endregion
     }
 }

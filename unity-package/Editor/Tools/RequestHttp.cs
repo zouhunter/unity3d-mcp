@@ -107,12 +107,46 @@ namespace UnityMcp.Tools
         }
 
         /// <summary>
-        /// 处理文件下载
+        /// 处理文件下载（默认使用协程）
         /// </summary>
         private object HandleDownloadFile(StateTreeContext ctx)
         {
-            LogInfo("[RequestHttp] Starting file download");
-            return DownloadFile(ctx);
+            LogInfo("[RequestHttp] Starting coroutine file download");
+            return DownloadFileCoroutine(ctx);
+        }
+
+        /// <summary>
+        /// 使用协程下载文件（异步）
+        /// </summary>
+        private object DownloadFileCoroutine(StateTreeContext ctx)
+        {
+            string url = ctx["url"]?.ToString();
+            string savePath = ctx["save_path"]?.ToString();
+            float timeout = ctx.TryGetValue("timeout", out int timeoutValue) ? timeoutValue : 60f;
+
+            // 参数验证
+            if (string.IsNullOrEmpty(url))
+            {
+                ctx.Complete(Response.Error("URL参数是必需的"));
+                return null;
+            }
+
+            if (string.IsNullOrEmpty(savePath))
+            {
+                ctx.Complete(Response.Error("save_path参数是必需的"));
+                return null;
+            }
+
+            LogInfo($"[RequestHttp] 启动协程下载: {url}");
+
+            // 启动协程下载
+            CoroutineRunner.StartCoroutine(DownloadFileAsync(url, savePath, timeout, (result) =>
+            {
+                ctx.Complete(result);
+            }, null, ctx));
+
+            // 返回null，表示异步执行
+            return null;
         }
 
         /// <summary>
@@ -134,12 +168,45 @@ namespace UnityMcp.Tools
         }
 
         /// <summary>
-        /// 处理批量下载
+        /// 处理批量下载（默认使用协程）
         /// </summary>
         private object HandleBatchDownload(StateTreeContext ctx)
         {
-            LogInfo("[RequestHttp] Starting batch download");
-            return BatchDownload(ctx);
+            LogInfo("[RequestHttp] Starting coroutine batch download");
+            return BatchDownloadCoroutine(ctx);
+        }
+
+        /// <summary>
+        /// 使用协程进行批量下载（异步）
+        /// </summary>
+        private object BatchDownloadCoroutine(StateTreeContext ctx)
+        {
+            var urlsToken = ctx["urls"];
+            string saveDirectory = ctx["save_directory"]?.ToString() ?? ctx["save_path"]?.ToString();
+
+            // 参数验证
+            if (urlsToken == null)
+            {
+                ctx.Complete(Response.Error("urls参数是必需的"));
+                return null;
+            }
+
+            if (string.IsNullOrEmpty(saveDirectory))
+            {
+                ctx.Complete(Response.Error("save_directory或save_path参数是必需的"));
+                return null;
+            }
+
+            LogInfo($"[RequestHttp] 启动协程批量下载");
+
+            // 启动协程批量下载
+            CoroutineRunner.StartCoroutine(BatchDownloadAsync(ctx, (result) =>
+            {
+                ctx.Complete(result);
+            }));
+
+            // 返回null，表示异步执行
+            return null;
         }
 
         // --- 核心实现方法 ---
@@ -163,7 +230,7 @@ namespace UnityMcp.Tools
                 string contentType = ctx["content_type"]?.ToString() ?? "application/json";
                 string userAgent = ctx["user_agent"]?.ToString() ?? "Unity-MCP-Network-Manager/1.0";
                 bool acceptCertificates = ctx.TryGetValue<bool>("accept_certificates", out var acceptCerts) ? acceptCerts : true;
-                bool followRedirects = ctx.TryGetValue<bool>("follow_redirects", out var followRedirects) ? followRedirects : true;
+                bool followRedirects = ctx.TryGetValue<bool>("follow_redirects", out var followRedirectsValue) ? followRedirectsValue : true;
                 int retryCount = ctx.TryGetValue<int>("retry_count", out var retryCountValue) ? retryCountValue : 0;
                 float retryDelay = ctx.TryGetValue<float>("retry_delay", out var retryDelayValue) ? retryDelayValue : 1f;
 
@@ -440,6 +507,291 @@ namespace UnityMcp.Tools
             {
                 return Response.Error($"HTTP请求失败 (状态码: {responseCode}): {request.error}", result);
             }
+        }
+
+        /// <summary>
+        /// 协程版本的文件下载器
+        /// </summary>
+        /// <param name="url">下载URL</param>
+        /// <param name="savePath">保存路径</param>
+        /// <param name="timeout">超时时间（秒）</param>
+        /// <param name="callback">完成回调</param>
+        /// <param name="progressCallback">进度回调，可选</param>
+        /// <param name="ctx">上下文，用于获取额外配置</param>
+        /// <returns>协程枚举器</returns>
+        IEnumerator DownloadFileAsync(string url, string savePath, float timeout, Action<object> callback,
+            Action<float> progressCallback = null, StateTreeContext ctx = null)
+        {
+            LogInfo($"[RequestHttp] 开始协程下载: {url}");
+
+            // 参数验证
+            if (string.IsNullOrEmpty(url))
+            {
+                callback?.Invoke(Response.Error("URL参数是必需的"));
+                yield break;
+            }
+
+            if (string.IsNullOrEmpty(savePath))
+            {
+                callback?.Invoke(Response.Error("save_path参数是必需的"));
+                yield break;
+            }
+
+            // 规范化保存路径
+            string fullSavePath = GetFullPath(savePath);
+            string directory = Path.GetDirectoryName(fullSavePath);
+
+            // 确保目录存在
+            try
+            {
+                if (!Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+            }
+            catch (Exception e)
+            {
+                callback?.Invoke(Response.Error($"无法创建目录: {e.Message}"));
+                yield break;
+            }
+
+            // 创建下载请求
+            using (var request = UnityWebRequest.Get(url))
+            {
+                request.timeout = (int)timeout;
+
+                // 如果有上下文，使用它来配置请求
+                if (ctx != null)
+                {
+                    ConfigureRequest(request, ctx, (int)timeout, "Unity-MCP-Downloader/1.0", true, true);
+                }
+                else
+                {
+                    request.SetRequestHeader("User-Agent", "Unity-MCP-Downloader/1.0");
+                }
+
+                // 发送请求
+                var operation = request.SendWebRequest();
+                float startTime = Time.realtimeSinceStartup;
+
+                // 等待下载完成，同时报告进度
+                while (!operation.isDone)
+                {
+                    // 检查超时
+                    float elapsedTime = Time.realtimeSinceStartup - startTime;
+                    if (elapsedTime > timeout)
+                    {
+                        request.Abort();
+                        callback?.Invoke(Response.Error($"下载超时 ({timeout}秒)"));
+                        yield break;
+                    }
+
+                    // 报告下载进度
+                    if (progressCallback != null && request.downloadHandler != null)
+                    {
+                        float progress = operation.progress;
+                        progressCallback(progress);
+                    }
+
+                    yield return null; // 等待一帧
+                }
+
+                // 检查下载结果
+                if (request.result == UnityWebRequest.Result.Success)
+                {
+                    try
+                    {
+                        // 保存文件
+                        File.WriteAllBytes(fullSavePath, request.downloadHandler.data);
+
+                        // 如果是Unity资源，刷新AssetDatabase
+                        if (fullSavePath.StartsWith(Application.dataPath))
+                        {
+                            string relativePath = "Assets" + fullSavePath.Substring(Application.dataPath.Length);
+                            AssetDatabase.ImportAsset(relativePath);
+                            AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
+                        }
+
+                        LogInfo($"[RequestHttp] 协程下载成功: {Path.GetFileName(fullSavePath)}");
+
+                        // 成功回调
+                        callback?.Invoke(Response.Success(
+                            $"文件下载成功: {Path.GetFileName(fullSavePath)}",
+                            new
+                            {
+                                url = url,
+                                save_path = fullSavePath,
+                                file_size = request.downloadHandler.data.Length,
+                                content_type = request.GetResponseHeader("Content-Type"),
+                                elapsed_time = Time.realtimeSinceStartup - startTime
+                            }
+                        ));
+                    }
+                    catch (Exception e)
+                    {
+                        callback?.Invoke(Response.Error($"保存文件失败: {e.Message}"));
+                    }
+                }
+                else
+                {
+                    // 下载失败
+                    string errorMessage = $"下载失败: {request.error}";
+                    if (request.responseCode > 0)
+                    {
+                        errorMessage += $" (HTTP {request.responseCode})";
+                    }
+
+                    LogError($"[RequestHttp] {errorMessage}");
+                    callback?.Invoke(Response.Error(errorMessage));
+                }
+            }
+        }
+
+        /// <summary>
+        /// 批量协程下载文件
+        /// </summary>
+        /// <param name="ctx">上下文</param>
+        /// <param name="callback">完成回调</param>
+        /// <returns>协程枚举器</returns>
+        IEnumerator BatchDownloadAsync(StateTreeContext ctx, Action<object> callback)
+        {
+            var urlsToken = ctx["urls"];
+            string saveDirectory = ctx["save_directory"]?.ToString() ?? ctx["save_path"]?.ToString();
+            float timeout = ctx.TryGetValue("timeout", out int timeoutValue) ? timeoutValue : 60f;
+
+            // 解析URL数组
+            string[] urls = null;
+            if (urlsToken is JArray urlArray)
+            {
+                urls = urlArray.ToObject<string[]>();
+            }
+            else if (urlsToken is string urlString)
+            {
+                urls = new[] { urlString };
+            }
+
+            if (urls == null || urls.Length == 0)
+            {
+                callback?.Invoke(Response.Error("urls数组不能为空"));
+                yield break;
+            }
+
+            // 规范化保存目录
+            string fullSaveDirectory = GetFullPath(saveDirectory);
+
+            // 确保目录存在
+            try
+            {
+                if (!Directory.Exists(fullSaveDirectory))
+                {
+                    Directory.CreateDirectory(fullSaveDirectory);
+                }
+            }
+            catch (Exception e)
+            {
+                callback?.Invoke(Response.Error($"无法创建目录: {e.Message}"));
+                yield break;
+            }
+
+            LogInfo($"[RequestHttp] 开始批量协程下载 {urls.Length} 个文件到: {fullSaveDirectory}");
+
+            var downloadResults = new List<object>();
+            var errors = new List<string>();
+            int completed = 0;
+            int total = urls.Length;
+
+            // 并发下载计数器
+            int activeDownloads = 0;
+            const int maxConcurrentDownloads = 3; // 最大并发下载数
+
+            for (int i = 0; i < urls.Length; i++)
+            {
+                string url = urls[i];
+
+                // 等待空闲槽位
+                while (activeDownloads >= maxConcurrentDownloads)
+                {
+                    yield return null;
+                }
+
+                // 从URL生成文件名
+                string fileName = GetFileNameFromUrl(url);
+                if (string.IsNullOrEmpty(fileName))
+                {
+                    fileName = $"download_{i + 1}";
+                }
+
+                string filePath = Path.Combine(fullSaveDirectory, fileName);
+
+                LogInfo($"[RequestHttp] 协程下载文件 {i + 1}/{total}: {url}");
+
+                activeDownloads++;
+
+                // 启动单个文件下载协程
+                CoroutineRunner.StartCoroutine(DownloadFileAsync(url, filePath, timeout, (result) =>
+                {
+                    lock (downloadResults)
+                    {
+                        bool downloadSuccess = IsSuccessResponse(result);
+
+                        downloadResults.Add(new
+                        {
+                            url = url,
+                            file_path = filePath,
+                            success = downloadSuccess,
+                            result = result
+                        });
+
+                        if (!downloadSuccess)
+                        {
+                            string errorMsg = $"文件 {Path.GetFileName(filePath)} 下载失败";
+                            if (result != null)
+                            {
+                                var errorProp = result.GetType().GetProperty("error");
+                                if (errorProp != null)
+                                {
+                                    errorMsg += $": {errorProp.GetValue(result)}";
+                                }
+                            }
+                            errors.Add(errorMsg);
+                        }
+
+                        completed++;
+                        activeDownloads--;
+
+                        LogInfo($"[RequestHttp] 批量下载进度: {completed}/{total} ({(completed * 100f / total):F1}%)");
+                    }
+                }, null, ctx));
+            }
+
+            // 等待所有下载完成
+            while (completed < total)
+            {
+                yield return null;
+            }
+
+            // 生成最终结果
+            int successCount = downloadResults.Count(r =>
+            {
+                var successProp = r.GetType().GetProperty("success");
+                return successProp != null && (bool)successProp.GetValue(r);
+            });
+
+            var finalResult = Response.Success(
+                $"批量下载完成: {successCount}/{total} 个文件成功",
+                new
+                {
+                    total_files = total,
+                    successful = successCount,
+                    failed = total - successCount,
+                    save_directory = fullSaveDirectory,
+                    results = downloadResults,
+                    errors = errors
+                }
+            );
+
+            LogInfo($"[RequestHttp] 批量协程下载完成: {successCount}/{total} 成功");
+            callback?.Invoke(finalResult);
         }
 
         /// <summary>
@@ -811,15 +1163,16 @@ namespace UnityMcp.Tools
                         };
 
                         // 复制认证和请求头参数
-                        if (ctx["headers"] as JObject != null) downloadArgs["headers"] = ctx["headers"];
-                        if (ctx["auth_token"]?.ToString() != null) downloadArgs["auth_token"] = ctx["auth_token"];
-                        if (ctx["basic_auth"]?.ToString() != null) downloadArgs["basic_auth"] = ctx["basic_auth"];
-                        if (ctx["user_agent"]?.ToString() != null) downloadArgs["user_agent"] = ctx["user_agent"];
+                        if (ctx["headers"] as JObject != null) downloadArgs["headers"] = ctx.JsonData["headers"];
+                        if (ctx["auth_token"]?.ToString() != null) downloadArgs["auth_token"] = ctx.JsonData["auth_token"];
+                        if (ctx["basic_auth"]?.ToString() != null) downloadArgs["basic_auth"] = ctx.JsonData["basic_auth"];
+                        if (ctx["user_agent"]?.ToString() != null) downloadArgs["user_agent"] = ctx.JsonData["user_agent"];
 
                         LogInfo($"[RequestHttp] 下载文件 {i + 1}/{urls.Length}: {url}");
 
                         // 调用单个文件下载方法
-                        var result = DownloadFile(downloadArgs);
+                        var downloadContext = new StateTreeContext(downloadArgs);
+                        var result = DownloadFile(downloadContext);
 
                         bool downloadSuccess = IsSuccessResponse(result);
 

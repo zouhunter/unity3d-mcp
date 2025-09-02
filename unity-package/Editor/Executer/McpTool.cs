@@ -11,6 +11,6 @@ namespace UnityMcp.Tools
         /// </summary>
         /// <param name="cmd">命令参数</param>
         /// <returns>处理结果</returns>
-        public abstract void HandleCommand(JObject ctx,Action<JObject> callback);
+        public abstract void HandleCommand(JObject ctx, System.Action<object> callback);
     }
 }

@@ -41,6 +41,10 @@ namespace UnityMcp.Tools
         public void RegistComplete(Action<object> completeAction)
         {
             CompleteAction = completeAction;
+            if (Result != null)
+            {
+                CompleteAction?.Invoke(Result);
+            }
         }
         /// <summary>
         /// 结束回调
@@ -339,7 +343,7 @@ namespace UnityMcp.Tools
         /// </summary>
         /// <param name="coroutine">协程</param>
         /// <returns>当前上下文实例</returns>
-        public StateTreeContext StartAsync(IEnumerator coroutine)
+        public StateTreeContext AsyncReturn(IEnumerator coroutine)
         {
             if (coroutine == null)
                 return this;

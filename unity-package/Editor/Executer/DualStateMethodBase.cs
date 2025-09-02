@@ -70,17 +70,6 @@ namespace UnityMcp.Tools
         protected abstract StateTree CreateActionTree();
 
         /// <summary>
-        /// 处理目标定位结果的虚方法，子类可以重写此方法来自定义目标处理逻辑。
-        /// </summary>
-        /// <param name="targetResult">目标定位的结果</param>
-        /// <param name="originalArgs">原始参数</param>
-        /// <returns>处理后的目标对象，如果为null则表示目标定位失败</returns>
-        protected virtual object ProcessTargetResult(object targetResult, StateTreeContext originalArgs)
-        {
-            return targetResult;
-        }
-
-        /// <summary>
         /// 预览双状态树结构，用于调试和可视化状态路由逻辑。
         /// </summary>
         /// <returns>双状态树的文本表示</returns>
@@ -105,132 +94,119 @@ namespace UnityMcp.Tools
         }
 
         /// <summary>
-        /// 执行工具方法，实现 IToolMethod 接口（同步版本）。
+        /// 执行工具方法，实现 IToolMethod 接口。
         /// 分两个阶段：首先通过目标定位树找到目标，然后通过执行操作树执行操作。
         /// </summary>
         /// <param name="args">方法调用的参数对象</param>
-        /// <returns>执行结果，若任一阶段失败则返回错误响应</returns>
-        public virtual object ExecuteMethod(StateTreeContext args)
+        public virtual void ExecuteMethod(StateTreeContext args)
         {
             try
             {
                 // 确保状态树已初始化
                 _targetTree = _targetTree ?? CreateTargetTree();
                 _actionTree = _actionTree ?? CreateActionTree();
-
-                // 第一阶段：使用目标定位树找到目标
-                LogInfo("[DualStateMethodBase] Phase 1: Target Location");
-                var targetResult = _targetTree.Run(args);
-
-                // 检查目标定位阶段的错误
-                if (targetResult == null && !string.IsNullOrEmpty(_targetTree.ErrorMessage))
-                {
-                    LogError($"[DualStateMethodBase] Target location failed: {_targetTree.ErrorMessage}");
-                    return Response.Error($"Target location failed: {_targetTree.ErrorMessage}");
-                }
-
-                // 处理目标定位结果
-                var processedTarget = ProcessTargetResult(targetResult, args);
-                if (processedTarget == null)
-                {
-                    LogError("[DualStateMethodBase] Target processing failed or returned null");
-                    return Response.Error("Target could not be located or processed");
-                }
-
-                LogInfo($"[DualStateMethodBase] Target located successfully: {processedTarget?.GetType()?.Name ?? "Unknown"}");
-
-                // 第二阶段：创建执行上下文并执行操作
-                LogInfo("[DualStateMethodBase] Phase 2: Action Execution");
-                args.SetObjectReference("_resolved_targets", processedTarget);
-
-                var actionResult = _actionTree.Run(args);
-
-                // 检查执行操作阶段的错误
-                if (actionResult == null && !string.IsNullOrEmpty(_actionTree.ErrorMessage))
-                {
-                    LogError($"[DualStateMethodBase] Action execution failed: {_actionTree.ErrorMessage}");
-                    return Response.Error($"Action execution failed: {_actionTree.ErrorMessage}");
-                }
-
-                LogInfo("[DualStateMethodBase] Action executed successfully");
-                return actionResult;
+                ExecuteTargetTree(args);
             }
             catch (Exception e)
             {
                 LogException(new Exception("[DualStateMethodBase] Unexpected error during dual-tree execution:", e));
-                return Response.Error($"Unexpected error during execution: {e.Message}");
+                args.Complete(Response.Error($"Unexpected error during execution: {e.Message}"));
+            }
+        }
+        /// <summary>
+        /// 执行目标树
+        /// </summary>
+        /// <param name="args"></param>
+        protected virtual void ExecuteTargetTree(StateTreeContext args)
+        {
+            var copyContext = new StateTreeContext(args.JsonData, args.ObjectReferences);
+            // 第一阶段：使用目标定位树找到目标
+            LogInfo("[DualStateMethodBase] Phase 1: Target Location");
+            var targetResult = _targetTree.Run(copyContext);
+
+            // 检查目标定位阶段的错误
+            if (targetResult == null && !string.IsNullOrEmpty(_targetTree.ErrorMessage))
+            {
+                LogError($"[DualStateMethodBase] Target location failed: {_targetTree.ErrorMessage}");
+                args.Complete(Response.Error($"Target location failed: {_targetTree.ErrorMessage}"));
+            }
+            else if (targetResult != null && targetResult != copyContext)
+            {
+                ExecuteActiontTree(targetResult, args);
+            }
+            else
+            {
+                copyContext.RegistComplete((x) => ExecuteActiontTree(x, args));
+            }
+        }
+        /// <summary>
+        /// 执行操作树
+        /// </summary>
+        /// <param name="targetResult"></param>
+        /// <param name="args"></param>
+        protected virtual void ExecuteActiontTree(object targetResult, StateTreeContext args)
+        {
+            // 处理目标定位结果
+            var processedTarget = ProcessTargetResult(targetResult);
+            if (processedTarget == null)
+            {
+                LogError("[DualStateMethodBase] Target processing failed or returned null");
+                args.Complete(Response.Error("Target could not be located or processed"));
+                return;
+            }
+
+            LogInfo($"[DualStateMethodBase] Target located successfully: {processedTarget?.GetType()?.Name ?? "Unknown"}");
+            // 第二阶段：创建执行上下文并执行操作
+            LogInfo("[DualStateMethodBase] Phase 2: Action Execution");
+            args.SetObjectReference("_resolved_targets", processedTarget);
+
+            var actionResult = _actionTree.Run(args);
+
+            // 检查执行操作阶段的错误
+            if (actionResult == null && !string.IsNullOrEmpty(_actionTree.ErrorMessage))
+            {
+                LogError($"[DualStateMethodBase] Action execution failed: {_actionTree.ErrorMessage}");
+                args.Complete(Response.Error($"Action execution failed: {_actionTree.ErrorMessage}"));
+                return;
+            }
+
+            LogInfo("[DualStateMethodBase] Action executed successfully");
+            if (actionResult == null && !string.IsNullOrEmpty(_actionTree.ErrorMessage))
+            {
+                LogError($"[DualStateMethodBase] Action execution failed: {_actionTree.ErrorMessage}");
+                args.Complete(Response.Error($"Action execution failed: {_actionTree.ErrorMessage}"));
+            }
+            // 完成执行
+            else if (actionResult != null && actionResult != args)
+            {
+                args.Complete(actionResult);
+            }
+            else
+            {
+                // 异步执行完成
+                LogInfo("[DualStateMethodBase] Execution completed!");
             }
         }
 
+
         /// <summary>
-        /// 执行工具方法，实现 IToolMethod 接口（异步版本）。
-        /// 通过主线程执行器确保双状态树在Unity主线程上执行。
+        /// 处理目标定位结果。如果目标结果是Response类型（即包含success字段），则直接返回，表示已是最终响应。
+        /// 否则返回原始目标结果，供后续操作树处理。
         /// </summary>
-        /// <param name="args">方法调用的参数对象</param>
-        /// <returns>执行结果，若任一阶段失败则返回错误响应</returns>
-        public virtual void ExecuteMethodAsync(StateTreeContext args)
+        protected virtual object ProcessTargetResult(object targetResult)
         {
-            try
+            // 判断是否为Response类型（即包含success字段的匿名对象）
+            if (targetResult != null)
             {
-                // 确保状态树已初始化
-                _targetTree = _targetTree ?? CreateTargetTree();
-                _actionTree = _actionTree ?? CreateActionTree();
-
-                // 第一阶段：使用目标定位树找到目标
-                LogInfo("[DualStateMethodBase] Phase 1: Target Location (Async)");
-                var targetResult = _targetTree.Run(args);
-
-                // 检查目标定位阶段的错误
-                if (targetResult == null && !string.IsNullOrEmpty(_targetTree.ErrorMessage))
+                var type = targetResult.GetType();
+                var successProp = type.GetProperty("success");
+                if (successProp != null)
                 {
-                    LogError($"[DualStateMethodBase] Target location failed: {_targetTree.ErrorMessage}");
-                    args.Complete(Response.Error($"Target location failed: {_targetTree.ErrorMessage}"));
-                    return;
-                }
-
-                // 处理目标定位结果
-                var processedTarget = ProcessTargetResult(targetResult, args);
-                if (processedTarget == null)
-                {
-                    LogError("[DualStateMethodBase] Target processing failed or returned null");
-                    args.Complete(Response.Error("Target could not be located or processed"));
-                    return;
-                }
-
-                LogInfo($"[DualStateMethodBase] Target located successfully: {processedTarget?.GetType()?.Name ?? "Unknown"}");
-
-                // 第二阶段：创建执行上下文并执行操作
-                LogInfo("[DualStateMethodBase] Phase 2: Action Execution (Async)");
-                args.SetObjectReference("_resolved_targets", processedTarget);
-
-                var actionResult = _actionTree.Run(args);
-
-                // 检查执行操作阶段的错误
-                if (actionResult == null && !string.IsNullOrEmpty(_actionTree.ErrorMessage))
-                {
-                    LogError($"[DualStateMethodBase] Action execution failed: {_actionTree.ErrorMessage}");
-                    args.Complete(Response.Error($"Action execution failed: {_actionTree.ErrorMessage}"));
-                    return;
-                }
-
-                LogInfo("[DualStateMethodBase] Action executed successfully (Async)");
-                
-                // 完成异步执行
-                if (actionResult != null && actionResult != args)
-                {
-                    args.Complete(actionResult);
-                }
-                else
-                {
-                    // 异步执行完成
-                    LogInfo("[DualStateMethodBase] Async execution completed!");
+                    return null;
                 }
             }
-            catch (Exception e)
-            {
-                LogException(new Exception("[DualStateMethodBase] Unexpected error during async dual-tree execution:", e));
-                args.Complete(Response.Error($"Unexpected error during async execution: {e.Message}"));
-            }
+            // 否则返回原始目标结果
+            return targetResult;
         }
 
         /// <summary>

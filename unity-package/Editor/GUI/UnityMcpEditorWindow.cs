@@ -116,6 +116,9 @@ namespace UnityMcp.Windows
 
         private void OnGUI()
         {
+            // 使用垂直布局管理整个窗口，确保充分利用空间
+            EditorGUILayout.BeginVertical(GUILayout.ExpandHeight(true));
+
             // Unity Bridge Section
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
@@ -163,9 +166,12 @@ namespace UnityMcp.Windows
             // 控制面板已移至标题行，不再单独显示
             // DrawControlPanel();
 
-            // 添加工具方法列表
+            // 添加工具方法列表 - 让它填充剩余空间
             EditorGUILayout.Space(10);
             DrawMethodsList();
+
+            // 结束主垂直布局
+            EditorGUILayout.EndVertical();
         }
         private async void ToggleUnityBridge()
         {
@@ -390,11 +396,53 @@ namespace UnityMcp.Windows
         }
 
         /// <summary>
+        /// 动态计算工具方法列表的可用高度
+        /// </summary>
+        private float CalculateAvailableMethodsHeight()
+        {
+            // 获取当前窗口总高度
+            float windowHeight = position.height;
+
+            // 估算已占用的空间
+            float usedHeight = 0f;
+
+            // Unity Bridge Section 估算高度 (约 120-140px)
+            usedHeight += 100;
+
+            // 客户端连接状态部分（如果显示）
+            if (isUnityBridgeRunning)
+            {
+                int clientCount = McpConnect.ConnectedClientCount;
+                if (clientCount > 0)
+                {
+                    // 如果显示详细信息，额外增加滚动视图高度
+                    if (showClientDetails)
+                    {
+                        usedHeight += 80f;
+                        // 滚动视图：最小80px，每个客户端约占100px，最大220px，再加上边距
+                        usedHeight += Mathf.Max(80f, Mathf.Min(clientCount * 100f, 220f)) + 10f;
+                    }
+                }
+            }
+
+            // 工具方法列表标题和间距 (约 50px)
+            usedHeight += 50f;
+
+            // 窗口边距和滚动条等 (约 30px)
+            usedHeight += 30f;
+
+            // 计算剩余可用高度，至少保留 150px
+            float availableHeight = Mathf.Max(windowHeight - usedHeight, 150f);
+
+            return availableHeight;
+        }
+
+        /// <summary>
         /// 绘制工具方法列表，支持折叠展开，按程序集分类显示
         /// </summary>
         private void DrawMethodsList()
         {
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox, GUILayout.ExpandHeight(true));
 
             // 标题栏：左侧显示标题，右侧显示调试按钮
             EditorGUILayout.BeginHorizontal();
@@ -437,9 +485,10 @@ namespace UnityMcp.Windows
                 methodsByAssembly[assemblyName].Add((methodName, method));
             }
 
-            // 滚动视图
+            // 动态计算可用高度并应用到滚动视图
+            float availableHeight = CalculateAvailableMethodsHeight();
             methodsScrollPosition = EditorGUILayout.BeginScrollView(methodsScrollPosition,
-                GUILayout.MinHeight(200), GUILayout.MaxHeight(400));
+                GUILayout.Height(availableHeight));
 
             // 按程序集名称排序并绘制
             foreach (var assemblyGroup in methodsByAssembly.OrderBy(kvp => kvp.Key))

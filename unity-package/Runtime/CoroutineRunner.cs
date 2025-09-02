@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEditor;
@@ -14,7 +15,7 @@ namespace UnityMcp.Tools
     public static class CoroutineRunner
     {
         private static readonly Queue<System.Action> _actions = new Queue<System.Action>();
-        private static readonly Queue<CoroutineInfo> _coroutines = new Queue<CoroutineInfo>();
+        private static readonly List<CoroutineInfo> _coroutines = new List<CoroutineInfo>();
         private static readonly object _lock = new object();
         private static bool _initialized = false;
 
@@ -66,7 +67,7 @@ namespace UnityMcp.Tools
                     }
                     catch (Exception e)
                     {
-                        if (McpConnect.EnableLog) Debug.LogError($"[MainThreadExecutor] Error executing action: {e}");
+                        Debug.LogError($"[MainThreadExecutor] Error executing action: {e}");
                     }
                 }
 
@@ -99,7 +100,7 @@ namespace UnityMcp.Tools
                             // 注意：协程的最后一个yield return的值才是最终结果
                             coroutineInfo.Result = current;
                             coroutineInfo.HasResult = true;
-                            
+
                             // 如果返回值是WaitForSeconds等，可以在这里处理
                             // 目前简单实现，直接继续执行
                         }
@@ -113,7 +114,7 @@ namespace UnityMcp.Tools
                 }
                 catch (Exception e)
                 {
-                    if (McpConnect.EnableLog) Debug.LogError($"[CoroutineRunner] Error executing coroutine: {e}");
+                    Debug.LogError($"[CoroutineRunner] Error executing coroutine: {e}");
                     coroutineInfo.IsRunning = false;
                     coroutineInfo.Error = e; // 将异常存储到Error字段
                     coroutineInfo.HasResult = false;
@@ -144,33 +145,12 @@ namespace UnityMcp.Tools
                         // 既没有异常也没有结果，传递null
                         resultToPass = null;
                     }
-                    
+
                     completed.CompleteCallback?.Invoke(resultToPass);
                 }
                 catch (Exception e)
                 {
-                    if (McpConnect.EnableLog) Debug.LogError($"[CoroutineRunner] Error in coroutine complete callback: {e}");
-                }
-            }
-        }
-
-        /// <summary>
-        /// 在主线程执行操作
-        /// </summary>
-        /// <param name="action">要执行的操作</param>
-        public static void Execute(System.Action action)
-        {
-            if (IsMainThread())
-            {
-                // 如果已经在主线程，直接执行
-                action?.Invoke();
-            }
-            else
-            {
-                // 否则加入队列等待主线程执行
-                lock (_lock)
-                {
-                    _actions.Enqueue(action);
+                    Debug.LogError($"[CoroutineRunner] Error in coroutine complete callback: {e}");
                 }
             }
         }
@@ -196,7 +176,7 @@ namespace UnityMcp.Tools
                     Error = null
                 };
 
-                _coroutines.Enqueue(coroutineInfo);
+                _coroutines.Add(coroutineInfo);
             }
         }
 
@@ -209,48 +189,6 @@ namespace UnityMcp.Tools
             {
                 _coroutines.Clear();
             }
-        }
-
-        /// <summary>
-        /// 检查当前是否在主线程
-        /// </summary>
-        /// <returns>如果在主线程返回true，否则返回false</returns>
-        public static bool IsMainThread()
-        {
-            return Thread.CurrentThread.ManagedThreadId == 1;
-        }
-
-        /// <summary>
-        /// 异步执行操作并等待结果
-        /// </summary>
-        /// <typeparam name="T">返回值类型</typeparam>
-        /// <param name="func">要执行的函数</param>
-        /// <returns>函数执行的结果</returns>
-        public static async Task<T> ExecuteMainThreadAsync<T>(Func<T> func)
-        {
-            if (IsMainThread())
-            {
-                // 如果已经在主线程，直接执行
-                return func();
-            }
-
-            // 使用TaskCompletionSource来等待主线程执行完成
-            var tcs = new TaskCompletionSource<T>();
-
-            Execute(() =>
-            {
-                try
-                {
-                    var result = func();
-                    tcs.SetResult(result);
-                }
-                catch (Exception e)
-                {
-                    tcs.SetException(e);
-                }
-            });
-
-            return await tcs.Task;
         }
     }
 }

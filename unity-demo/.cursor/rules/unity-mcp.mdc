@@ -77,7 +77,7 @@ function_call(
 ```python
 [
   { "func": "hierarchy_create", "args": {"from": "primitive", "primitive_type": "Cube", "name": "Enemy"} },
-  { "func": "edit_gameobject", "args": {"target": "Enemy", "action": "add_component", "component_name": "Rigidbody"} }
+  { "func": "edit_gameobject", "args": {"path": "Enemy", "action": "add_component", "component_name": "Rigidbody"} }
 ]
 ```
 
@@ -98,7 +98,7 @@ function_call(
 functions_call(
   funcs=[
     {"func": "hierarchy_create", "args": {"from": "primitive", "primitive_type": "Cube", "name": "Enemy"}},
-    {"func": "edit_gameobject", "args": {"target": "Enemy", "action": "add_component", "component_name": "Rigidbody"}}
+    {"func": "edit_gameobject", "args": {"path": "Enemy", "action": "add_component", "component_name": "Rigidbody"}}
   ]
 )
 ```
@@ -447,54 +447,138 @@ function_call(
 
 ---
 
-### edit_component - 组件操作管理
-**功能**: 执行Unity GameObject组件的各种操作，包括获取、添加、移除、设置属性等。
+### edit_component - 组件属性操作管理
+**功能**: 专门处理Unity GameObject组件的属性操作，支持批量获取和设置组件属性。使用双状态树架构进行目标定位和属性操作。
 
 主要参数（放入 `args`）
-- `action` (required): 操作类型
-  - `get_components`: 获取组件列表
-  - `add_component`: 添加组件
-  - `remove_component`: 移除组件
-  - `set_component_property`: 设置组件属性
-- `target` (required): 目标GameObject标识符（名称、ID或路径）
-- `search_method` (optional): 搜索方法
-- `component_name` (optional): 组件名称
-- `components` (optional): 要添加的组件列表
-- `components_to_remove` (optional): 要移除的组件列表
-- `component_properties` (optional): 组件属性字典
+- `id` (string, 可选): 对象的InstanceID
+- `path` (string, 可选): 对象的Hierarchy路径
+- `action` (string, 必需): 操作类型，支持 `get_component_propertys`、`set_component_propertys`
+- `component_type` (string, 必需): 组件类型名（继承自Component的类型名），如 "Transform"、"Rigidbody"、"MeshRenderer"
+- `properties` (dict, 可选): 属性字典（用于set_component_propertys操作）
 
-支持的操作：
-- **get_components**: 获取GameObject上的所有组件信息
-- **add_component**: 添加新组件到GameObject
-- **remove_component**: 从GameObject移除指定组件
-- **set_component_property**: 设置组件的属性值
+支持的操作类型 (action)
+- **get_component_propertys**: 批量获取组件的所有公共属性和字段
+- **set_component_propertys**: 批量设置组件的多个属性
 
-示例：
+**目标定位支持**
+- 通过 `id` 参数使用InstanceID精确定位
+- 通过 `path` 参数使用Hierarchy路径定位
+- 支持HierarchySelector的所有查找方式
+
+示例：获取Transform组件的所有属性
 ```python
-# 获取组件列表
 function_call(
   func="edit_component",
-  args={"action": "get_components", "target": "Player"}
-)
-
-# 添加Rigidbody组件
-function_call(
-  func="edit_component",
-  args={"action": "add_component", "target": "Player", "component_name": "Rigidbody"}
-)
-
-# 移除Collider组件
-function_call(
-  func="edit_component",
-  args={"action": "remove_component", "target": "Player", "component_name": "Collider"}
-)
-
-# 设置Image组件的sprite属性
-function_call(
-  func="edit_component",
-  args={"action": "set_component_property", "target": "Image", "component_name": "Image", "component_properties": {"sprite": "Assets/Pics/rabbit.jpg"}}
+  args={"action": "get_component_propertys", "instance_id": "12345", "component_type": "Transform"}
 )
 ```
+
+示例：获取Rigidbody组件的所有属性
+```python
+function_call(
+  func="edit_component",
+  args={"action": "get_component_propertys", "path": "Player", "component_type": "Rigidbody"}
+)
+```
+
+示例：批量设置Transform组件属性
+```python
+function_call(
+  func="edit_component",
+  args={
+    "action": "set_component_propertys", 
+    "path": "Player", 
+    "component_type": "Transform",
+    "properties": {
+      "localPosition": [0, 1, 0],
+      "localRotation": [0, 45, 0, 1],
+      "localScale": [2, 2, 2]
+    }
+  }
+)
+```
+
+示例：批量设置Rigidbody组件属性
+```python
+function_call(
+  func="edit_component",
+  args={
+    "action": "set_component_propertys",
+    "path": "Player",
+    "component_type": "Rigidbody", 
+    "properties": {
+      "mass": 2.5,
+      "useGravity": True,
+      "drag": 0.5,
+      "angularDrag": 0.1,
+      "isKinematic": False
+    }
+  }
+)
+```
+
+示例：设置Material Shader属性
+```python
+function_call(
+  func="edit_component",
+  args={
+    "action": "set_component_propertys",
+    "path": "Cube", 
+    "component_type": "MeshRenderer",
+    "properties": {
+      "material._Color": [1.0, 0.0, 0.0, 1.0],
+      "material._Metallic": 0.8,
+      "material._Smoothness": 0.9
+    }
+  }
+)
+```
+
+返回值格式 (get_component_propertys)
+```json
+{
+  "success": true,
+  "message": "Retrieved 15 properties from component 'Transform' on 'Player'.",
+  "data": {
+    "component_type": "UnityEngine.Transform",
+    "properties": {
+      "position": {"x": 0, "y": 0, "z": 0},
+      "rotation": {"x": 0, "y": 0, "z": 0, "w": 1},
+      "localScale": {"x": 1, "y": 1, "z": 1},
+      "localPosition": {"x": 0, "y": 0, "z": 0}
+    }
+  }
+}
+```
+
+返回值格式 (set_component_propertys)
+```json
+{
+  "success": true,
+  "message": "Set 3 of 3 properties on component 'Transform' on 'Player'.",
+  "data": {
+    "component_type": "Transform",
+    "total_properties": 3,
+    "successful_properties": 3,
+    "failed_properties": 0,
+    "results": {
+      "localPosition": "Success",
+      "localRotation": "Success", 
+      "localScale": "Success"
+    }
+  }
+}
+```
+
+特点
+- **批量属性操作**: 一次调用可以获取或设置组件的多个属性
+- **智能类型转换**: 支持Unity常用数据类型（Vector3、Quaternion、Color等）的自动转换
+- **详细结果反馈**: 提供每个属性操作的详细结果和错误信息
+- **材质Shader属性支持**: 直接支持设置材质的Shader属性（以_开头的属性）
+- **嵌套属性访问**: 支持通过点号访问嵌套属性，如 "material._Color"
+- **撤销支持**: 所有操作都支持Unity的撤销功能
+- **错误容错**: 单个属性操作失败不会影响其他属性的处理
 
 ---
 
@@ -646,10 +730,10 @@ function_call(
 **功能**: 使用双状态树架构处理GameObject修改操作，支持目标定位和多种操作，包括修改属性、组件管理和高级属性设置。
 
 主要参数（放入 `args`）
-- `target` (string, 必需): 目标GameObject标识符（名称、ID或路径）
-- `search_method` (string, 可选): 搜索方法，支持 `by_name`、`by_id`、`by_tag`、`by_layer`等
-- `search_in_scene` (bool, 可选): 是否仅在场景中查找（默认true）
-- `action` (string, 可选): 操作类型，支持 `modify`、`get_components`、`add_component`、`remove_component`、`set_component_property`、`set_property`、`get_property`
+- `id` (string, 必需): 目标GameObject的InstanceID
+- `path` (string, 可选): 目标GameObject的Hierarchy路径
+- `select_many` (bool, 可选): 是否选择所有匹配的对象进行批量操作（默认false）
+- `action` (string, 可选): 操作类型，支持 `create`、`modify`、`get_components`、`add_component`、`remove_component`、`set_property`、`get_property`
 
 **基本修改参数**
 - `name` (string, 可选): GameObject名称
@@ -663,15 +747,19 @@ function_call(
 
 **组件操作参数**
 - `component_name` (string, 可选): 组件名称
-- `components` (list, 可选): 要添加的组件列表
+- `components` (list, 可选): 要添加的组件列表，支持字符串或对象格式
 - `components_to_remove` (list, 可选): 要移除的组件列表
-- `component_properties` (dict, 可选): 组件属性字典
+- `component_properties` (dict, 可选): 组件属性字典，支持嵌套属性和数组访问
 
 **属性操作参数**
 - `property_name` (string, 可选): 属性名称（用于属性设置/获取）
 - `value` (any, 可选): 要设置的属性值
 
+**批量操作参数**
+- `select_many` (bool, 可选): 是否对所有匹配的对象进行批量操作
+
 支持的操作类型 (action)
+- `create` - 创建新GameObject（委托给hierarchy_create）
 - `modify` - 修改GameObject基本属性（默认操作）
 - `get_components` - 获取GameObject上的所有组件
 - `add_component` - 添加组件到GameObject
@@ -680,18 +768,19 @@ function_call(
 - `set_property` - 设置GameObject属性（通用属性操作）
 - `get_property` - 获取GameObject属性
 
-支持的搜索方法 (search_method)
-- `by_name` - 按名称搜索（默认）
-- `by_id` - 按ID搜索
-- `by_tag` - 按标签搜索
-- `by_layer` - 按层级搜索
-- `by_component` - 按组件类型搜索
-
 示例：修改GameObject基本属性（默认操作）
 ```python
 function_call(
   func="edit_gameobject",
-  args={"target": "Player", "name": "MainPlayer", "position": [0, 1, 0], "active": true}
+  args={"instance_id": "12345", "name": "MainPlayer", "position": [0, 1, 0], "active": true}
+)
+```
+
+示例：通过路径修改GameObject
+```python
+function_call(
+  func="edit_gameobject",
+  args={"path": "Player", "name": "MainPlayer", "position": [0, 1, 0], "active": true}
 )
 ```
 
@@ -699,47 +788,219 @@ function_call(
 ```python
 function_call(
   func="edit_gameobject",
-  args={"target": "Player", "action": "get_components"}
+  args={"instance_id": "12345", "action": "get_components"}
 )
 ```
 
-示例：添加组件到GameObject
+**组件操作示例:**
+
+示例：添加单个组件
 ```python
 function_call(
   func="edit_gameobject",
-  args={"target": "Player", "action": "add_component", "component_name": "Rigidbody"}
+  args={"path": "Player", "action": "add_component", "component_name": "Rigidbody"}
 )
 ```
 
-示例：移除组件
+示例：批量添加多个组件（字符串格式）
 ```python
 function_call(
   func="edit_gameobject",
-  args={"target": "Player", "action": "remove_component", "component_name": "Collider"}
+  args={"path": "Player", "action": "add_component", "components": ["Rigidbody", "BoxCollider", "AudioSource"]}
 )
 ```
 
-示例：设置组件属性
+示例：添加组件并立即设置属性
 ```python
 function_call(
   func="edit_gameobject",
-  args={"target": "Player", "action": "set_component_property", "component_name": "Rigidbody", "component_properties": {"mass": 2.5, "useGravity": true}}
+  args={
+    "path": "Player", 
+    "action": "add_component", 
+    "component_name": "Rigidbody",
+    "component_properties": {"mass": 2.5, "useGravity": true, "drag": 0.1}
+  }
 )
 ```
 
-示例：设置材质属性（使用嵌套访问）
+示例：添加组件（对象格式，支持初始属性）
 ```python
 function_call(
   func="edit_gameobject",
-  args={"target": "Cube", "action": "set_component_property", "component_name": "Renderer", "component_properties": {"material.color": [1.0, 0.0, 0.0, 1.0]}}
+  args={
+    "path": "Player", 
+    "action": "add_component", 
+    "components": [
+      {"typeName": "Rigidbody", "properties": {"mass": 2.5, "useGravity": true}},
+      {"typeName": "BoxCollider", "properties": {"isTrigger": false, "size": [1, 1, 1]}}
+    ]
+  }
 )
 ```
+
+示例：移除单个组件
+```python
+function_call(
+  func="edit_gameobject",
+  args={"path": "Player", "action": "remove_component", "component_name": "Collider"}
+)
+```
+
+示例：批量移除多个组件
+```python
+function_call(
+  func="edit_gameobject",
+  args={"path": "Player", "action": "remove_component", "components_to_remove": ["Rigidbody", "BoxCollider"]}
+)
+```
+
+**组件属性设置示例:**
+
+示例：设置基本组件属性
+```python
+function_call(
+  func="edit_gameobject",
+  args={
+    "path": "Player", 
+    "action": "set_component_property", 
+    "component_name": "Rigidbody", 
+    "component_properties": {"mass": 2.5, "useGravity": true, "drag": 0.5}
+  }
+)
+```
+
+示例：设置材质颜色（嵌套属性访问）
+```python
+function_call(
+  func="edit_gameobject",
+  args={
+    "path": "Cube", 
+    "action": "set_component_property", 
+    "component_name": "Renderer", 
+    "component_properties": {"material.color": [1.0, 0.0, 0.0, 1.0]}
+  }
+)
+```
+
+示例：设置Shader属性（以_开头的属性）
+```python
+function_call(
+  func="edit_gameobject",
+  args={
+    "path": "Cube", 
+    "action": "set_component_property", 
+    "component_name": "Renderer", 
+    "component_properties": {
+      "material._Color": [1.0, 0.5, 0.0, 1.0],
+      "material._Metallic": 0.8,
+      "material._Smoothness": 0.9
+    }
+  }
+)
+```
+
+示例：设置材质数组元素属性（数组访问）
+```python
+function_call(
+  func="edit_gameobject",
+  args={
+    "path": "MultiMaterialCube", 
+    "action": "set_component_property", 
+    "component_name": "Renderer", 
+    "component_properties": {
+      "materials[0].color": [1.0, 0.0, 0.0, 1.0],
+      "materials[1].color": [0.0, 1.0, 0.0, 1.0]
+    }
+  }
+)
+```
+
+示例：设置Unity Object引用（资产路径）
+```python
+function_call(
+  func="edit_gameobject",
+  args={
+    "path": "Cube", 
+    "action": "set_component_property", 
+    "component_name": "Renderer", 
+    "component_properties": {
+      "material": "Assets/Materials/RedMaterial.mat",
+      "material._MainTex": "Assets/Textures/brick.jpg"
+    }
+  }
+)
+```
+
+示例：设置Unity Object引用（GameObject引用）
+```python
+function_call(
+  func="edit_gameobject",
+  args={
+    "path": "Camera", 
+    "action": "set_component_property", 
+    "component_name": "Camera", 
+    "component_properties": {
+      "targetTexture": "Assets/RenderTextures/CameraOutput.renderTexture"
+    }
+  }
+)
+```
+
+示例：设置复杂组件引用（查找其他GameObject的组件）
+```python
+function_call(
+  func="edit_gameobject",
+  args={
+    "path": "FollowCamera", 
+    "action": "set_component_property", 
+    "component_name": "LookAtTarget", 
+    "component_properties": {
+      "target": {
+        "find": "Player",
+        "method": "by_name",
+        "component": "Transform"
+      }
+    }
+  }
+)
+```
+
+**批量操作示例:**
+
+示例：使用InstanceID批量修改（需要ObjectSelector支持）
+```python
+function_call(
+  func="edit_gameobject",
+  args={
+    "instance_id": "12345", 
+    "select_many": true,
+    "position": [0, 0, 0], 
+    "active": false
+  }
+)
+```
+
+示例：通过路径批量操作
+```python
+function_call(
+  func="edit_gameobject",
+  args={
+    "path": "Enemies/*", 
+    "select_many": true,
+    "action": "add_component",
+    "component_name": "Rigidbody",
+    "component_properties": {"mass": 1.0, "useGravity": true}
+  }
+)
+```
+
+**属性操作示例:**
 
 示例：设置GameObject属性
 ```python
 function_call(
   func="edit_gameobject",
-  args={"target": "Player", "action": "set_property", "property_name": "tag", "value": "Player"}
+  args={"path": "Player", "action": "set_property", "property_name": "tag", "value": "Player"}
 )
 ```
 
@@ -747,35 +1008,24 @@ function_call(
 ```python
 function_call(
   func="edit_gameobject",
-  args={"target": "Player", "action": "get_property", "property_name": "activeSelf"}
-)
-```
-
-示例：按标签搜索并修改
-```python
-function_call(
-  func="edit_gameobject",
-  args={"target": "Enemy", "search_method": "by_tag", "position": [0, 0, 0], "rotation": [0, 45, 0]}
-)
-```
-
-示例：批量添加多个组件
-```python
-function_call(
-  func="edit_gameobject",
-  args={"target": "Player", "action": "add_component", "components": ["Rigidbody", "BoxCollider", "AudioSource"]}
+  args={"instance_id": "12345", "action": "get_property", "property_name": "activeSelf"}
 )
 ```
 
 特殊功能
 - **双状态树架构**: 第一树负责目标定位，第二树负责操作执行，提供更强大的处理能力
-- **智能类型转换**: 自动处理Unity对象引用、Vector3、Color等类型
+- **批量操作支持**: 通过 `select_many` 参数可以对多个匹配对象进行批量操作
+- **智能类型转换**: 自动处理Unity对象引用、Vector3、Color、Quaternion等类型
 - **嵌套属性支持**: 支持通过点号访问嵌套属性，如 "material.color"、"material._MainTex"
-- **数组索引支持**: 支持访问数组元素，如 "materials[0].color"
-- **材质Shader属性**: 直接支持设置材质的Shader属性（以_开头的属性）
+- **数组索引支持**: 支持访问数组元素，如 "materials[0].color"、"materials[1]._Color"
+- **材质Shader属性**: 直接支持设置材质的Shader属性（以_开头的属性），包括颜色、浮点数、纹理等
 - **组件属性批量设置**: 通过component_properties字典可一次设置多个属性
+- **复杂引用处理**: 支持通过查找条件设置Unity Object引用，包括GameObject、Component、Asset等
 - **标签自动创建**: 如果指定的标签不存在，会自动创建
+- **组件动态查找**: 支持通过类名在所有程序集中查找组件类型
 - **撤销支持**: 所有操作都支持Unity的撤销功能
+- **错误恢复**: 批量操作时单个对象失败不会影响其他对象的处理
+- **属性验证**: 自动验证属性类型和可访问性，避免运行时错误
 
 ---
 

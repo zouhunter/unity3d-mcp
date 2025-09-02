@@ -203,9 +203,24 @@ namespace UnityMcp.Tools
                     if (string.IsNullOrEmpty(message))
                         continue; // 跳过空消息
 
-                    // --- 过滤 ---
+
+
+                    // --- 格式化和类型推断 ---
+                    string stackTrace = includeStacktrace ? ExtractStackTrace(message) : null;
+                    // 如果存在堆栈且被请求，获取第一行，否则使用完整消息
+                    string messageOnly =
+                        (includeStacktrace && !string.IsNullOrEmpty(stackTrace))
+                            ? message.Split(
+                                new[] { '\n', '\r' },
+                                StringSplitOptions.RemoveEmptyEntries
+                            )[0]
+                            : message;
+
+                    // 使用堆栈跟踪信息进行更准确的类型识别
+                    LogType currentType = GetLogTypeFromModeAndStackTrace(mode, message, stackTrace);
+
+                    // --- 过滤 ---  
                     // 按类型过滤
-                    LogType currentType = GetLogTypeFromMode(mode);
                     if (!types.Contains(currentType.ToString().ToLowerInvariant()))
                     {
                         continue;
@@ -219,17 +234,6 @@ namespace UnityMcp.Tools
                     {
                         continue;
                     }
-
-                    // --- 格式化 ---
-                    string stackTrace = includeStacktrace ? ExtractStackTrace(message) : null;
-                    // 如果存在堆栈且被请求，获取第一行，否则使用完整消息
-                    string messageOnly =
-                        (includeStacktrace && !string.IsNullOrEmpty(stackTrace))
-                            ? message.Split(
-                                new[] { '\n', '\r' },
-                                StringSplitOptions.RemoveEmptyEntries
-                            )[0]
-                            : message;
 
                     object formattedEntry = null;
                     switch (format)
@@ -307,49 +311,107 @@ namespace UnityMcp.Tools
 
         private static LogType GetLogTypeFromMode(int mode)
         {
-            // 首先，基于原始逻辑确定类型（最严重的优先）
-            LogType initialType;
-            if (
-                (
-                    mode
-                    & (
-                        ModeBitError
-                        | ModeBitScriptingError
-                        | ModeBitException
-                        | ModeBitScriptingException
-                    )
-                ) != 0
-            )
+            // 基于Unity 2021.3的实际bit模式
+            // 通过观察发现Unity内部的mode位定义与我们预期的不同
+
+            // 简化的基于位模式的映射
+            // 基于实际观察，重新定义位映射：
+
+            if ((mode & 0x8) != 0) // 位3 - 实际对应Error
             {
-                initialType = LogType.Error;
+                return LogType.Error;
             }
-            else if ((mode & (ModeBitAssert | ModeBitScriptingAssertion)) != 0)
+            else if ((mode & 0x4) != 0) // 位2 - 实际对应Warning  
             {
-                initialType = LogType.Assert;
+                return LogType.Warning;
             }
-            else if ((mode & (ModeBitWarning | ModeBitScriptingWarning)) != 0)
+            else if ((mode & 0x2) != 0) // 位1 - 实际对应Assert
             {
-                initialType = LogType.Warning;
+                return LogType.Assert;
+            }
+            else if ((mode & 0x1) != 0) // 位0 - 实际对应Exception
+            {
+                return LogType.Exception;
+            }
+            else if ((mode & 0x10) != 0) // 位4 - 可能对应其他Exception类型
+            {
+                return LogType.Exception;
             }
             else
             {
-                initialType = LogType.Log;
+                return LogType.Log; // 默认为普通日志
+            }
+        }
+
+        /// <summary>
+        /// 基于mode、消息内容和堆栈跟踪推断正确的日志类型
+        /// </summary>
+        private static LogType GetLogTypeFromModeAndStackTrace(int mode, string fullMessage, string stackTrace)
+        {
+            // 优先使用堆栈跟踪进行类型判断，这是最可靠的方法
+            string textToSearch = stackTrace ?? fullMessage;
+
+            if (!string.IsNullOrEmpty(textToSearch))
+            {
+                // 精确匹配Debug方法调用
+                if (textToSearch.Contains("UnityEngine.Debug:LogError (object)"))
+                {
+                    return LogType.Error;
+                }
+                else if (textToSearch.Contains("UnityEngine.Debug:LogWarning (object)"))
+                {
+                    return LogType.Warning;
+                }
+                else if (textToSearch.Contains("UnityEngine.Debug:LogAssertion (object)"))
+                {
+                    return LogType.Assert;
+                }
+                else if (textToSearch.Contains("UnityEngine.Debug:LogException"))
+                {
+                    return LogType.Exception;
+                }
+                else if (textToSearch.Contains("UnityEngine.Debug:Log (object)"))
+                {
+                    return LogType.Log;
+                }
+
+                // 备用模式匹配（不那么精确）
+                else if (textToSearch.Contains("UnityEngine.Debug:LogError"))
+                {
+                    return LogType.Error;
+                }
+                else if (textToSearch.Contains("UnityEngine.Debug:LogWarning"))
+                {
+                    return LogType.Warning;
+                }
+                else if (textToSearch.Contains("UnityEngine.Debug:Log"))
+                {
+                    return LogType.Log;
+                }
             }
 
-            // 应用观察到的"低一级"校正
-            switch (initialType)
+            // 对于编译错误等特殊情况，使用mode位分析
+            // 编译错误通常不包含Debug调用的堆栈跟踪
+            if (string.IsNullOrEmpty(stackTrace) || !stackTrace.Contains("UnityEngine.Debug:"))
             {
-                case LogType.Error:
-                    return LogType.Warning; // Error变成Warning
-                case LogType.Warning:
-                    return LogType.Log; // Warning变成Log
-                case LogType.Assert:
-                    return LogType.Assert; // Assert保持Assert（没有定义更低级别）
-                case LogType.Log:
-                    return LogType.Log; // Log保持Log
-                default:
-                    return LogType.Log; // 默认回退
+                // 对于真正的编译错误，mode位是可靠的
+                if ((mode & ModeBitError) != 0 || (mode & ModeBitException) != 0 ||
+                    (mode & ModeBitScriptingError) != 0 || (mode & ModeBitScriptingException) != 0)
+                {
+                    return LogType.Error;
+                }
+                else if ((mode & ModeBitWarning) != 0 || (mode & ModeBitScriptingWarning) != 0)
+                {
+                    return LogType.Warning;
+                }
+                else if ((mode & ModeBitAssert) != 0 || (mode & ModeBitScriptingAssertion) != 0)
+                {
+                    return LogType.Assert;
+                }
             }
+
+            // 默认回退
+            return LogType.Log;
         }
 
         /// <summary>

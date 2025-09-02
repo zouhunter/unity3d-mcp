@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Generic;
+using System.Collections;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -134,7 +134,7 @@ namespace UnityMcp.Tools
                 LogInfo($"[HierarchyCreate] Finalizing newly created object: '{newObject.name}' (ID: {newObject.GetInstanceID()})");
 
                 // 应用其他设置（名称、位置等）
-                var finalizeResult = FinalizeGameObjectCreation(ctx.Args, newObject, false);
+                var finalizeResult = FinalizeGameObjectCreation(ctx.JsonData, newObject, false);
                 LogInfo($"[HierarchyCreate] Finalization result: {finalizeResult}");
                 yield return finalizeResult;
                 yield break;
@@ -153,7 +153,7 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleCreateFromMenu(StateTreeContext ctx)
         {
-            return ctx.StartAsync(HandleCreateFromMenuAsync(ctx));
+            return ctx.AsyncReturn(HandleCreateFromMenuAsync(ctx));
         }
 
         /// <summary>

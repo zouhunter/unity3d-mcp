@@ -5,6 +5,7 @@ using System.Reflection;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using UnityEditor.SearchService;
 using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -22,10 +23,12 @@ namespace UnityMcp.Tools
     public class EditGameObject : DualStateMethodBase
     {
         private HierarchyCreate hierarchyCreate;
+        private IObjectSelector objectSelector;
 
         public EditGameObject()
         {
             hierarchyCreate = new HierarchyCreate();
+            objectSelector = objectSelector ?? new ObjectSelector<GameObject>();
         }
 
         /// <summary>
@@ -35,15 +38,11 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                // 目标定位参数
-                new MethodKey("target", "目标GameObject标识符（名称、ID或路径）", false),
-                new MethodKey("search_method", "搜索方法：by_name, by_id, by_tag, by_layer等", true),
-                new MethodKey("search_in_scene", "是否仅在场景中查找（默认true）", true),
-                new MethodKey("select_many", "是否选择所有匹配的对象进行批量操作（默认false）", true),
-                
+                   // 目标查找参数
+                new MethodKey("instance_id", "对象的InstanceID", true),
+                new MethodKey("path", "对象的Hierachy路径", false),
                 // 操作参数
-                new MethodKey("action", "操作类型：create,modify, get_components, add_component, remove_component, set_component_property, set_property, get_property", false),
-                
+                new MethodKey("action", "操作类型：create,modify, get_components, add_component, remove_component,", false),
                 // 基本修改参数
                 new MethodKey("name", "GameObject名称", true),
                 new MethodKey("tag", "GameObject标签", true),
@@ -53,13 +52,9 @@ namespace UnityMcp.Tools
                 new MethodKey("rotation", "旋转角度 [x, y, z]", true),
                 new MethodKey("scale", "缩放比例 [x, y, z]", true),
                 new MethodKey("active", "设置激活状态", true),
-                
                 // 组件操作参数
                 new MethodKey("component_name", "组件名称", true),
-                new MethodKey("components", "要添加的组件列表", true),
-                new MethodKey("components_to_remove", "要移除的组件列表", true),
                 new MethodKey("component_properties", "组件属性字典", true),
-                
                 // 属性操作参数（兜底功能）
                 new MethodKey("property_name", "属性名称（用于属性设置/获取）", true),
                 new MethodKey("value", "要设置的属性值", true),
@@ -71,7 +66,7 @@ namespace UnityMcp.Tools
         /// </summary>
         protected override StateTree CreateTargetTree()
         {
-            return new GameObjectSelector().BuildStateTree();
+            return objectSelector.BuildStateTree();
         }
 
         /// <summary>
@@ -87,7 +82,6 @@ namespace UnityMcp.Tools
                 .Leaf("get_components", (Func<StateTreeContext, object>)HandleGetComponentsAction)
                 .Leaf("add_component", (Func<StateTreeContext, object>)HandleAddComponentAction)
                 .Leaf("remove_component", (Func<StateTreeContext, object>)HandleRemoveComponentAction)
-                .Leaf("set_component_property", (Func<StateTreeContext, object>)HandleSetComponentPropertyAction)
                 .Leaf("set_property", (Func<StateTreeContext, object>)HandleSetPropertyAction)
                 .Leaf("get_property", (Func<StateTreeContext, object>)HandleGetPropertyAction)
                 .DefaultLeaf((Func<StateTreeContext, object>)HandleDefaultAction)
@@ -99,7 +93,8 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleCreateAction(StateTreeContext args)
         {
-            return hierarchyCreate.ExecuteMethod(args);
+            hierarchyCreate.ExecuteMethod(args);
+            return args;
         }
 
         /// <summary>
@@ -2090,18 +2085,10 @@ namespace UnityMcp.Tools
                 return null;
 
             // 使用GameObjectDynamicSelector来查找父对象
-            var selector = new GameObjectSelector();
+            var selector = new ObjectSelector<GameObject>();
             JObject findArgs = new JObject();
-            findArgs["target"] = parentIdentifier;
-            findArgs["search_in_scene"] = true;
-            findArgs["search_method"] = "by_name"; // 默认按名称查找
-
-            // 尝试按ID查找（如果是数字）
-            if (int.TryParse(parentIdentifier, out int id))
-            {
-                findArgs["search_method"] = "by_id";
-            }
-
+            findArgs["id"] = parentIdentifier;
+            findArgs["path"] = "";
             var stateTree = selector.BuildStateTree();
             object result = stateTree.Run(new StateTreeContext(findArgs));
 

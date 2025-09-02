@@ -25,13 +25,15 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("action", "操作类型：import, modify, move, duplicate, rename, search, get_info, create_folder等", false),
+                new MethodKey("action", "操作类型：import, modify, move, duplicate, rename, search, get_info, create_folder, reload等", false),
                 new MethodKey("path", "资产路径，Unity标准格式：Assets/Folder/File.extension", false),
                 new MethodKey("properties", "资产属性字典，用于设置资产的各种属性", true),
                 new MethodKey("destination", "目标路径（移动/复制时使用）", true),
                 new MethodKey("search_pattern", "搜索模式，如*.prefab, *.cs等（搜索时使用）", true),
                 new MethodKey("recursive", "是否递归搜索子文件夹", true),
-                new MethodKey("force", "是否强制执行操作（覆盖现有文件等）", true)
+                new MethodKey("force", "是否强制执行操作（覆盖现有文件等）", true),
+                new MethodKey("refresh_type", "刷新类型：all(全部), assets(仅资产), scripts(仅脚本)，默认all", true),
+                new MethodKey("save_before_refresh", "刷新前是否保存所有资产，默认true", true)
             };
         }
 
@@ -45,6 +47,7 @@ namespace UnityMcp.Tools
                 .Create()
                 .Key("action")
                     .Leaf("import", ReimportAsset)
+                    .Leaf("refresh", RefreshProject)
                     .Leaf("modify", ModifyAsset)
                     .Leaf("duplicate", DuplicateAsset)
                     .Leaf("move", MoveOrRenameAsset)
@@ -551,7 +554,165 @@ namespace UnityMcp.Tools
             }
         }
 
+        /// <summary>
+        /// 重载（刷新）Unity工程资产数据库
+        /// </summary>
+        private object RefreshProject(JObject args)
+        {
+            try
+            {
+                string refreshType = args["refresh_type"]?.ToString()?.ToLower() ?? "all";
+                bool saveBeforeRefresh = args["save_before_refresh"]?.ToObject<bool?>() ?? true;
+                string specificPath = args["path"]?.ToString();
 
+                LogInfo($"[ProjectOperate] Starting project reload with type: {refreshType}");
+
+                // 记录开始时间用于性能监控
+                var startTime = System.DateTime.Now;
+
+                // 保存所有待保存的资产
+                if (saveBeforeRefresh)
+                {
+                    LogInfo("[ProjectOperate] Saving all modified assets before refresh...");
+                    AssetDatabase.SaveAssets();
+                }
+
+                // 根据刷新类型执行不同的刷新操作
+                switch (refreshType)
+                {
+                    case "all":
+                        LogInfo("[ProjectOperate] Performing full project refresh...");
+                        // 全面刷新：包括资产导入、脚本编译等
+                        if (!string.IsNullOrEmpty(specificPath))
+                        {
+                            string sanitizedPath = SanitizeAssetPath(specificPath);
+                            if (AssetExists(sanitizedPath))
+                            {
+                                AssetDatabase.ImportAsset(sanitizedPath, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ImportRecursive);
+                                LogInfo($"[ProjectOperate] Refreshed specific path: {sanitizedPath}");
+                            }
+                            else
+                            {
+                                LogInfo($"[ProjectOperate] Specified path '{specificPath}' not found, performing full refresh");
+                            }
+                        }
+                        AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
+                        break;
+
+                    case "assets":
+                        LogInfo("[ProjectOperate] Performing assets-only refresh...");
+                        // 仅刷新资产，不触发脚本重新编译
+                        if (!string.IsNullOrEmpty(specificPath))
+                        {
+                            string sanitizedPath = SanitizeAssetPath(specificPath);
+                            if (AssetExists(sanitizedPath))
+                            {
+                                AssetDatabase.ImportAsset(sanitizedPath, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ImportRecursive);
+                            }
+                        }
+                        AssetDatabase.Refresh(ImportAssetOptions.Default);
+                        break;
+
+                    case "scripts":
+                        LogInfo("[ProjectOperate] Performing scripts-only refresh...");
+                        // 主要针对脚本文件的重新编译
+                        AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+                        // 强制请求脚本重新编译
+                        EditorUtility.RequestScriptReload();
+                        break;
+
+                    default:
+                        return Response.Error($"Unknown refresh_type: '{refreshType}'. Valid options are 'all', 'assets', or 'scripts'.");
+                }
+
+                // 计算耗时
+                var duration = System.DateTime.Now - startTime;
+
+                // 获取项目统计信息
+                var projectStats = GetProjectStatistics();
+
+                LogInfo($"[ProjectOperate] Project reload completed in {duration.TotalSeconds:F2} seconds");
+
+                return Response.Success(
+                    $"Project reloaded successfully with type '{refreshType}' in {duration.TotalSeconds:F2} seconds.",
+                    new
+                    {
+                        refreshType = refreshType,
+                        durationSeconds = duration.TotalSeconds,
+                        savedBeforeRefresh = saveBeforeRefresh,
+                        specificPath = specificPath,
+                        timestamp = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                        projectStatistics = projectStats
+                    }
+                );
+            }
+            catch (Exception e)
+            {
+                LogError($"[ProjectOperate] Failed to reload project: {e.Message}");
+                return Response.Error($"Failed to reload project: {e.Message}");
+            }
+        }
+
+
+
+        /// <summary>
+        /// 获取项目统计信息
+        /// </summary>
+        private object GetProjectStatistics()
+        {
+            try
+            {
+                // 统计不同类型的资产数量
+                string[] allAssetGUIDs = AssetDatabase.FindAssets("");
+
+                int totalAssets = allAssetGUIDs.Length;
+                int scriptCount = AssetDatabase.FindAssets("t:MonoScript").Length;
+                int prefabCount = AssetDatabase.FindAssets("t:Prefab").Length;
+                int materialCount = AssetDatabase.FindAssets("t:Material").Length;
+                int textureCount = AssetDatabase.FindAssets("t:Texture2D").Length;
+                int sceneCount = AssetDatabase.FindAssets("t:Scene").Length;
+                int audioCount = AssetDatabase.FindAssets("t:AudioClip").Length;
+                int modelCount = AssetDatabase.FindAssets("t:Model").Length;
+
+                // 统计文件夹数量
+                int folderCount = 0;
+                foreach (string guid in allAssetGUIDs)
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(guid);
+                    if (AssetDatabase.IsValidFolder(path))
+                    {
+                        folderCount++;
+                    }
+                }
+
+                return new
+                {
+                    totalAssets = totalAssets,
+                    breakdown = new
+                    {
+                        scripts = scriptCount,
+                        prefabs = prefabCount,
+                        materials = materialCount,
+                        textures = textureCount,
+                        scenes = sceneCount,
+                        audioClips = audioCount,
+                        models = modelCount,
+                        folders = folderCount,
+                        others = totalAssets - scriptCount - prefabCount - materialCount - textureCount - sceneCount - audioCount - modelCount - folderCount
+                    },
+                    lastRefreshTime = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                };
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[ProjectOperate] Failed to get project statistics: {e.Message}");
+                return new
+                {
+                    error = "Failed to gather project statistics",
+                    message = e.Message
+                };
+            }
+        }
 
         // --- Internal Helpers ---
 

@@ -25,11 +25,9 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                // 目标定位参数
-                new MethodKey("target", "目标GameObject标识符（名称、ID或路径）", false),
-                new MethodKey("search_method", "搜索方法：by_name, by_id, by_tag, by_layer等", true),
-                new MethodKey("search_in_scene", "是否仅在场景中查找（默认true）", true),
-                new MethodKey("select_many", "是否选择所有匹配的对象进行批量操作（默认false）", true),
+                         // 目标查找参数
+                new MethodKey("id", "对象的InstanceID", true),
+                new MethodKey("path", "对象的Hierachy路径", false),
                 
                 // 操作参数
                 new MethodKey("action", "操作类型：modify, get_property, set_property, set_anchors, set_size, set_position", false),
@@ -70,7 +68,7 @@ namespace UnityMcp.Tools
         /// </summary>
         protected override StateTree CreateTargetTree()
         {
-            return new GameObjectSelector().BuildStateTree();
+            return new ObjectSelector<GameObject>().BuildStateTree();
         }
 
         /// <summary>

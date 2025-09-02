@@ -47,7 +47,7 @@ namespace UnityMcp.Tools
                 new MethodKey("name", "GameObject名称", true),
                 new MethodKey("tag", "GameObject标签", true),
                 new MethodKey("layer", "GameObject所在层", true),
-                new MethodKey("parent", "父对象标识符", true),
+                new MethodKey("parent_id", "父对象的InstanceID", true),
                 new MethodKey("position", "位置坐标 [x, y, z]", true),
                 new MethodKey("rotation", "旋转角度 [x, y, z]", true),
                 new MethodKey("scale", "缩放比例 [x, y, z]", true),

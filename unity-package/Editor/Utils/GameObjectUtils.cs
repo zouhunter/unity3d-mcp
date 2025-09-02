@@ -433,7 +433,7 @@ namespace UnityMcp.Tools
         /// </summary>
         public static void ApplyParentSetting(JObject args, GameObject newGo, Action<string> logAction = null)
         {
-            JToken parentToken = args["parent"];
+            JToken parentToken = args["parent_id"];
             if (parentToken != null)
             {
                 GameObject parentGo = FindObjectByIdOrNameOrPath(parentToken);

@@ -31,7 +31,7 @@ namespace UnityMcp.Tools
                 new MethodKey("from", "操作类型：menu, primitive, prefab", false),
                 new MethodKey("tag", "GameObject标签", true),
                 new MethodKey("layer", "GameObject所在层", true),
-                new MethodKey("parent", "父对象标识符", true),
+                new MethodKey("parent_id", "父对象标识符", true),
                 new MethodKey("position", "位置坐标 [x, y, z]", true),
                 new MethodKey("rotation", "旋转角度 [x, y, z]", true),
                 new MethodKey("scale", "缩放比例 [x, y, z]", true),

@@ -535,6 +535,71 @@ function_call(
 )
 ```
 
+示例：设置材质颜色（嵌套属性访问）
+```python
+function_call(
+  func="edit_component",
+  args={
+    "action": "set_component_propertys",
+    "path": "Cube", 
+    "component_type": "Renderer",
+    "properties": {
+      "material.color": [1.0, 0.0, 0.0, 1.0]
+    }
+  }
+)
+```
+
+示例：设置材质数组元素属性（数组访问）
+```python
+function_call(
+  func="edit_component",
+  args={
+    "action": "set_component_propertys",
+    "path": "MultiMaterialCube", 
+    "component_type": "Renderer",
+    "properties": {
+      "materials[0].color": [1.0, 0.0, 0.0, 1.0],
+      "materials[1].color": [0.0, 1.0, 0.0, 1.0]
+    }
+  }
+)
+```
+
+示例：设置Unity Object引用（资产路径）
+```python
+function_call(
+  func="edit_component",
+  args={
+    "action": "set_component_propertys",
+    "path": "Cube", 
+    "component_type": "Renderer",
+    "properties": {
+      "material": "Assets/Materials/RedMaterial.mat",
+      "material._MainTex": "Assets/Textures/brick.jpg"
+    }
+  }
+)
+```
+
+示例：设置Camera组件属性
+```python
+function_call(
+  func="edit_component",
+  args={
+    "action": "set_component_propertys",
+    "path": "Camera", 
+    "component_type": "Camera",
+    "properties": {
+      "targetTexture": "Assets/RenderTextures/CameraOutput.renderTexture",
+      "fieldOfView": 60.0,
+      "nearClipPlane": 0.3,
+      "farClipPlane": 1000.0
+    }
+  }
+)
+```
+
 返回值格式 (get_component_propertys)
 ```json
 {
@@ -739,7 +804,7 @@ function_call(
 - `name` (string, 可选): GameObject名称
 - `tag` (string, 可选): GameObject标签
 - `layer` (string, 可选): GameObject所在层
-- `parent` (string, 可选): 父对象标识符
+- `parent_id` (string, 可选): 父对象实例id
 - `position` (list, 可选): 位置坐标 [x, y, z]
 - `rotation` (list, 可选): 旋转角度 [x, y, z]
 - `scale` (list, 可选): 缩放比例 [x, y, z]
@@ -764,9 +829,10 @@ function_call(
 - `get_components` - 获取GameObject上的所有组件
 - `add_component` - 添加组件到GameObject
 - `remove_component` - 从GameObject移除组件
-- `set_component_property` - 设置组件属性
 - `set_property` - 设置GameObject属性（通用属性操作）
 - `get_property` - 获取GameObject属性
+
+**注意**: 组件属性设置功能已移动到 `edit_component` 方法，请使用 `edit_component` 的 `set_component_propertys` 操作来设置组件属性。
 
 示例：修改GameObject基本属性（默认操作）
 ```python
@@ -854,116 +920,7 @@ function_call(
 )
 ```
 
-**组件属性设置示例:**
-
-示例：设置基本组件属性
-```python
-function_call(
-  func="edit_gameobject",
-  args={
-    "path": "Player", 
-    "action": "set_component_property", 
-    "component_name": "Rigidbody", 
-    "component_properties": {"mass": 2.5, "useGravity": true, "drag": 0.5}
-  }
-)
-```
-
-示例：设置材质颜色（嵌套属性访问）
-```python
-function_call(
-  func="edit_gameobject",
-  args={
-    "path": "Cube", 
-    "action": "set_component_property", 
-    "component_name": "Renderer", 
-    "component_properties": {"material.color": [1.0, 0.0, 0.0, 1.0]}
-  }
-)
-```
-
-示例：设置Shader属性（以_开头的属性）
-```python
-function_call(
-  func="edit_gameobject",
-  args={
-    "path": "Cube", 
-    "action": "set_component_property", 
-    "component_name": "Renderer", 
-    "component_properties": {
-      "material._Color": [1.0, 0.5, 0.0, 1.0],
-      "material._Metallic": 0.8,
-      "material._Smoothness": 0.9
-    }
-  }
-)
-```
-
-示例：设置材质数组元素属性（数组访问）
-```python
-function_call(
-  func="edit_gameobject",
-  args={
-    "path": "MultiMaterialCube", 
-    "action": "set_component_property", 
-    "component_name": "Renderer", 
-    "component_properties": {
-      "materials[0].color": [1.0, 0.0, 0.0, 1.0],
-      "materials[1].color": [0.0, 1.0, 0.0, 1.0]
-    }
-  }
-)
-```
-
-示例：设置Unity Object引用（资产路径）
-```python
-function_call(
-  func="edit_gameobject",
-  args={
-    "path": "Cube", 
-    "action": "set_component_property", 
-    "component_name": "Renderer", 
-    "component_properties": {
-      "material": "Assets/Materials/RedMaterial.mat",
-      "material._MainTex": "Assets/Textures/brick.jpg"
-    }
-  }
-)
-```
-
-示例：设置Unity Object引用（GameObject引用）
-```python
-function_call(
-  func="edit_gameobject",
-  args={
-    "path": "Camera", 
-    "action": "set_component_property", 
-    "component_name": "Camera", 
-    "component_properties": {
-      "targetTexture": "Assets/RenderTextures/CameraOutput.renderTexture"
-    }
-  }
-)
-```
-
-示例：设置复杂组件引用（查找其他GameObject的组件）
-```python
-function_call(
-  func="edit_gameobject",
-  args={
-    "path": "FollowCamera", 
-    "action": "set_component_property", 
-    "component_name": "LookAtTarget", 
-    "component_properties": {
-      "target": {
-        "find": "Player",
-        "method": "by_name",
-        "component": "Transform"
-      }
-    }
-  }
-)
-```
+**注意**: 组件属性设置示例已移动到 `edit_component` 部分，请参考该部分的详细示例。
 
 **批量操作示例:**
 
@@ -1030,14 +987,17 @@ function_call(
 ---
 
 ### ugui_layout - UGUI布局管理工具
-**功能**: 使用双状态树架构处理RectTransform修改操作，专门用于UGUI的布局调整，支持目标定位和多种UI布局操作。
+**功能**: 使用双状态树架构处理RectTransform修改操作，专门用于UGUI的布局调整。第一个状态树负责目标GameObject定位，第二个状态树负责RectTransform属性操作。
 
 主要参数（放入 `args`）
-- `target` (string, 必需): 目标GameObject标识符（名称、ID或路径）
-- `search_method` (string, 可选): 搜索方法，支持 `by_name`、`by_id`、`by_tag`、`by_layer`等
-- `search_in_scene` (bool, 可选): 是否仅在场景中查找（默认true）
+
+**目标定位参数**
+- `id` (string, 可选): 对象的InstanceID
+- `path` (string, 可选): 对象的Hierarchy路径
 - `select_many` (bool, 可选): 是否选择所有匹配的对象进行批量操作（默认false）
-- `action` (string, 可选): 操作类型，支持 `modify`、`set_anchors`、`set_size`、`set_position`、`set_property`、`get_property`
+
+**操作类型参数**
+- `action` (string, 可选): 操作类型，支持 `modify`、`set_anchors`、`set_size`、`set_position`、`set_property`、`get_property`（默认为modify）
 
 **RectTransform基本属性**
 - `anchored_position` (list, 可选): 锚点位置 [x, y]
@@ -1069,29 +1029,30 @@ function_call(
   - `stretch_horizontal`, `stretch_vertical`, `stretch_all`
 
 **属性操作参数**
-- `property_name` (string, 可选): 属性名称（用于属性设置/获取）
+- `property_name` (string, 可选): 属性名称（用于set_property/get_property操作）
 - `value` (any, 可选): 要设置的属性值
 
 支持的操作类型 (action)
 - `modify` - 修改RectTransform的各种属性（默认操作）
-- `set_anchors` - 专门设置锚点相关属性
-- `set_size` - 专门设置尺寸相关属性
-- `set_position` - 专门设置位置相关属性
-- `set_property` - 设置RectTransform属性（通用属性操作）
-- `get_property` - 获取RectTransform属性
-
-支持的搜索方法 (search_method)
-- `by_name` - 按名称搜索（默认）
-- `by_id` - 按ID搜索
-- `by_tag` - 按标签搜索
-- `by_layer` - 按层级搜索
-- `by_component` - 按组件类型搜索
+- `set_anchors` - 专门设置锚点相关属性（anchor_preset, anchor_min, anchor_max, pivot）
+- `set_size` - 专门设置尺寸相关属性（size_delta, width, height）
+- `set_position` - 专门设置位置相关属性（anchored_position, local_position, 边距, offset）
+- `set_property` - 设置RectTransform指定属性（通用属性操作）
+- `get_property` - 获取RectTransform指定属性
 
 示例：修改UI元素的基本布局属性（默认操作）
 ```python
 function_call(
   func="ugui_layout",
-  args={"target": "Button", "width": 200, "height": 50, "anchored_position": [0, 0]}
+  args={"path": "Canvas/Button", "width": 200, "height": 50, "anchored_position": [0, 0]}
+)
+```
+
+示例：通过InstanceID定位并修改
+```python
+function_call(
+  func="ugui_layout",
+  args={"id": "12345", "action": "modify", "width": 150, "height": 40}
 )
 ```
 
@@ -1099,7 +1060,7 @@ function_call(
 ```python
 function_call(
   func="ugui_layout",
-  args={"target": "Panel", "action": "set_anchors", "anchor_preset": "stretch_all"}
+  args={"path": "Canvas/Panel", "action": "set_anchors", "anchor_preset": "stretch_all"}
 )
 ```
 
@@ -1107,7 +1068,7 @@ function_call(
 ```python
 function_call(
   func="ugui_layout",
-  args={"target": "Content", "action": "set_position", "left": 10, "right": 10, "top": 10, "bottom": 10}
+  args={"path": "Canvas/Content", "action": "set_position", "left": 10, "right": 10, "top": 10, "bottom": 10}
 )
 ```
 
@@ -1115,7 +1076,7 @@ function_call(
 ```python
 function_call(
   func="ugui_layout",
-  args={"target": "Button", "select_many": true, "action": "set_size", "width": 150, "height": 40}
+  args={"path": "Canvas/Button", "select_many": true, "action": "set_size", "width": 150, "height": 40}
 )
 ```
 
@@ -1124,7 +1085,7 @@ function_call(
 function_call(
   func="ugui_layout",
   args={
-    "target": "InfoPanel", 
+    "path": "Canvas/InfoPanel", 
     "anchor_min": [0, 0], 
     "anchor_max": [1, 0.3], 
     "offset_min": [10, 10], 
@@ -1133,21 +1094,65 @@ function_call(
 )
 ```
 
+示例：设置RectTransform属性
+```python
+function_call(
+  func="ugui_layout",
+  args={"path": "Canvas/ScrollView", "action": "set_property", "property_name": "anchoredPosition", "value": [100, 50]}
+)
+```
+
 示例：获取RectTransform属性
 ```python
 function_call(
   func="ugui_layout",
-  args={"target": "ScrollView", "action": "get_property", "property_name": "anchoredPosition"}
+  args={"path": "Canvas/ScrollView", "action": "get_property", "property_name": "anchoredPosition"}
 )
 ```
 
-特点：
-- **UI专用**: 专门针对UGUI的RectTransform组件设计
-- **布局预设**: 支持常用的锚点预设，快速设置布局
-- **便捷参数**: 提供width、height、边距等便捷参数
-- **批量操作**: 支持select_many参数进行批量UI布局调整
-- **双状态树**: 先定位目标，再执行操作，确保操作准确性
-- **撤销支持**: 所有操作都支持Unity的撤销功能
+示例：设置复杂的UI布局组合
+```python
+function_call(
+  func="ugui_layout",
+  args={
+    "path": "Canvas/LoginPanel",
+    "anchor_preset": "middle_center",
+    "width": 400,
+    "height": 300,
+    "local_position": [0, 0, 0]
+  }
+)
+```
+
+返回值格式
+```json
+{
+  "success": true,
+  "message": "RectTransform on 'Button' modified successfully.",
+  "data": {
+    "name": "Button",
+    "instanceID": 12345,
+    "anchoredPosition": {"x": 0, "y": 0},
+    "sizeDelta": {"x": 200, "y": 50},
+    "anchorMin": {"x": 0.5, "y": 0.5},
+    "anchorMax": {"x": 0.5, "y": 0.5},
+    "pivot": {"x": 0.5, "y": 0.5},
+    "rect": {"x": -100, "y": -25, "width": 200, "height": 50}
+  }
+}
+```
+
+特点
+- **双状态树架构**: 先通过ObjectSelector定位目标GameObject，再执行RectTransform操作，确保操作精确性
+- **UI专用**: 专门针对UGUI的RectTransform组件设计，包含所有UI布局相关功能
+- **多种定位方式**: 支持InstanceID、Hierarchy路径等多种目标定位方式
+- **布局预设**: 支持常用的锚点预设，快速设置UI布局模式
+- **便捷参数**: 提供width、height、边距等便捷参数，简化常用操作
+- **批量操作**: 支持select_many参数进行批量UI布局调整，提高批量处理效率
+- **智能类型转换**: 自动处理Vector2、Vector3等Unity数据类型转换
+- **撤销支持**: 所有操作都支持Unity的撤销功能，便于调试和修改
+- **详细返回数据**: 返回完整的RectTransform状态信息，便于验证操作结果
+- **专用操作**: 提供set_anchors、set_size、set_position等专用操作，针对不同布局需求优化
 
 ---
 
@@ -1983,4 +1988,5 @@ function_call(
 ### 5) 调试建议
 - 使用 `console_read` 查看Unity控制台输出
 - 检查返回值中的 `success` 字段
+- 查看 `message` 和 `error` 字段获取详细信息 
 - 查看 `message` 和 `error` 字段获取详细信息 

@@ -37,18 +37,19 @@ namespace UnityMcp.Tools
         {
             return StateTreeBuilder
                 .Create()
-                .Leaf("asset", HandleAssetSearch)
-                .Leaf("folder", HandleFolderSearch)
-                .Leaf("script", HandleScriptSearch)
-                .Leaf("texture", HandleTextureSearch)
-                .Leaf("material", HandleMaterialSearch)
-                .Leaf("prefab", HandlePrefabSearch)
-                .Leaf("scene", HandleSceneSearch)
-                .Leaf("audio", HandleAudioSearch)
-                .Leaf("model", HandleModelSearch)
-                .Leaf("shader", HandleShaderSearch)
-                .Leaf("animation", HandleAnimationSearch)
-                .Leaf("general", HandleGeneralSearch)
+                .Key("search_type")
+                     .Leaf("asset", HandleAssetSearch)
+                     .Leaf("folder", HandleFolderSearch)
+                     .Leaf("script", HandleScriptSearch)
+                     .Leaf("texture", HandleTextureSearch)
+                     .Leaf("material", HandleMaterialSearch)
+                     .Leaf("prefab", HandlePrefabSearch)
+                     .Leaf("scene", HandleSceneSearch)
+                     .Leaf("audio", HandleAudioSearch)
+                     .Leaf("model", HandleModelSearch)
+                     .Leaf("shader", HandleShaderSearch)
+                     .Leaf("animation", HandleAnimationSearch)
+                     .Leaf("general", HandleGeneralSearch)
                 .Build();
         }
 
@@ -168,7 +169,8 @@ namespace UnityMcp.Tools
 
             try
             {
-                List<object> results = new List<object>();
+                // 用JArray来序列化结果，确保兼容JSON序列化
+                List<JObject> results = new List<JObject>();
 
                 // 获取所有资产GUID
                 string[] guids = AssetDatabase.FindAssets(searchTerm, new[] { searchPath });
@@ -179,7 +181,7 @@ namespace UnityMcp.Tools
                         break;
 
                     string assetPath = AssetDatabase.GUIDToAssetPath(guid);
-                    
+
                     // 检查是否在指定路径范围内
                     if (!IsInSearchPath(assetPath, searchPath, recursive))
                         continue;
@@ -197,6 +199,7 @@ namespace UnityMcp.Tools
                     if (asset != null)
                     {
                         var assetInfo = GetAssetInfo(asset, assetPath, guid);
+                        // assetInfo本身是JObject，直接加入JArray
                         results.Add(assetInfo);
                     }
                 }
@@ -207,15 +210,17 @@ namespace UnityMcp.Tools
                     message += $" (type: {searchType})";
                 }
 
-                return Response.Success(message, new
+                // 用JObject包装返回，保证序列化友好
+                var resultObj = new JObject
                 {
-                    search_term = searchTerm,
-                    search_path = searchPath,
-                    search_type = searchType,
-                    total_results = results.Count,
-                    max_results = maxResults,
-                    results = results
-                });
+                    ["search_term"] = searchTerm,
+                    ["search_path"] = searchPath,
+                    ["search_type"] = searchType,
+                    ["total_results"] = results.Count,
+                    ["max_results"] = maxResults,
+                    ["results"] = JToken.FromObject(results),
+                };
+                return Response.Success(message, resultObj);
             }
             catch (Exception ex)
             {
@@ -232,7 +237,7 @@ namespace UnityMcp.Tools
             {
                 if (recursive)
                     return true;
-                
+
                 // 如果不递归，检查是否在直接子目录中
                 string relativePath = assetPath.Substring(searchPath.Length).TrimStart('/');
                 return !relativePath.Contains('/');
@@ -243,15 +248,15 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 获取资产的详细信息
         /// </summary>
-        private object GetAssetInfo(UnityEngine.Object asset, string assetPath, string guid)
+        private JObject GetAssetInfo(UnityEngine.Object asset, string assetPath, string guid)
         {
-            var info = new Dictionary<string, object>
+            var info = new JObject
             {
-                { "name", asset.name },
-                { "path", assetPath },
-                { "guid", guid },
-                { "type", asset.GetType().Name },
-                { "instanceID", asset.GetInstanceID() }
+                ["name"] = asset.name,
+                ["path"] = assetPath,
+                ["guid"] = guid,
+                ["type"] = asset.GetType().Name,
+                ["instanceID"] = asset.GetInstanceID()
             };
 
             // 根据资产类型添加特定信息
@@ -334,4 +339,4 @@ namespace UnityMcp.Tools
 
 
     }
-} 
+}

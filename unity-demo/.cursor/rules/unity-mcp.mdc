@@ -258,9 +258,8 @@ function_call(
 主要参数（放入 `args`）
 - `action` (string, 必需): 操作类型，固定为 `find`
 - `search_method` (string, 可选): 搜索方法，支持 `by_name`、`by_id`、`by_tag`、`by_layer`、`by_component`、`by_term`等
-- `target` (string, 可选): 搜索目标（可以是ID、名称或路径）
 - `select_many` (bool, 可选): 是否查找所有匹配项，默认false
-- `search_term` (string, 可选): 搜索条件（支持通配符*）
+- `search_term` (string, 可选): 搜索目标（可以是ID、名称或路径；支持通配符*）
 - `root_only` (bool, 可选): 是否仅搜索根对象（不包括子物体），默认false（包括所有层级）
 - `include_inactive` (bool, 可选): 是否搜索非激活对象，默认false
 - `use_regex` (bool, 可选): 是否使用正则表达式，默认false
@@ -282,7 +281,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "target": "Player", "search_method": "by_name"}
+  args={"action": "find", "search_term": "Player", "search_method": "by_name"}
 )
 ```
 
@@ -298,7 +297,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "target": "12345", "search_method": "by_id"}
+  args={"action": "find", "search_term": "12345", "search_method": "by_id"}
 )
 ```
 
@@ -575,6 +574,22 @@ function_call(
     "properties": {
       "material": "Assets/Materials/RedMaterial.mat",
       "material._MainTex": "Assets/Textures/brick.jpg"
+    }
+  }
+)
+```
+
+示例：设置Unity InstanceId引用（唯一id）
+```python
+function_call(
+  func="edit_component",
+  args={
+    "action": "set_component_propertys",
+    "path": "Cube", 
+    "component_type": "Renderer",
+    "properties": {
+      "material": -45550,
+      "material._MainTex": -36970
     }
   }
 )

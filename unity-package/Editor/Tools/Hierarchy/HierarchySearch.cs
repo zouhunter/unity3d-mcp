@@ -27,10 +27,9 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("target", "搜索目标（可以是ID、名称或路径）", false),
                 new MethodKey("search_method", "搜索方法：by_name, by_id, by_tag, by_layer, by_component, by_term等", false),
                 new MethodKey("select_many", "是否查找所有匹配项", true),
-                new MethodKey("search_term", "搜索条件（支持通配符*）", true),
+                new MethodKey("search_term", "搜索条件可以是ID、名称或路径（支持通配符*）", true),
                 new MethodKey("root_only", "是否仅搜索根对象（不包括子物体）", true),
                 new MethodKey("include_inactive", "是否搜索非激活对象", true),
                 new MethodKey("use_regex", "是否使用正则表达式", true)
@@ -58,17 +57,17 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleSearchByName(JObject args)
         {
-            string target = args["target"]?.ToString();
+            string search_term = args["search_term"]?.ToString();
             bool findAll = args["select_many"]?.ToObject<bool>() ?? false;
             bool rootOnly = args["root_only"]?.ToObject<bool>() ?? false;
             bool searchInInactive = args["include_inactive"]?.ToObject<bool>() ?? false;
 
             List<GameObject> foundObjects = new List<GameObject>();
 
-            if (!string.IsNullOrEmpty(target))
+            if (!string.IsNullOrEmpty(search_term))
             {
                 // 精确名称搜索 - 使用Unity内置API
-                GameObject exactMatch = GameObject.Find(target);
+                GameObject exactMatch = GameObject.Find(search_term);
                 if (exactMatch != null && (searchInInactive || exactMatch.activeInHierarchy))
                 {
                     foundObjects.Add(exactMatch);
@@ -82,8 +81,7 @@ namespace UnityMcp.Tools
 
                 foreach (GameObject go in allObjects)
                 {
-                    bool nameMatches = string.IsNullOrEmpty(target) ||
-                                     go.name.Contains(target, StringComparison.OrdinalIgnoreCase);
+                    bool nameMatches = string.IsNullOrEmpty(search_term) || go.name.Contains(search_term, StringComparison.OrdinalIgnoreCase);
 
                     if (nameMatches)
                     {
@@ -101,18 +99,18 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleSearchById(JObject args)
         {
-            string target = args["target"]?.ToString();
+            string search_term = args["search_term"]?.ToString();
             bool searchInInactive = args["include_inactive"]?.ToObject<bool>() ?? false;
 
-            if (string.IsNullOrEmpty(target))
+            if (string.IsNullOrEmpty(search_term))
             {
-                return Response.Error("Target ID is required for by_id search.");
+                return Response.Error("search_term ID is required for by_id search.");
             }
 
             List<GameObject> foundObjects = new List<GameObject>();
 
             // 尝试解析ID并查找
-            if (int.TryParse(target, out int instanceId))
+            if (int.TryParse(search_term, out int instanceId))
             {
                 GameObject found = EditorUtility.InstanceIDToObject(instanceId) as GameObject;
                 if (found != null && (searchInInactive || found.activeInHierarchy))
@@ -307,8 +305,8 @@ namespace UnityMcp.Tools
             // 如果是类型搜索，直接使用FindObjectsOfType
             if (isTypeSearch)
             {
-                Type targetType = GetComponentType(typeName);
-                if (targetType == null)
+                Type search_termType = GetComponentType(typeName);
+                if (search_termType == null)
                 {
                     return Response.Error($"Component type '{typeName}' not found.");
                 }
@@ -320,7 +318,7 @@ namespace UnityMcp.Tools
                     // 检查是否仅搜索根对象
                     if (rootOnly && go.transform.parent != null) continue;
 
-                    if (go.GetComponent(targetType) != null)
+                    if (go.GetComponent(search_termType) != null)
                     {
                         if (uniqueObjects.Add(go))
                         {

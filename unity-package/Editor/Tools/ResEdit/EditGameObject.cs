@@ -240,19 +240,6 @@ namespace UnityMcp.Tools
         }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
         /// <summary>
         /// 应用修改到GameObject
         /// </summary>
@@ -401,38 +388,15 @@ namespace UnityMcp.Tools
         /// </summary>
         private bool ApplyParentModification(GameObject targetGo, StateTreeContext args)
         {
-            if (args.TryGetValue("parent", out object parentObj))
+            object parentIdObj = args["parent_id"] ?? args["parent_path"];
+            if (parentIdObj == null)
             {
-                JToken parentToken = null;
-                GameObject newParentGo = null;
+                return false;
+            }
 
-                // 处理不同类型的父对象标识符
-                if (parentObj is JToken token)
-                {
-                    parentToken = token;
-                    newParentGo = FindParentGameObject(parentToken);
-                }
-                else if (parentObj is GameObject parentGameObject)
-                {
-                    newParentGo = parentGameObject;
-                }
-                else if (parentObj != null)
-                {
-                    // 转换为JToken进行处理
-                    parentToken = JToken.FromObject(parentObj);
-                    newParentGo = FindParentGameObject(parentToken);
-                }
-
-                if (
-                    newParentGo == null
-                    && parentObj != null
-                    && !(parentObj.ToString() == "null" || string.IsNullOrEmpty(parentObj.ToString()))
-                )
-                {
-                    return false;
-                }
-
-                // Check for hierarchy loops
+            GameObject newParentGo = GameObjectUtils.FindObjectByIdOrPath(JToken.FromObject(parentIdObj));
+            if (newParentGo != null)
+            {
                 if (newParentGo != null && newParentGo.transform.IsChildOf(targetGo.transform))
                 {
                     return false;

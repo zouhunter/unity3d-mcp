@@ -122,7 +122,7 @@ namespace UnityMcp.Tools
                     return Response.Error("'target_object' parameter is required for link operation.");
                 }
 
-                GameObject targetGo = GameObjectUtils.FindObjectByIdOrNameOrPath(targetToken);
+                GameObject targetGo = GameObjectUtils.FindObjectByIdOrPath(targetToken);
                 if (targetGo == null)
                 {
                     return Response.Error($"Target GameObject '{targetToken}' not found.");
@@ -233,7 +233,7 @@ namespace UnityMcp.Tools
                     return Response.Error("'target_object' parameter is required for apply operation.");
                 }
 
-                GameObject targetGo = GameObjectUtils.FindObjectByIdOrNameOrPath(targetToken);
+                GameObject targetGo = GameObjectUtils.FindObjectByIdOrPath(targetToken);
                 if (targetGo == null)
                 {
                     return Response.Error($"Target GameObject '{targetToken}' not found.");
@@ -285,7 +285,7 @@ namespace UnityMcp.Tools
                     return Response.Error("'target_object' parameter is required for break connection operation.");
                 }
 
-                GameObject targetGo = GameObjectUtils.FindObjectByIdOrNameOrPath(targetToken);
+                GameObject targetGo = GameObjectUtils.FindObjectByIdOrPath(targetToken);
                 if (targetGo == null)
                 {
                     return Response.Error($"Target GameObject '{targetToken}' not found.");

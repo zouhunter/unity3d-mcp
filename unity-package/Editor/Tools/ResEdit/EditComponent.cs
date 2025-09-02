@@ -941,21 +941,61 @@ namespace UnityMcp.Tools
                     return Enum.Parse(targetType, token.ToString(), true);
 
                 // Handle Unity Objects (Assets)
-                if (typeof(UnityEngine.Object).IsAssignableFrom(targetType) && token.Type == JTokenType.String)
+                if (typeof(UnityEngine.Object).IsAssignableFrom(targetType))
                 {
-                    string assetPath = token.ToString();
-                    if (!string.IsNullOrEmpty(assetPath))
+                    if (token.Type == JTokenType.String)
                     {
-                        UnityEngine.Object loadedAsset = AssetDatabase.LoadAssetAtPath(assetPath, targetType);
-                        if (loadedAsset != null)
+                        string assetPath = token.ToString();
+                        if (!string.IsNullOrEmpty(assetPath) && System.IO.File.Exists(assetPath))
                         {
-                            return loadedAsset;
+                            UnityEngine.Object loadedAsset = AssetDatabase.LoadAssetAtPath(assetPath, targetType);
+                            if (loadedAsset != null)
+                            {
+                                return loadedAsset;
+                            }
+                            else
+                            {
+                                Debug.LogWarning($"[ConvertJTokenToType] Could not load asset of type '{targetType.Name}' from path: '{assetPath}'");
+                            }
                         }
                         else
                         {
-                            Debug.LogWarning($"[ConvertJTokenToType] Could not load asset of type '{targetType.Name}' from path: '{assetPath}'");
+                            var sceneObj = GameObjectUtils.FindByHierarchyPath(assetPath, targetType);
+                            if (sceneObj != null)
+                            {
+                                return sceneObj;
+                            }
+                            else
+                            {
+                                Debug.LogWarning($"[ConvertJTokenToType] Could not load asset of type '{targetType.Name}' from path: '{assetPath}'");
+                            }
                         }
                     }
+                    else if (token.Type == JTokenType.Integer)
+                    {
+                        var instanceId = token.ToObject<int>();
+                        var objectItem = UnityEditor.EditorUtility.InstanceIDToObject(instanceId);
+                        if (objectItem != null)
+                        {
+                            if (objectItem.GetType() == targetType)
+                            {
+                                return objectItem;
+                            }
+                            else if (objectItem is GameObject go && typeof(Component).IsAssignableFrom(targetType))
+                            {
+                                return go.GetComponent(targetType);
+                            }
+                            else
+                            {
+                                Debug.LogWarning($"[ConvertJTokenToType] Could not load asset of type '{targetType.Name}' from instance id: '{instanceId}'");
+                            }
+                        }
+                        else
+                        {
+                            Debug.LogWarning($"[ConvertJTokenToType] Could not load asset of type '{targetType.Name}' from instance id: '{instanceId}'");
+                        }
+                    }
+
                     return null;
                 }
 

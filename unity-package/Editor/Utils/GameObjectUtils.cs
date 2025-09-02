@@ -205,7 +205,7 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 简单查找GameObject，用于父对象查找等场景
         /// </summary>
-        public static GameObject FindObjectByIdOrNameOrPath(JToken targetToken)
+        public static GameObject FindObjectByIdOrPath(JToken targetToken)
         {
             string searchTerm = targetToken?.ToString();
             if (string.IsNullOrEmpty(searchTerm))
@@ -219,15 +219,138 @@ namespace UnityMcp.Tools
                 if (objById != null)
                     return objById;
             }
+            var go = FindByHierarchyPath(searchTerm, typeof(GameObject));
+            if (go != null)
+                return go as GameObject;
+            return null;
+        }
 
-            // 尝试按路径查找
-            GameObject objByPath = GameObject.Find(searchTerm);
-            if (objByPath != null)
-                return objByPath;
 
-            // 尝试按名称查找
-            var allObjectsName = GetAllSceneObjects(true);
-            return allObjectsName.FirstOrDefault(go => go.name == searchTerm);
+        /// <summary>
+        /// 通过Hierarchy路径在当前场景中查找对象
+        /// </summary>
+        /// <param name="path">Hierarchy路径，如"Parent/Child/Target"或"Parent/Child/Target:ComponentType"</param>
+        /// <param name="type">查找类型</param>
+        /// <returns>找到的对象，未找到则返回null</returns>
+        public static object FindByHierarchyPath(string path, Type type)
+        {
+            if (string.IsNullOrEmpty(path))
+                return null;
+
+            // 检查是否包含组件类型指定符 ":"
+            string gameObjectPath = path;
+            string componentTypeName = null;
+
+            if (path.Contains(':'))
+            {
+                var parts = path.Split(':');
+                gameObjectPath = parts[0];
+                componentTypeName = parts.Length > 1 ? parts[1] : null;
+            }
+
+            // 获取当前活动场景中的所有根对象
+            Scene activeScene = SceneManager.GetActiveScene();
+            if (!activeScene.isLoaded)
+            {
+                return null;
+            }
+
+            GameObject[] rootObjects = activeScene.GetRootGameObjects();
+
+            // 分割路径
+            string[] pathSegments = gameObjectPath.Split('/');
+            if (pathSegments.Length == 0)
+            {
+                return null;
+            }
+
+            // 递归查找所有可能的路径
+            List<GameObject> currentLevel = new List<GameObject>();
+            // 首先找到所有名字匹配的根对象
+            foreach (var rootObject in rootObjects)
+            {
+                if (rootObject.name == pathSegments[0])
+                {
+                    currentLevel.Add(rootObject);
+                }
+            }
+
+            if (currentLevel.Count == 0)
+            {
+                return null;
+            }
+
+            // 逐层查找
+            for (int i = 1; i < pathSegments.Length; i++)
+            {
+                string segment = pathSegments[i];
+                List<GameObject> nextLevel = new List<GameObject>();
+                foreach (var parent in currentLevel)
+                {
+                    // 这里不能用Find，因为Find只会返回第一个匹配的
+                    for (int j = 0; j < parent.transform.childCount; j++)
+                    {
+                        var child = parent.transform.GetChild(j);
+                        if (child.name == segment)
+                        {
+                            nextLevel.Add(child.gameObject);
+                        }
+                    }
+                }
+                if (nextLevel.Count == 0)
+                {
+                    return null;
+                }
+                currentLevel = nextLevel;
+            }
+
+            // 最终所有匹配的对象都在currentLevel里，返回第一个类型匹配的
+            foreach (var obj in currentLevel)
+            {
+                // 如果指定了组件类型名，优先使用指定的组件类型
+                if (!string.IsNullOrEmpty(componentTypeName))
+                {
+                    Type specifiedComponentType = FindType(componentTypeName);
+                    if (specifiedComponentType != null && typeof(UnityEngine.Component).IsAssignableFrom(specifiedComponentType))
+                    {
+                        var comp = obj.GetComponent(specifiedComponentType);
+                        if (comp != null)
+                            return comp;
+                    }
+                    continue;
+                }
+
+                // 如果type是GameObject类型，直接返回
+                if (type == typeof(GameObject))
+                {
+                    return obj;
+                }
+                // 如果T是Component类型，尝试获取组件
+                if (typeof(UnityEngine.Component).IsAssignableFrom(type))
+                {
+                    var comp = obj.GetComponent(type);
+                    if (comp != null)
+                        return comp;
+                }
+            }
+
+            return null;
+        }
+        /// <summary>
+        /// 通过Hierarchy路径在当前场景中查找对象（泛型版本）
+        /// 支持场景中有多个重名对象的路径查找，每一层都可能有多个同名对象，需逐层递归查找
+        /// </summary>
+        /// <param name="path">Hierarchy路径，支持两种格式：
+        /// 1. "Parent/Child/Target" - 只指定GameObject路径
+        /// 2. "Parent/Child/Target:ComponentType" - 指定GameObject路径和组件类型
+        /// </param>
+        /// <returns>找到的对象，未找到则返回default(T)</returns>
+        public static T FindByHierarchyPath<T>(string path)
+        {
+            var obj = FindByHierarchyPath(path, typeof(T));
+            if (obj is T o)
+                return o;
+            return default(T);
         }
 
         /// <summary>
@@ -279,6 +402,11 @@ namespace UnityMcp.Tools
                 type = assembly.GetType("UnityEngine.UI." + typeName);
                 if (type != null)
                     return type;
+                foreach (var typeNext in assembly.GetTypes())
+                {
+                    if (typeNext.Name == typeName)
+                        return typeNext;
+                }
             }
 
             return null;
@@ -355,7 +483,6 @@ namespace UnityMcp.Tools
 
             // 递归遍历所有子对象
             CollectChildrenRecursively(go.transform, childList);
-
             return childList;
         }
 
@@ -466,7 +593,7 @@ namespace UnityMcp.Tools
             JToken parentToken = args["parent_id"];
             if (parentToken != null)
             {
-                GameObject parentGo = FindObjectByIdOrNameOrPath(parentToken);
+                GameObject parentGo = FindObjectByIdOrPath(parentToken);
                 if (parentGo == null)
                 {
                     logAction?.Invoke($"Parent specified ('{parentToken}') but not found.");

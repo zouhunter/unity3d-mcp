@@ -455,7 +455,7 @@ function_call(
 - `path` (string, 可选): 对象的Hierarchy路径
 - `action` (string, 必需): 操作类型，支持 `get_component_propertys`、`set_component_propertys`
 - `component_type` (string, 必需): 组件类型名（继承自Component的类型名），如 "Transform"、"Rigidbody"、"MeshRenderer"
-- `properties` (dict, 可选): 属性字典（用于set_component_propertys操作）
+- `properties` (dict, 可选): 属性字典（用于set_component_propertys操作,值甚至支持路径或InstanceId）
 
 支持的操作类型 (action)
 - **get_component_propertys**: 批量获取组件的所有公共属性和字段

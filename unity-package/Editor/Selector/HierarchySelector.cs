@@ -95,7 +95,7 @@ namespace UnityMcp.Tools
             try
             {
                 // 只在当前场景的Hierarchy中查找
-                T hierarchyObject = FindByHierarchyPath(path);
+                T hierarchyObject = GameObjectUtils.FindByHierarchyPath<T>(path);
                 if (hierarchyObject != null)
                 {
                     return hierarchyObject;
@@ -135,91 +135,7 @@ namespace UnityMcp.Tools
             return Response.Error("未找到匹配的对象。");
         }
 
-        /// <summary>
-        /// 通过Hierarchy路径在当前场景中查找对象
-        /// </summary>
-        /// <param name="path">Hierarchy路径，如"Parent/Child/Target"</param>
-        /// <returns>找到的对象，未找到则返回null</returns>
-        /// <summary>
-        /// 支持场景中有多个重名对象的路径查找，每一层都可能有多个同名对象，需逐层递归查找
-        /// </summary>
-        private T FindByHierarchyPath(string path)
-        {
-            // 获取当前活动场景中的所有根对象
-            Scene activeScene = SceneManager.GetActiveScene();
-            if (!activeScene.isLoaded)
-            {
-                return null;
-            }
 
-            GameObject[] rootObjects = activeScene.GetRootGameObjects();
-
-            // 分割路径
-            string[] pathSegments = path.Split('/');
-            if (pathSegments.Length == 0)
-            {
-                return null;
-            }
-
-            // 递归查找所有可能的路径
-            List<GameObject> currentLevel = new List<GameObject>();
-            // 首先找到所有名字匹配的根对象
-            foreach (var rootObject in rootObjects)
-            {
-                if (rootObject.name == pathSegments[0])
-                {
-                    currentLevel.Add(rootObject);
-                }
-            }
-
-            if (currentLevel.Count == 0)
-            {
-                return null;
-            }
-
-            // 逐层查找
-            for (int i = 1; i < pathSegments.Length; i++)
-            {
-                string segment = pathSegments[i];
-                List<GameObject> nextLevel = new List<GameObject>();
-                foreach (var parent in currentLevel)
-                {
-                    // 这里不能用Find，因为Find只会返回第一个匹配的
-                    for (int j = 0; j < parent.transform.childCount; j++)
-                    {
-                        var child = parent.transform.GetChild(j);
-                        if (child.name == segment)
-                        {
-                            nextLevel.Add(child.gameObject);
-                        }
-                    }
-                }
-                if (nextLevel.Count == 0)
-                {
-                    return null;
-                }
-                currentLevel = nextLevel;
-            }
-
-            // 最终所有匹配的对象都在currentLevel里，返回第一个类型匹配的
-            foreach (var obj in currentLevel)
-            {
-                // 如果T是GameObject类型，直接返回
-                if (obj is T directMatch)
-                {
-                    return directMatch;
-                }
-                // 如果T是Component类型，尝试获取组件
-                if (typeof(UnityEngine.Component).IsAssignableFrom(typeof(T)))
-                {
-                    var comp = obj.GetComponent<T>();
-                    if (comp != null)
-                        return comp;
-                }
-            }
-
-            return null;
-        }
 
         /// <summary>
         /// 检查对象是否在当前场景的Hierarchy中
@@ -282,7 +198,7 @@ namespace UnityMcp.Tools
 
             try
             {
-                return FindByHierarchyPath(path);
+                return GameObjectUtils.FindByHierarchyPath<T>(path);
             }
             catch
             {

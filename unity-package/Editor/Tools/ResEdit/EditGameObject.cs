@@ -42,7 +42,7 @@ namespace UnityMcp.Tools
                 new MethodKey("instance_id", "对象的InstanceID", true),
                 new MethodKey("path", "对象的Hierachy路径", false),
                 // 操作参数
-                new MethodKey("action", "操作类型：create,modify, get_components, add_component, remove_component,", false),
+                new MethodKey("action", "操作类型：create,modify, get_components, add_component, remove_component, set_parent", false),
                 // 基本修改参数
                 new MethodKey("name", "GameObject名称", true),
                 new MethodKey("tag", "GameObject标签", true),
@@ -55,9 +55,6 @@ namespace UnityMcp.Tools
                 // 组件操作参数
                 new MethodKey("component_name", "组件名称", true),
                 new MethodKey("component_properties", "组件属性字典", true),
-                // 属性操作参数（兜底功能）
-                new MethodKey("property_name", "属性名称（用于属性设置/获取）", true),
-                new MethodKey("value", "要设置的属性值", true),
             };
         }
 
@@ -82,8 +79,7 @@ namespace UnityMcp.Tools
                 .Leaf("get_components", (Func<StateTreeContext, object>)HandleGetComponentsAction)
                 .Leaf("add_component", (Func<StateTreeContext, object>)HandleAddComponentAction)
                 .Leaf("remove_component", (Func<StateTreeContext, object>)HandleRemoveComponentAction)
-                .Leaf("set_property", (Func<StateTreeContext, object>)HandleSetPropertyAction)
-                .Leaf("get_property", (Func<StateTreeContext, object>)HandleGetPropertyAction)
+                .Leaf("set_parent", (Func<StateTreeContext, object>)HandleSetParentAction)
                 .DefaultLeaf((Func<StateTreeContext, object>)HandleDefaultAction)
                 .Build();
         }
@@ -218,9 +214,9 @@ namespace UnityMcp.Tools
         }
 
         /// <summary>
-        /// 处理属性设置操作（兜底功能）
+        /// 处理设置父级操作
         /// </summary>
-        private object HandleSetPropertyAction(StateTreeContext args)
+        private object HandleSetParentAction(StateTreeContext args)
         {
             GameObject[] targets = GetTargetsBasedOnSelectMany(args);
             if (targets.Length == 0)
@@ -228,209 +224,27 @@ namespace UnityMcp.Tools
                 return Response.Error("No target GameObjects found in execution context.");
             }
 
-            if (!args.TryGetValue("property_name", out object propertyNameObj) || propertyNameObj == null)
-            {
-                return Response.Error("Property name is required for set_property action.");
-            }
-            string propertyName = propertyNameObj.ToString();
-
-            if (!args.TryGetValue("value", out object valueObj))
-            {
-                return Response.Error("Value is required for set_property action.");
-            }
-
             if (targets.Length == 1)
             {
-                return SetPropertyOnSingleTarget(targets[0], propertyName, valueObj);
+                return SetParentOnSingleTarget(targets[0], args);
             }
             else
             {
-                return SetPropertyOnMultipleTargets(targets, propertyName, valueObj);
+                return SetParentOnMultipleTargets(targets, args);
             }
         }
 
-        /// <summary>
-        /// 处理属性获取操作（兜底功能）
-        /// </summary>
-        private object HandleGetPropertyAction(StateTreeContext args)
-        {
-            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
-            if (targets.Length == 0)
-            {
-                return Response.Error("No target GameObjects found in execution context.");
-            }
 
-            if (!args.TryGetValue("property_name", out object propertyNameObj) || propertyNameObj == null)
-            {
-                return Response.Error("Property name is required for get_property action.");
-            }
-            string propertyName = propertyNameObj.ToString();
 
-            if (targets.Length == 1)
-            {
-                return GetPropertyFromSingleTarget(targets[0], propertyName);
-            }
-            else
-            {
-                return GetPropertyFromMultipleTargets(targets, propertyName);
-            }
-        }
 
-        /// <summary>
-        /// 在单个目标上设置属性
-        /// </summary>
-        private object SetPropertyOnSingleTarget(GameObject target, string propertyName, object valueObj)
-        {
-            try
-            {
-                // 只操作GameObject本身的属性
-                Undo.RecordObject(target, $"Set Property {propertyName}");
 
-                // 如果值是JToken，使用原有逻辑；否则直接使用值
-                if (valueObj is JToken valueToken)
-                {
-                    SetPropertyValue(target, propertyName, valueToken);
-                }
-                else
-                {
-                    // 将值转换为JToken再设置
-                    JToken convertedToken = JToken.FromObject(valueObj);
-                    SetPropertyValue(target, propertyName, convertedToken);
-                }
 
-                EditorUtility.SetDirty(target);
 
-                LogInfo($"[EditGameObject] Set property '{propertyName}' on {target.name}");
 
-                return Response.Success(
-                    $"Property '{propertyName}' set successfully on {target.name}.",
-                    new Dictionary<string, object>
-                    {
-                        { "target", target.name },
-                        { "property", propertyName },
-                        { "value", valueObj?.ToString() }
-                    }
-                );
-            }
-            catch (Exception e)
-            {
-                return Response.Error($"Failed to set property '{propertyName}': {e.Message}");
-            }
-        }
 
-        /// <summary>
-        /// 在多个目标上设置属性
-        /// </summary>
-        private object SetPropertyOnMultipleTargets(GameObject[] targets, string propertyName, object valueObj)
-        {
-            var results = new List<Dictionary<string, object>>();
-            var errors = new List<string>();
-            int successCount = 0;
 
-            foreach (GameObject target in targets)
-            {
-                if (target == null) continue;
 
-                try
-                {
-                    var result = SetPropertyOnSingleTarget(target, propertyName, valueObj);
 
-                    if (IsSuccessResponse(result, out object data, out string message))
-                    {
-                        successCount++;
-                        if (data is Dictionary<string, object> dictData)
-                        {
-                            results.Add(dictData);
-                        }
-                        else if (data != null)
-                        {
-                            // 如果data不是Dictionary，包装它
-                            results.Add(new Dictionary<string, object> { { "result", data } });
-                        }
-                    }
-                    else
-                    {
-                        errors.Add($"[{target.name}] {message ?? "Unknown error"}");
-                    }
-                }
-                catch (Exception e)
-                {
-                    errors.Add($"[{target.name}] Error: {e.Message}");
-                }
-            }
-
-            return CreateBatchOperationResponse($"set property '{propertyName}'", successCount, targets.Length, results, errors);
-        }
-
-        /// <summary>
-        /// 从单个目标获取属性
-        /// </summary>
-        private object GetPropertyFromSingleTarget(GameObject target, string propertyName)
-        {
-            try
-            {
-                // 只获取GameObject本身的属性
-                var value = GetPropertyValue(target, propertyName);
-                LogInfo($"[EditGameObject] Got property '{propertyName}' from {target.name}: {value}");
-
-                return Response.Success(
-                    $"Property '{propertyName}' retrieved successfully from {target.name}.",
-                    new Dictionary<string, object>
-                    {
-                        { "target", target.name },
-                        { "property", propertyName },
-                        { "value", value }
-                    }
-                );
-            }
-            catch (Exception e)
-            {
-                return Response.Error($"Failed to get property '{propertyName}': {e.Message}");
-            }
-        }
-
-        /// <summary>
-        /// 从多个目标获取属性
-        /// </summary>
-        private object GetPropertyFromMultipleTargets(GameObject[] targets, string propertyName)
-        {
-            var results = new List<Dictionary<string, object>>();
-            var errors = new List<string>();
-            int successCount = 0;
-
-            foreach (GameObject target in targets)
-            {
-                if (target == null) continue;
-
-                try
-                {
-                    var result = GetPropertyFromSingleTarget(target, propertyName);
-
-                    if (IsSuccessResponse(result, out object data, out string message))
-                    {
-                        successCount++;
-                        if (data is Dictionary<string, object> dictData)
-                        {
-                            results.Add(dictData);
-                        }
-                        else if (data != null)
-                        {
-                            results.Add(new Dictionary<string, object> { { "result", data } });
-                        }
-                    }
-                    else
-                    {
-                        errors.Add($"[{target.name}] {message ?? "Unknown error"}");
-                    }
-                }
-                catch (Exception e)
-                {
-                    errors.Add($"[{target.name}] Error: {e.Message}");
-                }
-            }
-
-            return CreateBatchOperationResponse($"get property '{propertyName}'", successCount, targets.Length, results, errors);
-        }
 
 
 
@@ -449,10 +263,7 @@ namespace UnityMcp.Tools
             modified |= ApplyNameModification(targetGo, args);
 
             // 应用父对象修改
-            object parentResult = ApplyParentModification(targetGo, args);
-            if (parentResult != null)
-                return parentResult;
-            modified |= parentResult != null;
+            modified |= ApplyParentModification(targetGo, args);
 
             // 应用激活状态修改
             modified |= ApplyActiveStateModification(targetGo, args);
@@ -583,7 +394,7 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 应用父对象修改
         /// </summary>
-        private object ApplyParentModification(GameObject targetGo, StateTreeContext args)
+        private bool ApplyParentModification(GameObject targetGo, StateTreeContext args)
         {
             if (args.TryGetValue("parent", out object parentObj))
             {
@@ -613,15 +424,13 @@ namespace UnityMcp.Tools
                     && !(parentObj.ToString() == "null" || string.IsNullOrEmpty(parentObj.ToString()))
                 )
                 {
-                    return Response.Error($"New parent ('{parentObj}') not found.");
+                    return false;
                 }
 
                 // Check for hierarchy loops
                 if (newParentGo != null && newParentGo.transform.IsChildOf(targetGo.transform))
                 {
-                    return Response.Error(
-                        $"Cannot parent '{targetGo.name}' to '{newParentGo.name}', as it would create a hierarchy loop."
-                    );
+                    return false;
                 }
 
                 if (targetGo.transform.parent != (newParentGo?.transform))
@@ -798,74 +607,107 @@ namespace UnityMcp.Tools
             return modified;
         }
 
-        #region 属性操作辅助方法
+
+
+        #region 父级设置方法
 
         /// <summary>
-        /// 获取属性值
+        /// 在单个目标上设置父级
         /// </summary>
-        private object GetPropertyValue(object target, string propertyName)
+        private object SetParentOnSingleTarget(GameObject target, StateTreeContext args)
         {
-            Type type = target.GetType();
-            PropertyInfo propInfo = type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
-
-            if (propInfo != null && propInfo.CanRead)
+            try
             {
-                return propInfo.GetValue(target);
-            }
+                GameObject newParent = null;
 
-            FieldInfo fieldInfo = type.GetField(propertyName, BindingFlags.Public | BindingFlags.Instance);
-            if (fieldInfo != null)
+                // 只处理parent_id参数
+                if (args.TryGetValue("parent_id", out object parentIdObj) && parentIdObj != null)
+                {
+                    // 通过GameObjectUtils.FindObjectByIdOrPath查找父级
+                    newParent = GameObjectUtils.FindObjectByIdOrPath(JToken.FromObject(parentIdObj));
+                    // 如果parent_id为0或找不到，newParent为null，表示设置为根对象
+                }
+                else
+                {
+                    return Response.Error("parent_id is required for set_parent action.");
+                }
+
+                // 检查循环引用
+                if (newParent != null && newParent.transform.IsChildOf(target.transform))
+                {
+                    return Response.Error($"Cannot parent '{target.name}' to '{newParent.name}', as it would create a hierarchy loop.");
+                }
+
+                // 记录撤销操作
+                Undo.RecordObject(target.transform, "Set Parent");
+
+                // 设置父级
+                target.transform.SetParent(newParent?.transform, true);
+
+                LogInfo($"[EditGameObject] Set parent of '{target.name}' to '{newParent?.name ?? "null"}'");
+
+                return Response.Success(
+                    $"Successfully set parent of '{target.name}' to '{newParent?.name ?? "null"}'.",
+                    new Dictionary<string, object>
+                    {
+                        { "target", target.name },
+                        { "target_id", target.GetInstanceID() },
+                        { "new_parent", newParent?.name },
+                        { "new_parent_id", newParent?.GetInstanceID() ?? 0 }
+                    }
+                );
+            }
+            catch (Exception e)
             {
-                return fieldInfo.GetValue(target);
+                return Response.Error($"Failed to set parent for '{target.name}': {e.Message}");
             }
-
-            throw new ArgumentException($"Property or field '{propertyName}' not found on type '{type.Name}'");
         }
 
         /// <summary>
-        /// 设置属性值
+        /// 在多个目标上设置父级
         /// </summary>
-        private void SetPropertyValue(object target, string propertyName, JToken value)
+        private object SetParentOnMultipleTargets(GameObject[] targets, StateTreeContext args)
         {
-            Type type = target.GetType();
-            PropertyInfo propInfo = type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+            var results = new List<Dictionary<string, object>>();
+            var errors = new List<string>();
+            int successCount = 0;
 
-            if (propInfo != null && propInfo.CanWrite)
+            foreach (GameObject target in targets)
             {
-                object convertedValue = ConvertValue(value, propInfo.PropertyType);
-                propInfo.SetValue(target, convertedValue);
-                return;
+                if (target == null) continue;
+
+                try
+                {
+                    var result = SetParentOnSingleTarget(target, args);
+
+                    if (IsSuccessResponse(result, out object data, out string message))
+                    {
+                        successCount++;
+                        if (data is Dictionary<string, object> dictData)
+                        {
+                            results.Add(dictData);
+                        }
+                        else
+                        {
+                            results.Add(new Dictionary<string, object>
+                            {
+                                { "target", target.name },
+                                { "target_id", target.GetInstanceID() }
+                            });
+                        }
+                    }
+                    else
+                    {
+                        errors.Add($"[{target.name}] {message ?? "Unknown error"}");
+                    }
+                }
+                catch (Exception e)
+                {
+                    errors.Add($"[{target.name}] Error: {e.Message}");
+                }
             }
 
-            FieldInfo fieldInfo = type.GetField(propertyName, BindingFlags.Public | BindingFlags.Instance);
-            if (fieldInfo != null)
-            {
-                object convertedValue = ConvertValue(value, fieldInfo.FieldType);
-                fieldInfo.SetValue(target, convertedValue);
-                return;
-            }
-
-            throw new ArgumentException($"Property or field '{propertyName}' not found or is read-only on type '{type.Name}'");
-        }
-
-        /// <summary>
-        /// 转换JToken值到指定类型
-        /// </summary>
-        private object ConvertValue(JToken token, Type targetType)
-        {
-            if (targetType == typeof(string))
-                return token.ToObject<string>();
-            if (targetType == typeof(int))
-                return token.ToObject<int>();
-            if (targetType == typeof(float))
-                return token.ToObject<float>();
-            if (targetType == typeof(bool))
-                return token.ToObject<bool>();
-            if (targetType == typeof(Vector3) && token is JArray arr && arr.Count == 3)
-                return new Vector3(arr[0].ToObject<float>(), arr[1].ToObject<float>(), arr[2].ToObject<float>());
-
-            // 尝试直接转换
-            return token.ToObject(targetType);
+            return CreateBatchOperationResponse("set parent", successCount, targets.Length, results, errors);
         }
 
         #endregion
@@ -2088,7 +1930,7 @@ namespace UnityMcp.Tools
             var selector = new ObjectSelector<GameObject>();
             JObject findArgs = new JObject();
             findArgs["id"] = parentIdentifier;
-            findArgs["path"] = "";
+            findArgs["path"] = parentIdentifier;
             var stateTree = selector.BuildStateTree();
             object result = stateTree.Run(new StateTreeContext(findArgs));
 

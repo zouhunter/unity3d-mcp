@@ -40,36 +40,21 @@ namespace UnityMcp.Tools
                 new MethodKey("path", "对象的Hierachy路径", false),
                 
                 // 操作参数
-                new MethodKey("action", "操作类型：do_layout(执行布局修改), set_props(设置属性), get_layout(获取属性)", true),
+                new MethodKey("action", "操作类型：do_layout(执行布局修改), get_layout(获取属性)", true),
                 
                 // RectTransform基本属性
-                new MethodKey("anchored_position", "锚点位置 [x, y]", true),
+                new MethodKey("anchored_pos", "锚点位置 [x, y]", true),
                 new MethodKey("size_delta", "尺寸增量 [width, height]", true),
                 new MethodKey("anchor_min", "最小锚点 [x, y]", true),
                 new MethodKey("anchor_max", "最大锚点 [x, y]", true),
+                      // 预设锚点类型
+                new MethodKey("anchor_preset", "锚点预设：top_left, top_center, top_right, middle_left, middle_center, middle_right, bottom_left, bottom_center, bottom_right, stretch_horizontal, stretch_vertical, stretch_all", true),
                 new MethodKey("pivot", "轴心点 [x, y]", true),
-                new MethodKey("offset_min", "最小偏移 [x, y]", true),
-                new MethodKey("offset_max", "最大偏移 [x, y]", true),
                 
                 // Transform继承属性
                 new MethodKey("local_position", "本地位置 [x, y, z]", true),
                 new MethodKey("local_rotation", "本地旋转 [x, y, z]", true),
                 new MethodKey("local_scale", "本地缩放 [x, y, z]", true),
-                
-                // 便捷设置参数
-                new MethodKey("width", "宽度", true),
-                new MethodKey("height", "高度", true),
-                new MethodKey("left", "左边距", true),
-                new MethodKey("right", "右边距", true),
-                new MethodKey("top", "上边距", true),
-                new MethodKey("bottom", "下边距", true),
-                
-                // 预设锚点类型
-                new MethodKey("anchor_preset", "锚点预设：top_left, top_center, top_right, middle_left, middle_center, middle_right, bottom_left, bottom_center, bottom_right, stretch_horizontal, stretch_vertical, stretch_all", true),
-                
-                // 属性操作参数（兜底功能）
-                new MethodKey("property_name", "属性名称（用于属性设置/获取）", true),
-                new MethodKey("value", "要设置的属性值", true),
             };
         }
 
@@ -90,7 +75,6 @@ namespace UnityMcp.Tools
                 .Create()
                 .Key("action")
                     .Leaf("do_layout", (Func<StateTreeContext, object>)HandleDoLayoutAction)
-                    .Leaf("set_props", (Func<StateTreeContext, object>)HandleSetPropsAction)
                     .Leaf("get_layout", (Func<StateTreeContext, object>)HandleGetLayoutAction)
                     .DefaultLeaf((Func<StateTreeContext, object>)HandleDefaultAction)
                 .Build();
@@ -105,22 +89,6 @@ namespace UnityMcp.Tools
             if (targets.Length == 0)
             {
                 return Response.Error("No target GameObjects found in execution context.");
-            }
-
-            // 如果指定了 property_name 和 value，设置特定属性
-            if (args.TryGetValue("property_name", out object propertyNameObj) && propertyNameObj != null &&
-                args.TryGetValue("value", out object valueObj))
-            {
-                string propertyName = propertyNameObj.ToString();
-
-                if (targets.Length == 1)
-                {
-                    return SetPropertyOnSingleTarget(targets[0], propertyName, valueObj);
-                }
-                else
-                {
-                    return SetPropertyOnMultipleTargets(targets, propertyName, valueObj);
-                }
             }
 
             // 否则根据传入的各种属性参数执行 RectTransform 修改
@@ -144,22 +112,6 @@ namespace UnityMcp.Tools
             {
                 return Response.Error("No target GameObjects found in execution context.");
             }
-
-            // 如果指定了 property_name，获取特定属性
-            if (args.TryGetValue("property_name", out object propertyNameObj) && propertyNameObj != null)
-            {
-                string propertyName = propertyNameObj.ToString();
-
-                if (targets.Length == 1)
-                {
-                    return GetPropertyFromSingleTarget(targets[0], propertyName);
-                }
-                else
-                {
-                    return GetPropertyFromMultipleTargets(targets, propertyName);
-                }
-            }
-
             // 否则获取所有 RectTransform 属性信息
             if (targets.Length == 1)
             {
@@ -171,43 +123,7 @@ namespace UnityMcp.Tools
             }
         }
 
-        /// <summary>
-        /// 处理设置属性操作
-        /// </summary>
-        private object HandleSetPropsAction(StateTreeContext args)
-        {
-            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
-            if (targets.Length == 0)
-            {
-                return Response.Error("No target GameObjects found in execution context.");
-            }
 
-            // 如果指定了 property_name 和 value，设置特定属性
-            if (args.TryGetValue("property_name", out object propertyNameObj) && propertyNameObj != null &&
-                args.TryGetValue("value", out object valueObj))
-            {
-                string propertyName = propertyNameObj.ToString();
-
-                if (targets.Length == 1)
-                {
-                    return SetPropertyOnSingleTarget(targets[0], propertyName, valueObj);
-                }
-                else
-                {
-                    return SetPropertyOnMultipleTargets(targets, propertyName, valueObj);
-                }
-            }
-
-            // 否则根据传入的各种属性参数执行 RectTransform 修改
-            if (targets.Length == 1)
-            {
-                return ApplyRectTransformModifications(targets[0], args);
-            }
-            else
-            {
-                return ApplyRectTransformModificationsToMultiple(targets, args);
-            }
-        }
 
         /// <summary>
         /// 默认操作处理（不指定 action 时默认为 do_layout）
@@ -246,12 +162,8 @@ namespace UnityMcp.Tools
             modified |= ApplyAnchorMin(rectTransform, args);
             modified |= ApplyAnchorMax(rectTransform, args);
             modified |= ApplyPivot(rectTransform, args);
-            modified |= ApplyOffsetMin(rectTransform, args);
-            modified |= ApplyOffsetMax(rectTransform, args);
 
-            // 应用便捷尺寸设置
-            modified |= ApplyWidthHeight(rectTransform, args);
-            modified |= ApplyMargins(rectTransform, args);
+            // 已移除便捷设置参数，只保留核心属性
 
             // 应用Transform继承属性
             modified |= ApplyLocalPosition(rectTransform, args);
@@ -416,7 +328,7 @@ namespace UnityMcp.Tools
         /// </summary>
         private bool ApplyAnchoredPosition(RectTransform rectTransform, StateTreeContext args)
         {
-            if (args.TryGetValue("anchored_position", out object positionObj))
+            if (args.TryGetValue("anchored_pos", out object positionObj))
             {
                 Vector2? position = ParseVector2(positionObj);
                 if (position.HasValue && rectTransform.anchoredPosition != position.Value)
@@ -496,145 +408,11 @@ namespace UnityMcp.Tools
             return false;
         }
 
-        /// <summary>
-        /// 应用最小偏移修改
-        /// </summary>
-        private bool ApplyOffsetMin(RectTransform rectTransform, StateTreeContext args)
-        {
-            if (args.TryGetValue("offset_min", out object offsetObj))
-            {
-                Vector2? offset = ParseVector2(offsetObj);
-                if (offset.HasValue && rectTransform.offsetMin != offset.Value)
-                {
-                    rectTransform.offsetMin = offset.Value;
-                    return true;
-                }
-            }
-            return false;
-        }
 
-        /// <summary>
-        /// 应用最大偏移修改
-        /// </summary>
-        private bool ApplyOffsetMax(RectTransform rectTransform, StateTreeContext args)
-        {
-            if (args.TryGetValue("offset_max", out object offsetObj))
-            {
-                Vector2? offset = ParseVector2(offsetObj);
-                if (offset.HasValue && rectTransform.offsetMax != offset.Value)
-                {
-                    rectTransform.offsetMax = offset.Value;
-                    return true;
-                }
-            }
-            return false;
-        }
 
-        /// <summary>
-        /// 应用宽度和高度修改
-        /// </summary>
-        private bool ApplyWidthHeight(RectTransform rectTransform, StateTreeContext args)
-        {
-            bool modified = false;
-            Vector2 sizeDelta = rectTransform.sizeDelta;
 
-            if (args.TryGetValue("width", out object widthObj) && widthObj != null)
-            {
-                if (float.TryParse(widthObj.ToString(), out float width))
-                {
-                    if (sizeDelta.x != width)
-                    {
-                        sizeDelta.x = width;
-                        modified = true;
-                    }
-                }
-            }
 
-            if (args.TryGetValue("height", out object heightObj) && heightObj != null)
-            {
-                if (float.TryParse(heightObj.ToString(), out float height))
-                {
-                    if (sizeDelta.y != height)
-                    {
-                        sizeDelta.y = height;
-                        modified = true;
-                    }
-                }
-            }
 
-            if (modified)
-            {
-                rectTransform.sizeDelta = sizeDelta;
-            }
-
-            return modified;
-        }
-
-        /// <summary>
-        /// 应用边距修改
-        /// </summary>
-        private bool ApplyMargins(RectTransform rectTransform, StateTreeContext args)
-        {
-            bool modified = false;
-            Vector2 offsetMin = rectTransform.offsetMin;
-            Vector2 offsetMax = rectTransform.offsetMax;
-
-            if (args.TryGetValue("left", out object leftObj) && leftObj != null)
-            {
-                if (float.TryParse(leftObj.ToString(), out float left))
-                {
-                    if (offsetMin.x != left)
-                    {
-                        offsetMin.x = left;
-                        modified = true;
-                    }
-                }
-            }
-
-            if (args.TryGetValue("bottom", out object bottomObj) && bottomObj != null)
-            {
-                if (float.TryParse(bottomObj.ToString(), out float bottom))
-                {
-                    if (offsetMin.y != bottom)
-                    {
-                        offsetMin.y = bottom;
-                        modified = true;
-                    }
-                }
-            }
-
-            if (args.TryGetValue("right", out object rightObj) && rightObj != null)
-            {
-                if (float.TryParse(rightObj.ToString(), out float right))
-                {
-                    if (offsetMax.x != -right)
-                    {
-                        offsetMax.x = -right;
-                        modified = true;
-                    }
-                }
-            }
-
-            if (args.TryGetValue("top", out object topObj) && topObj != null)
-            {
-                if (float.TryParse(topObj.ToString(), out float top))
-                {
-                    if (offsetMax.y != -top)
-                    {
-                        offsetMax.y = -top;
-                        modified = true;
-                    }
-                }
-            }
-
-            if (modified)
-            {
-                rectTransform.offsetMin = offsetMin;
-                rectTransform.offsetMax = offsetMax;
-            }
-
-            return modified;
-        }
 
         /// <summary>
         /// 应用本地位置修改

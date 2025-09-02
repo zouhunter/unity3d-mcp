@@ -109,7 +109,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                LogException(new Exception("[DualStateMethodBase] Unexpected error during dual-tree execution:", e));
+                Debug.LogException(new Exception("[DualStateMethodBase] Unexpected error during dual-tree execution:", e));
                 args.Complete(Response.Error($"Unexpected error during execution: {e.Message}"));
             }
         }
@@ -127,7 +127,7 @@ namespace UnityMcp.Tools
             // 检查目标定位阶段的错误
             if (targetResult == null && !string.IsNullOrEmpty(_targetTree.ErrorMessage))
             {
-                LogError($"[DualStateMethodBase] Target location failed: {_targetTree.ErrorMessage}");
+                Debug.LogError($"[DualStateMethodBase] Target location failed: {_targetTree.ErrorMessage}");
                 args.Complete(Response.Error($"Target location failed: {_targetTree.ErrorMessage}"));
             }
             else if (targetResult != null && targetResult != copyContext)
@@ -150,8 +150,8 @@ namespace UnityMcp.Tools
             var processedTarget = ProcessTargetResult(targetResult);
             if (processedTarget == null)
             {
-                LogError("[DualStateMethodBase] Target processing failed or returned null");
-                args.Complete(Response.Error("Target could not be located or processed"));
+                Debug.LogError("[DualStateMethodBase] Target processing failed or returned null:" + args["path"] + " ," + args["instance_id"]);
+                args.Complete(Response.Error("Target could not be located or processed！"));
                 return;
             }
 
@@ -165,7 +165,7 @@ namespace UnityMcp.Tools
             // 检查执行操作阶段的错误
             if (actionResult == null && !string.IsNullOrEmpty(_actionTree.ErrorMessage))
             {
-                LogError($"[DualStateMethodBase] Action execution failed: {_actionTree.ErrorMessage}");
+                Debug.LogError($"[DualStateMethodBase] Action execution failed: {_actionTree.ErrorMessage}");
                 args.Complete(Response.Error($"Action execution failed: {_actionTree.ErrorMessage}"));
                 return;
             }
@@ -173,7 +173,7 @@ namespace UnityMcp.Tools
             LogInfo("[DualStateMethodBase] Action executed successfully");
             if (actionResult == null && !string.IsNullOrEmpty(_actionTree.ErrorMessage))
             {
-                LogError($"[DualStateMethodBase] Action execution failed: {_actionTree.ErrorMessage}");
+                Debug.LogError($"[DualStateMethodBase] Action execution failed: {_actionTree.ErrorMessage}");
                 args.Complete(Response.Error($"Action execution failed: {_actionTree.ErrorMessage}"));
             }
             // 完成执行
@@ -217,21 +217,6 @@ namespace UnityMcp.Tools
         public virtual void LogInfo(string message)
         {
             if (McpConnect.EnableLog) Debug.Log(message);
-        }
-
-        public virtual void LogWarning(string message)
-        {
-            Debug.LogWarning(message);
-        }
-
-        public virtual void LogError(string message)
-        {
-            Debug.LogError(message);
-        }
-
-        public virtual void LogException(Exception exception)
-        {
-            Debug.LogException(exception);
         }
     }
 }

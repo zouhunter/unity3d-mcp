@@ -464,7 +464,7 @@ namespace UnityMcp.Tools
                     right = $"({go.transform.right.x},{go.transform.right.y},{go.transform.right.z})",
                 },
                 parent_instance_id = go.transform.parent?.gameObject.GetInstanceID() ?? 0,
-                component_names = JToken.FromObject(go.GetComponents<Component>()
+                component_types = JToken.FromObject(go.GetComponents<Component>()
                     .Select(c => c.GetType().FullName)
                     .ToList()),
                 children = JToken.FromObject(CreateChildIdMap(go)),
@@ -590,7 +590,7 @@ namespace UnityMcp.Tools
         /// </summary>
         public static void ApplyParentSetting(JObject args, GameObject newGo, Action<string> logAction = null)
         {
-            JToken parentToken = args["parent_id"];
+            JToken parentToken = args["parent_id"] ?? args["parent_path"];
             if (parentToken != null)
             {
                 GameObject parentGo = FindObjectByIdOrPath(parentToken);
@@ -733,8 +733,8 @@ namespace UnityMcp.Tools
                 }
             }
 
-            // 处理单个component_name和component_properties的情况
-            string singleComponentName = args["component_name"]?.ToString();
+            // 处理单个component_type和component_properties的情况
+            string singleComponentName = args["component_type"]?.ToString();
             if (!string.IsNullOrEmpty(singleComponentName) && args["component_properties"] is JObject singleProps)
             {
                 // 检查是否是嵌套结构

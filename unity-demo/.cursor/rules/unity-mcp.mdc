@@ -1,45 +1,34 @@
 ---
-description:
-globs:
+description:当用户需要控制Unity时，请使用此规则
+globs:  [
+  "**/Assets/MCP/Tools/**"
+]
 alwaysApply: true
 ---
 # Unity MCP 工具规则 (mcp_rules)
 
-本文档将工具按两类划分：
-- Tools: `function_call`, `functions_call`（调用/批量调用 Methods）。
-- Methods: `hierarchy_create`, `hierarchy_link`, `hierarchy_search`, `edit_asset`, `edit_component`, `manage_editor`, `edit_gameobject`, `ugui_layout`, `edit_prefab`, `request_http`, `edit_scene`, `edit_script`, `edit_scriptableobject`, `edit_shader`, `edit_texture`, `edit_material`, `edit_mesh`, `console_read`（均作为 `func` 传给 Tools）。
-
-除 `function_call` 与 `functions_call` 外，其余均为 Methods 名称，不直接调用；请通过 Tools 调用，并把方法参数放入 `args`（字典类型）。
-
-## 🗂️ 目录
-- Tools
-  - `function_call`
-  - `functions_call`
-- Methods
-  - `gm_command`
-  - `hierarchy_create`
-  - `hierarchy_link` 
-  - `hierarchy_search`
-  - `edit_asset`
-  - `edit_component`
-  - `manage_editor`
-  - `edit_gameobject`
-  - `ugui_layout`
-  - `edit_prefab`
-  - `request_http`
-  - `edit_scene`
-  - `edit_script`
-  - `edit_scriptableobject`
-  - `edit_shader`
-  - `edit_texture`
-  - `edit_material`
-  - `edit_mesh`
-  - `console_read`
-- 使用指南
+工具分为两类：
+- FacadeTools：`function_call`、`functions_call`，用于调用或批量调用方法（Methods）。
+- MethodTools：（仅通过 FacadeTool 间接调用，参数通过 `args` 字典传递。）
+    + `hierarchy_create` : Hierarchy 窗口内创建 GameObject创建
+    + `hierarchy_apply`:Hierarchy 应用到资源
+    + `hierarchy_search`:Hierarchy 搜索
+    + `figma_make_ugui`:Figma 创建UGUI的规则
+    + `edit_gameobject`:编辑 GameObject
+    + `edit_component`:编辑 Component
+    + `edit_material`:编辑材质
+    + `edit_mesh`:编辑 Mesh
+    + `edit_scene`:编辑场景
+    + `edit_script`:编辑脚本
+    + `project_operate`:编辑 Asset
+    + `project_search`:搜索 Asset
+    + `request_http`:请求 HTTP
+  
+除 `function_call` 和 `functions_call` 外，其余均为方法名，不能直接被MCP调用。
 
 ---
 
-## 🔧 Tools
+## 🔧 FacadeTools
 
 ### function_call - 单次函数调用工具
 **功能**: 调用一次 Unity MCP 方法。
@@ -77,7 +66,7 @@ function_call(
 ```python
 [
   { "func": "hierarchy_create", "args": {"from": "primitive", "primitive_type": "Cube", "name": "Enemy"} },
-  { "func": "edit_gameobject", "args": {"path": "Enemy", "action": "add_component", "component_name": "Rigidbody"} }
+  { "func": "edit_gameobject", "args": {"path": "Enemy", "action": "add_component", "component_type": "Rigidbody"} }
 ]
 ```
 
@@ -98,15 +87,15 @@ function_call(
 functions_call(
   funcs=[
     {"func": "hierarchy_create", "args": {"from": "primitive", "primitive_type": "Cube", "name": "Enemy"}},
-    {"func": "edit_gameobject", "args": {"path": "Enemy", "action": "add_component", "component_name": "Rigidbody"}}
+    {"func": "edit_gameobject", "args": {"path": "Enemy", "action": "add_component", "component_type": "Rigidbody"}}
   ]
 )
 ```
 
 ---
 
-## 🧩 Methods
-> 通过 Tools 调用以下方法：
+## 🧩 MethodTools
+> 通过 FacadeTools： 调用以下方法：
 > - 单次：使用 `function_call`，设置 `func` 为方法名，`args` 为方法参数字典。
 > - 批量：使用 `functions_call`，把多条 `{func, args}` 放入 `function_calls`。
 
@@ -196,26 +185,35 @@ function_call(
 )
 ```
 
+示例：通过菜单创建Image
+```python
+function_call(
+  func="hierarchy_create",
+  args={"from": "menu", "menu_path": "GameObject/UI/Image", "name": "HeadIcon","properties": {"Image": {"sprite": "Assets/Sprites/HeadIcon.png"}}"}
+)
+```
+
+
 示例：创建带父对象的圆柱体
 ```python
 function_call(
   func="hierarchy_create",
-  args={"from": "primitive", "primitive_type": "Cylinder", "name": "Pillar", "parent": "Environment", "position": [10, 0, 10], "scale": [2, 5, 2]}
+  args={"from": "primitive", "primitive_type": "Cylinder", "name": "Pillar", "parent_path": "Environment/Group1", "position": [10, 0, 10], "scale": [2, 5, 2]}
 )
 ```
 ---
 
-### hierarchy_link - 层级预制体链接工具
+### hierarchy_apply - 层级预制体链接工具
 **功能**: 管理GameObject与预制体的连接关系，包括连接、应用更改和断开连接。
 
 主要参数（放入 `args`）
-- `action` (string, 必需): 操作类型，固定为 `link`
+- `action` (string, 必需): 操作类型，固定为 `apply`
 - `target_object` (string, 必需): 目标GameObject标识符（ID、名称或路径）
 - `prefab_path` (string, 可选): 预制体路径
-- `link_type` (string, 可选): 链接类型，支持 `connect_to_prefab`、`apply_prefab_changes`、`break_prefab_connection`
-- `force_link` (bool, 可选): 是否强制创建链接（覆盖现有连接）
+- `apply_type` (string, 可选): 链接类型，支持 `connect_to_prefab`、`apply_prefab_changes`、`break_prefab_connection`
+- `force_apply` (bool, 可选): 是否强制创建链接（覆盖现有连接）
 
-支持的链接类型 (link_type)
+支持的链接类型 (apply_type)
 - `connect_to_prefab` - 连接GameObject到预制体（默认）
 - `apply_prefab_changes` - 应用预制体实例的更改到预制体资源
 - `break_prefab_connection` - 断开预制体连接
@@ -223,32 +221,32 @@ function_call(
 示例：连接GameObject到预制体
 ```python
 function_call(
-  func="hierarchy_link",
-  args={"action": "link", "target_object": "Player", "prefab_path": "Assets/Prefabs/Player.prefab", "link_type": "connect_to_prefab"}
+  func="hierarchy_apply",
+  args={"action": "apply", "target_object": "Player", "prefab_path": "Assets/Prefabs/Player.prefab", "apply_type": "connect_to_prefab"}
 )
 ```
 
 示例：强制连接（覆盖现有连接）
 ```python
 function_call(
-  func="hierarchy_link",
-  args={"action": "link", "target_object": "Enemy", "prefab_path": "Assets/Prefabs/NewEnemy.prefab", "force_link": True}
+  func="hierarchy_apply",
+  args={"action": "apply", "target_object": "Enemy", "prefab_path": "Assets/Prefabs/NewEnemy.prefab", "force_apply": True}
 )
 ```
 
 示例：应用预制体实例的更改
 ```python
 function_call(
-  func="hierarchy_link",
-  args={"action": "link", "target_object": "PlayerInstance", "link_type": "apply_prefab_changes"}
+  func="hierarchy_apply",
+  args={"action": "apply", "target_object": "PlayerInstance", "apply_type": "apply_prefab_changes"}
 )
 ```
 
 示例：断开预制体连接
 ```python
 function_call(
-  func="hierarchy_link",
-  args={"action": "link", "target_object": "Enemy", "link_type": "break_prefab_connection"}
+  func="hierarchy_apply",
+  args={"action": "apply", "target_object": "Enemy", "apply_type": "break_prefab_connection"}
 )
 ```
 
@@ -785,7 +783,7 @@ function_call(
 ```python
 function_call(
   func="manage_editor",
-  args={"action": "execute_menu", "menu_path": "GameObject/UI/Canvas"}
+  args={"action": "execute_menu", "menu_path": "Window/General/TestRunner"}
 )
 ```
 
@@ -805,13 +803,14 @@ function_call(
 - `tag` (string, 可选): GameObject标签
 - `layer` (string, 可选): GameObject所在层
 - `parent_id` (string, 可选): 父对象实例id
+- `parent_path` (string, 可选): 父对象场景路径
 - `position` (list, 可选): 位置坐标 [x, y, z]
 - `rotation` (list, 可选): 旋转角度 [x, y, z]
 - `scale` (list, 可选): 缩放比例 [x, y, z]
 - `active` (bool, 可选): 设置激活状态
 
 **组件操作参数**
-- `component_name` (string, 可选): 组件名称
+- `component_type` (string, 可选): 组件名称
 - `components` (list, 可选): 要添加的组件列表，支持字符串或对象格式
 - `components_to_remove` (list, 可选): 要移除的组件列表
 - `component_properties` (dict, 可选): 组件属性字典，支持嵌套属性和数组访问
@@ -864,7 +863,7 @@ function_call(
 ```python
 function_call(
   func="edit_gameobject",
-  args={"path": "Player", "action": "add_component", "component_name": "Rigidbody"}
+  args={"path": "Player", "action": "add_component", "component_type": "Rigidbody"}
 )
 ```
 
@@ -883,7 +882,7 @@ function_call(
   args={
     "path": "Player", 
     "action": "add_component", 
-    "component_name": "Rigidbody",
+    "component_type": "Rigidbody",
     "component_properties": {"mass": 2.5, "useGravity": true, "drag": 0.1}
   }
 )
@@ -908,7 +907,7 @@ function_call(
 ```python
 function_call(
   func="edit_gameobject",
-  args={"path": "Player", "action": "remove_component", "component_name": "Collider"}
+  args={"path": "Player", "action": "remove_component", "component_type": "Collider"}
 )
 ```
 
@@ -945,7 +944,7 @@ function_call(
     "path": "Enemies/*", 
     "select_many": true,
     "action": "add_component",
-    "component_name": "Rigidbody",
+    "component_type": "Rigidbody",
     "component_properties": {"mass": 1.0, "useGravity": true}
   }
 )
@@ -997,29 +996,21 @@ function_call(
 - `select_many` (bool, 可选): 是否选择所有匹配的对象进行批量操作（默认false）
 
 **操作类型参数**
-- `action` (string, 可选): 操作类型，支持 `do_layout`、`set_props`、`get_layout`（默认为do_layout）
+- `action` (string, 可选): 操作类型，支持 `do_layout`、`get_layout`（默认为do_layout）
 
 **RectTransform基本属性**
-- `anchored_position` (list, 可选): 锚点位置 [x, y]
+- `anchored_pos` (list, 可选): 锚点位置 [x, y]
 - `size_delta` (list, 可选): 尺寸增量 [width, height]
 - `anchor_min` (list, 可选): 最小锚点 [x, y]
 - `anchor_max` (list, 可选): 最大锚点 [x, y]
 - `pivot` (list, 可选): 轴心点 [x, y]
-- `offset_min` (list, 可选): 最小偏移 [x, y]
-- `offset_max` (list, 可选): 最大偏移 [x, y]
 
 **Transform继承属性**
 - `local_position` (list, 可选): 本地位置 [x, y, z]
 - `local_rotation` (list, 可选): 本地旋转 [x, y, z]
 - `local_scale` (list, 可选): 本地缩放 [x, y, z]
 
-**便捷设置参数**
-- `width` (float, 可选): 宽度
-- `height` (float, 可选): 高度
-- `left` (float, 可选): 左边距
-- `right` (float, 可选): 右边距
-- `top` (float, 可选): 上边距
-- `bottom` (float, 可选): 下边距
+
 
 **预设锚点类型**
 - `anchor_preset` (string, 可选): 锚点预设，支持：
@@ -1034,14 +1025,29 @@ function_call(
 
 支持的操作类型 (action)
 - `do_layout` - 执行布局修改操作，可通过property_name+value设置特定属性，或直接传递各种属性参数（默认操作）
-- `set_props` - 设置RectTransform属性，可通过property_name+value设置特定属性，或直接传递各种属性参数
 - `get_layout` - 获取RectTransform属性信息，可指定property_name获取特定属性，否则获取所有属性
 
 示例：执行布局修改（默认操作）
 ```python
 function_call(
   func="ugui_layout",
-  args={"path": "Canvas/Button", "width": 200, "height": 50, "anchored_position": [0, 0]}
+  args={"path": "Canvas/Button", "size_delta": [200, 50], "anchored_pos": [0, 0]}
+)
+```
+
+示例：使用锚点位置参数
+```python
+function_call(
+  func="ugui_layout",
+  args={"path": "Canvas/Panel", "size_delta": [300, 200], "anchored_pos": [100, 50], "pivot": [0.5, 0.5]}
+)
+```
+
+示例：设置UI元素的锚点位置
+```python
+function_call(
+  func="ugui_layout",
+  args={"path": "Canvas/TitleText", "anchored_pos": [0, 100], "size_delta": [400, 60]}
 )
 ```
 
@@ -1049,7 +1055,7 @@ function_call(
 ```python
 function_call(
   func="ugui_layout",
-  args={"id": "12345", "action": "do_layout", "width": 150, "height": 40}
+  args={"id": "12345", "action": "do_layout", "size_delta": [150, 40]}
 )
 ```
 
@@ -1061,19 +1067,13 @@ function_call(
 )
 ```
 
-示例：设置边距
-```python
-function_call(
-  func="ugui_layout",
-  args={"path": "Canvas/Content", "action": "do_layout", "left": 10, "right": 10, "top": 10, "bottom": 10}
-)
-```
+
 
 示例：批量设置多个UI元素的尺寸
 ```python
 function_call(
   func="ugui_layout",
-  args={"path": "Canvas/Button", "select_many": true, "action": "do_layout", "width": 150, "height": 40}
+  args={"path": "Canvas/Button", "select_many": true, "action": "do_layout", "size_delta": [150, 40]}
 )
 ```
 
@@ -1093,16 +1093,14 @@ function_call(
 )
 ```
 
-示例：设置精确的锚点和偏移
+示例：设置锚点拉伸
 ```python
 function_call(
   func="ugui_layout",
   args={
     "path": "Canvas/InfoPanel", 
     "anchor_min": [0, 0], 
-    "anchor_max": [1, 0.3], 
-    "offset_min": [10, 10], 
-    "offset_max": [-10, -10]
+    "anchor_max": [1, 0.3]
   }
 )
 ```
@@ -1111,7 +1109,7 @@ function_call(
 ```python
 function_call(
   func="ugui_layout",
-  args={"path": "Canvas/ScrollView", "action": "set_props", "property_name": "anchoredPosition", "value": [100, 50]}
+  args={"path": "Canvas/ScrollView", "action": "do_layout", "property_name": "anchoredPosition", "value": [100, 50]}
 )
 ```
 
@@ -1160,12 +1158,12 @@ function_call(
 - **UI专用**: 专门针对UGUI的RectTransform组件设计，包含所有UI布局相关功能
 - **多种定位方式**: 支持InstanceID、Hierarchy路径等多种目标定位方式
 - **布局预设**: 支持常用的锚点预设，快速设置UI布局模式
-- **便捷参数**: 提供width、height、边距等便捷参数，简化常用操作
+- **核心参数**: 提供RectTransform核心属性，精确控制UI布局
 - **批量操作**: 支持select_many参数进行批量UI布局调整，提高批量处理效率
 - **智能类型转换**: 自动处理Vector2、Vector3等Unity数据类型转换
 - **撤销支持**: 所有操作都支持Unity的撤销功能，便于调试和修改
 - **详细返回数据**: 返回完整的RectTransform状态信息，便于验证操作结果
-- **灵活的操作模式**: do_layout执行布局修改、set_props设置属性、get_layout获取布局信息，满足不同场景需求
+- **灵活的操作模式**: do_layout执行布局修改、get_layout获取布局信息，满足不同场景需求
 
 ---
 
@@ -1194,7 +1192,7 @@ function_call(
 - `position` (list, 可选): 位置坐标 [x, y, z]
 - `rotation` (list, 可选): 旋转角度 [x, y, z]
 - `scale` (list, 可选): 缩放比例 [x, y, z]
-- `parent` (string, 可选): 父对象名称或路径
+- `parent_path` (string, 可选): 父对象名称或路径
 
 支持的操作 (action)
 - `create` - 创建预制体
@@ -1961,6 +1959,262 @@ function_call(
   args={"action": "get_full", "count": 10, "filterText": "Error"}
 )
 ```
+
+---
+
+### project_operate - Unity项目资产管理
+**功能**: 专门处理Unity项目中的资产管理操作，支持资产导入、修改、移动、复制、搜索、刷新等功能，提供全面的项目管理支持。
+
+主要参数（放入 `args`）
+- `action` (string, 必需): 操作类型，支持 `import`、`refresh`、`modify`、`duplicate`、`move`、`rename`、`search`、`get_info`、`create_folder`
+- `path` (string, 必需): 资产路径，Unity标准格式：Assets/Folder/File.extension
+- `properties` (dict, 可选): 资产属性字典，用于设置资产的各种属性
+- `destination` (string, 可选): 目标路径（移动/复制时使用）
+- `search_pattern` (string, 可选): 搜索模式，如*.prefab, *.cs等（搜索时使用）
+- `recursive` (bool, 可选): 是否递归搜索子文件夹
+- `force` (bool, 可选): 是否强制执行操作（覆盖现有文件等）
+- `refresh_type` (string, 可选): 刷新类型：all(全部)、assets(仅资产)、scripts(仅脚本)，默认all
+- `save_before_refresh` (bool, 可选): 刷新前是否保存所有资产，默认true
+
+支持的操作 (action)
+- `import` - 重新导入资产
+- `refresh` - 刷新项目资产数据库
+- `modify` - 修改资产属性
+- `duplicate` - 复制资产
+- `move` - 移动/重命名资产
+- `rename` - 移动/重命名资产（与move相同）
+- `search` - 搜索资产
+- `get_info` - 获取资产信息
+- `create_folder` - 创建文件夹
+
+示例：创建文件夹
+```python
+function_call(
+  func="project_operate",
+  args={"action": "create_folder", "path": "Assets/ScriptableObjects"}
+)
+```
+
+示例：重新导入资产
+```python
+function_call(
+  func="project_operate",
+  args={"action": "import", "path": "Assets/Textures/icon.png"}
+)
+```
+
+示例：修改ScriptableObject属性
+```python
+function_call(
+  func="project_operate",
+  args={"action": "modify", "path": "Assets/Data/GameSettings.asset", "properties": {"playerSpeed": 7.0, "maxHealth": 150}}
+)
+```
+
+示例：复制资产
+```python
+function_call(
+  func="project_operate",
+  args={"action": "duplicate", "path": "Assets/Materials/RedMaterial.mat", "destination": "Assets/Materials/RedMaterialCopy.mat"}
+)
+```
+
+示例：移动/重命名资产
+```python
+function_call(
+  func="project_operate",
+  args={"action": "move", "path": "Assets/Scripts/OldName.cs", "destination": "Assets/Scripts/NewName.cs"}
+)
+```
+
+示例：刷新项目
+```python
+function_call(
+  func="project_operate",
+  args={"action": "refresh", "refresh_type": "all", "save_before_refresh": true}
+)
+```
+
+示例：搜索资产
+```python
+function_call(
+  func="project_operate",
+  args={"action": "search", "search_pattern": "*.prefab", "path": "Assets/Prefabs/"}
+)
+```
+
+示例：获取资产信息
+```python
+function_call(
+  func="project_operate",
+  args={"action": "get_info", "path": "Assets/Scripts/PlayerController.cs", "generate_preview": true}
+)
+```
+
+---
+
+### project_search - Unity项目资产搜索
+**功能**: 专门处理Unity项目窗口中的资产搜索操作，支持按类型、关键词、路径等多种条件进行精确搜索，提供强大的项目资产查找功能。
+
+主要参数（放入 `args`）
+- `search_type` (string, 必需): 搜索类型，支持 `asset`、`folder`、`script`、`texture`、`material`、`prefab`、`scene`、`audio`、`model`、`shader`、`animation`、`general`
+- `search_term` (string, 必需): 搜索关键词
+- `search_path` (string, 可选): 搜索路径（相对于Assets），默认为整个Assets目录
+- `file_extension` (string, 可选): 文件扩展名过滤
+- `recursive` (bool, 可选): 是否递归搜索子文件夹，默认true
+- `case_sensitive` (bool, 可选): 是否区分大小写，默认false
+- `max_results` (int, 可选): 最大返回结果数，默认100
+- `include_meta` (bool, 可选): 是否包含.meta文件，默认false
+
+支持的搜索类型 (search_type)
+- `asset` - 搜索所有类型的资产
+- `folder` - 搜索文件夹
+- `script` - 搜索脚本文件(.cs, .js, .boo)
+- `texture` - 搜索纹理文件(.png, .jpg, .tga等)
+- `material` - 搜索材质文件(.mat)
+- `prefab` - 搜索预制体文件(.prefab)
+- `scene` - 搜索场景文件(.unity)
+- `audio` - 搜索音频文件(.mp3, .wav, .ogg等)
+- `model` - 搜索3D模型文件(.fbx, .obj, .blend等)
+- `shader` - 搜索Shader文件(.shader, .cginc, .hlsl)
+- `animation` - 搜索动画文件(.anim, .controller等)
+- `general` - 通用搜索
+
+示例：搜索所有脚本文件
+```python
+function_call(
+  func="project_search",
+  args={"search_type": "script", "search_term": "Player", "search_path": "Assets/Scripts", "recursive": true, "max_results": 50}
+)
+```
+
+示例：搜索纹理文件
+```python
+function_call(
+  func="project_search",
+  args={"search_type": "texture", "search_term": "icon", "search_path": "Assets/Textures", "max_results": 20}
+)
+```
+
+示例：搜索预制体
+```python
+function_call(
+  func="project_search",
+  args={"search_type": "prefab", "search_term": "Enemy", "recursive": true}
+)
+```
+
+示例：搜索材质文件
+```python
+function_call(
+  func="project_search",
+  args={"search_type": "material", "search_term": "Red", "search_path": "Assets/Materials"}
+)
+```
+
+示例：搜索音频文件
+```python
+function_call(
+  func="project_search",
+  args={"search_type": "audio", "search_term": "music", "search_path": "Assets/Audio", "case_sensitive": false}
+)
+```
+
+示例：搜索场景文件
+```python
+function_call(
+  func="project_search",
+  args={"search_type": "scene", "search_term": "Level", "max_results": 10}
+)
+```
+
+示例：通用搜索
+```python
+function_call(
+  func="project_search",
+  args={"search_type": "general", "search_term": "MainMenu", "search_path": "Assets", "recursive": true, "max_results": 30}
+)
+```
+
+---
+
+### figma_make_ugui - Figma UI制作衔接工具
+**功能**: 专门处理Figma设计稿到Unity UGUI的转换和制作流程管理，支持UI制作方案查询、修改记录管理等功能。
+
+主要参数（放入 `args`）
+- `action` (string, 必需): 操作类型，支持 `get_rule`、`add_modify`、`get_modifys`、`clear_modify`
+- `name` (string, 必需): UI名称，用于查找和记录
+- `modify_desc` (string, 可选): 修改描述，仅在 add_modify 操作时使用
+
+支持的操作 (action)
+- `get_rule` - 通过UI名查找UI制作的具体方案
+- `add_modify` - 将UI调整的关键信息保存起来
+- `get_modifys` - 获取UI调整记录
+- `clear_modify` - 清除修改记录
+
+示例：获取UI制作方案
+```python
+function_call(
+  func="figma_make_ugui",
+  args={"action": "get_rule", "name": "Homepage"}
+)
+```
+
+示例：添加UI修改记录
+```python
+function_call(
+  func="figma_make_ugui",
+  args={"action": "add_modify", "name": "Homepage", "modify_desc": "调整了页面布局和按钮样式"}
+)
+```
+
+示例：获取所有UI修改记录
+```python
+function_call(
+  func="figma_make_ugui",
+  args={"action": "get_modifys"}
+)
+```
+
+示例：获取特定UI的修改记录
+```python
+function_call(
+  func="figma_make_ugui",
+  args={"action": "get_modifys", "name": "Homepage"}
+)
+```
+
+示例：清除特定UI的修改记录
+```python
+function_call(
+  func="figma_make_ugui",
+  args={"action": "clear_modify", "name": "Homepage"}
+)
+```
+
+示例：清除所有修改记录
+```python
+function_call(
+  func="figma_make_ugui",
+  args={"action": "clear_modify"}
+)
+```
+
+特点
+- **简化接口**: 极简化的参数设计，只需要action、name和modify_desc三个参数
+- **全局搜索**: 在整个项目中搜索所有FigmaUGUIObject资产，无需指定路径
+- **单对象处理**: 一次只处理一个FigmaUGUIObject，逻辑清晰简单
+- **智能匹配**: 支持模糊匹配和精确匹配UI名称，返回第一个匹配的对象
+- **数据持久化**: 修改记录直接保存到FigmaUGUIObject资产中，永久保存
+- **制作方案**: 提供详细的UI制作步骤建议和复杂度评估
+- **关联资产**: 自动查找相关的纹理、组件等资产信息
+
+工作流程
+1. 使用 `get_rule` 获取UI制作方案
+2. 按照推荐步骤制作UI
+3. 使用 `add_modify` 记录重要的修改信息
+4. 使用 `get_modifys` 查看历史记录
+5. 使用 `clear_modify` 清理不需要的记录
 
 ---
 

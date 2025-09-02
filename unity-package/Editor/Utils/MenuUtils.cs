@@ -18,9 +18,9 @@ namespace UnityMcp.Tools
             { "gameobject/ui/input_field", new[] { "GameObject/UI/Input Field", "GameObject/UI/Legacy/Input Field" } },
             { "gameobject/ui/inputfield", new[] { "GameObject/UI/Input Field", "GameObject/UI/Legacy/Input Field" } },
             { "gameobject/ui/dropdown", new[] { "GameObject/UI/Dropdown", "GameObject/UI/Legacy/Dropdown" } },
+            { "gameobject/ui/button", new[] { "GameObject/UI/Button", "GameObject/UI/Legacy/Button" } },
             
             // 没有变化的控件
-            { "gameobject/ui/button", new[] { "GameObject/UI/Button" } },
             { "gameobject/ui/toggle", new[] { "GameObject/UI/Toggle" } },
             { "gameobject/ui/slider", new[] { "GameObject/UI/Slider" } },
             { "gameobject/ui/scrollbar", new[] { "GameObject/UI/Scrollbar" } },

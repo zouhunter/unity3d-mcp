@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using Newtonsoft.Json;
@@ -55,6 +56,8 @@ namespace UnityMcp.Tools
         private string resultText = "";
         private bool showResult = false;
         private bool isExecuting = false;
+        private int currentExecutionIndex = 0; // 当前执行的任务索引
+        private int totalExecutionCount = 0; // 总任务数
 
         private object currentResult = null; // 存储当前执行结果
 
@@ -119,7 +122,7 @@ namespace UnityMcp.Tools
             // 说明文字
             EditorGUILayout.HelpBox(
                 "输入单个函数调用:\n{\"func\": \"function_name\", \"args\": {...}}\n\n" +
-                "或批量调用:\n{\"funcs\": [{\"func\": \"...\", \"args\": {...}}, ...]}",
+                "或批量调用 (顺序执行):\n{\"funcs\": [{\"func\": \"...\", \"args\": {...}}, ...]}",
                 MessageType.Info);
 
             GUILayout.Space(5);
@@ -211,7 +214,14 @@ namespace UnityMcp.Tools
 
             if (isExecuting)
             {
-                GUILayout.Label("执行中...", GUILayout.Width(100));
+                if (totalExecutionCount > 1)
+                {
+                    GUILayout.Label($"执行中... ({currentExecutionIndex}/{totalExecutionCount})", GUILayout.Width(150));
+                }
+                else
+                {
+                    GUILayout.Label("执行中...", GUILayout.Width(100));
+                }
             }
 
             GUILayout.EndHorizontal();
@@ -346,7 +356,7 @@ namespace UnityMcp.Tools
                 resultText = errorResult;
                 isExecuting = false;
 
-                Debug.LogError($"[McpDebugWindow] 执行调用时发生错误: {e}");
+                Debug.LogException(new Exception("ExecuteCall error", e));
             }
         }
 
@@ -355,6 +365,7 @@ namespace UnityMcp.Tools
         /// </summary>
         private void CompleteExecution(object result, TimeSpan duration)
         {
+
             try
             {
                 // 存储当前结果并格式化
@@ -365,6 +376,10 @@ namespace UnityMcp.Tools
                 // 刷新界面
                 Repaint();
             }
+            catch (Exception e)
+            {
+                Debug.LogException(new Exception("CompleteExecution error", e));
+            }
             finally
             {
                 isExecuting = false;
@@ -372,144 +387,154 @@ namespace UnityMcp.Tools
         }
 
         /// <summary>
-        /// 执行批量函数调用，支持异步回调
+        /// 执行批量函数调用的内部通用方法（顺序执行）
         /// </summary>
-        private object ExecuteBatchCalls(JArray funcsArray, DateTime startTime)
+        private object ExecuteBatchCallsInternal(JArray funcsArray, DateTime startTime, System.Action<object, TimeSpan> onComplete)
         {
-            var results = new List<object>(new object[funcsArray.Count]); // 预分配容量防止越界
-            var errors = new List<string>();
-            int totalCalls = funcsArray.Count;
-            int successfulCalls = 0;
-            int failedCalls = 0;
-            int completedCalls = 0;
-            var lockObject = new object(); // 专用锁对象
-            bool hasAsyncCalls = false;
+            // 设置批量执行状态
+            totalExecutionCount = funcsArray.Count;
+            currentExecutionIndex = 0;
 
-            for (int i = 0; i < funcsArray.Count; i++)
-            {
-                try
-                {
-                    var funcCall = funcsArray[i] as JObject;
-                    if (funcCall == null)
-                    {
-                        errors.Add($"第{i + 1}个函数调用格式错误: 不是有效的JSON对象");
-                        failedCalls++;
-                        results[i] = null; // 使用索引而非Add
-                        completedCalls++;
-                        continue;
-                    }
+            // 启动协程进行顺序执行
+            CoroutineRunner.StartCoroutine(SequentialExecuteCoroutine(funcsArray, startTime, onComplete), null);
 
-                    var functionCall = new FunctionCall();
-                    object callResult = null;
-                    bool callbackExecuted = false;
-                    int callIndex = i; // 捕获当前索引
-
-                    functionCall.HandleCommand(funcCall, (result) =>
-                    {
-                        callResult = result;
-                        callbackExecuted = true;
-
-                        // 更新结果
-                        lock (lockObject) // 线程安全
-                        {
-                            // 安全设置结果，防止越界
-                            if (callIndex >= 0 && callIndex < results.Count)
-                            {
-                                results[callIndex] = result;
-                            }
-
-                            if (result != null && !IsErrorResponse(result))
-                            {
-                                successfulCalls++;
-                            }
-                            else
-                            {
-                                failedCalls++;
-                                if (result != null)
-                                {
-                                    errors.Add($"第{callIndex + 1}个调用: {ExtractErrorMessage(result)}");
-                                }
-                            }
-
-                            completedCalls++;
-
-                            // 检查是否所有调用都完成了
-                            if (completedCalls == totalCalls && isExecuting)
-                            {
-                                // 生成最终结果
-                                var finalResult = new
-                                {
-                                    success = failedCalls == 0,
-                                    results = results,
-                                    errors = errors,
-                                    total_calls = totalCalls,
-                                    successful_calls = successfulCalls,
-                                    failed_calls = failedCalls
-                                };
-
-                                DateTime endTime = DateTime.Now;
-                                TimeSpan duration = endTime - startTime;
-                                CompleteExecution(finalResult, duration);
-                            }
-                        }
-                    });
-
-                    // 设置结果位置
-                    results[i] = callResult;
-
-                    if (callbackExecuted)
-                    {
-                        // 同步执行
-                        if (callResult != null && !IsErrorResponse(callResult))
-                        {
-                            successfulCalls++;
-                        }
-                        else
-                        {
-                            failedCalls++;
-                            if (callResult != null)
-                            {
-                                errors.Add($"第{i + 1}个调用: {ExtractErrorMessage(callResult)}");
-                            }
-                        }
-                        completedCalls++;
-                    }
-                    else
-                    {
-                        hasAsyncCalls = true;
-                    }
-                }
-                catch (Exception e)
-                {
-                    string error = $"第{i + 1}个函数调用失败: {e.Message}";
-                    errors.Add(error);
-                    results[i] = null; // 使用索引而非Add
-                    failedCalls++;
-                    completedCalls++;
-                }
-            }
-
-            // 如果所有调用都是同步的，直接返回结果
-            if (!hasAsyncCalls)
-            {
-                return new
-                {
-                    success = failedCalls == 0,
-                    results = results,
-                    errors = errors,
-                    total_calls = totalCalls,
-                    successful_calls = successfulCalls,
-                    failed_calls = failedCalls
-                };
-            }
-
-            // 有异步调用，返回null等待回调完成
+            // 返回null表示异步执行
             return null;
         }
 
+        /// <summary>
+        /// 顺序执行批量任务的协程
+        /// </summary>
+        private IEnumerator SequentialExecuteCoroutine(JArray funcsArray, DateTime startTime, System.Action<object, TimeSpan> onComplete)
+        {
+            var results = new List<object>();
+            var errors = new List<string>();
+            int successfulCalls = 0;
+            int failedCalls = 0;
+
+            for (int i = 0; i < funcsArray.Count; i++)
+            {
+                currentExecutionIndex = i + 1;
+
+                // 刷新UI显示当前进度
+                Repaint();
+
+                var funcCall = funcsArray[i] as JObject;
+                if (funcCall == null)
+                {
+                    errors.Add($"第{i + 1}个函数调用格式错误: 不是有效的JSON对象");
+                    failedCalls++;
+                    results.Add(null);
+                    continue;
+                }
+
+                // 执行单个函数调用
+                var functionCall = new FunctionCall();
+                object callResult = null;
+                bool callCompleted = false;
+                Exception executionError = null;
+
+                try
+                {
+                    functionCall.HandleCommand(funcCall, (result) =>
+                    {
+                        callResult = result;
+                        callCompleted = true;
+                    });
+                }
+                catch (Exception e)
+                {
+                    executionError = e;
+                    callCompleted = true;
+                }
+
+                // 等待调用完成
+                int waitFrames = 0;
+                while (!callCompleted)
+                {
+                    yield return null; // 等待下一帧
+                    waitFrames++;
+
+                    // 每10帧刷新一次UI（大约每100ms）
+                    if (waitFrames % 10 == 0)
+                    {
+                        Repaint();
+                    }
+                }
+
+                // 处理结果
+                if (executionError != null)
+                {
+                    string error = $"第{i + 1}个函数调用失败: {executionError.Message}";
+                    errors.Add(error);
+                    results.Add(null);
+                    failedCalls++;
+
+                    Debug.LogException(new Exception($"批量执行第{i + 1}个任务时发生错误", executionError));
+                }
+                else
+                {
+                    results.Add(callResult);
+
+                    if (callResult != null && !IsErrorResponse(callResult))
+                    {
+                        successfulCalls++;
+                    }
+                    else
+                    {
+                        failedCalls++;
+                        if (callResult != null)
+                        {
+                            errors.Add($"第{i + 1}个调用: {ExtractErrorMessage(callResult)}");
+                        }
+                        else
+                        {
+                            errors.Add($"第{i + 1}个调用: 执行失败，返回null");
+                        }
+                    }
+                }
+
+                // 短暂延迟，让UI有机会更新
+                yield return null;
+            }
+
+            // 生成最终结果
+            var finalResult = new
+            {
+                success = failedCalls == 0,
+                results = results,
+                errors = errors,
+                total_calls = funcsArray.Count,
+                successful_calls = successfulCalls,
+                failed_calls = failedCalls
+            };
+
+            DateTime endTime = DateTime.Now;
+            TimeSpan duration = endTime - startTime;
+
+            // 重置执行状态
+            currentExecutionIndex = 0;
+            totalExecutionCount = 0;
+
+            onComplete?.Invoke(finalResult, duration);
+        }
+
+
+
         private object ExecuteJsonCall(DateTime startTime)
         {
-            JObject inputObj = JObject.Parse(inputJson);
+            return ExecuteJsonCallInternal(inputJson, startTime, (result, duration) =>
+            {
+                CompleteExecution(result, duration);
+            });
+        }
+
+        /// <summary>
+        /// 执行JSON调用的内部通用方法
+        /// </summary>
+        private object ExecuteJsonCallInternal(string jsonString, DateTime startTime, System.Action<object, TimeSpan> onSingleComplete)
+        {
+            JObject inputObj = JObject.Parse(jsonString);
 
             // 检查是否为批量调用
             if (inputObj.ContainsKey("funcs"))
@@ -520,8 +545,7 @@ namespace UnityMcp.Tools
                 {
                     throw new ArgumentException("'funcs' 字段必须是一个数组");
                 }
-
-                return ExecuteBatchCalls(funcsArray, startTime);
+                return ExecuteBatchCallsInternal(funcsArray, startTime, onSingleComplete);
             }
             else if (inputObj.ContainsKey("func"))
             {
@@ -540,7 +564,7 @@ namespace UnityMcp.Tools
                     {
                         DateTime endTime = DateTime.Now;
                         TimeSpan duration = endTime - startTime;
-                        CompleteExecution(result, duration);
+                        onSingleComplete?.Invoke(result, duration);
                     }
                 });
 
@@ -552,9 +576,6 @@ namespace UnityMcp.Tools
                 throw new ArgumentException("输入的JSON必须包含 'func' 字段（单个调用）或 'funcs' 字段（批量调用）");
             }
         }
-
-
-
 
 
         private string FormatResult(object result, TimeSpan duration)
@@ -707,6 +728,8 @@ namespace UnityMcp.Tools
             resultText = "";
             showResult = false;
             currentResult = null;
+            currentExecutionIndex = 0;
+            totalExecutionCount = 0;
         }
 
         /// <summary>
@@ -876,201 +899,20 @@ namespace UnityMcp.Tools
         /// </summary>
         private object ExecuteJsonCallFromString(string jsonString, DateTime startTime)
         {
-            JObject inputObj = JObject.Parse(jsonString);
-
-            // 检查是否为批量调用
-            if (inputObj.ContainsKey("funcs"))
+            return ExecuteJsonCallInternal(jsonString, startTime, (result, duration) =>
             {
-                // 批量调用 - 循环调用FunctionCall
-                var funcsArray = inputObj["funcs"] as JArray;
-                if (funcsArray == null)
-                {
-                    throw new ArgumentException("'funcs' 字段必须是一个数组");
-                }
+                // 剪贴板格式的UI更新
+                currentResult = result;
+                string formattedResult = FormatResult(result, duration);
+                resultText = $"📋 从剪贴板执行\n原始JSON:\n{jsonString}\n\n{formattedResult}";
 
-                return ExecuteBatchCallsForClipboard(funcsArray, startTime, jsonString);
-            }
-            else if (inputObj.ContainsKey("func"))
-            {
-                // 单个函数调用
-                var functionCall = new FunctionCall();
-                object callResult = null;
-                bool callbackExecuted = false;
-
-                functionCall.HandleCommand(inputObj, (result) =>
-                {
-                    callResult = result;
-                    callbackExecuted = true;
-
-                    // 如果是异步回调，更新UI（剪贴板格式）
-                    if (isExecuting)
-                    {
-                        DateTime endTime = DateTime.Now;
-                        TimeSpan duration = endTime - startTime;
-
-                        // 存储当前结果并格式化
-                        currentResult = result;
-                        string formattedResult = FormatResult(result, duration);
-                        resultText = $"📋 从剪贴板执行\n原始JSON:\n{jsonString}\n\n{formattedResult}";
-
-                        // 刷新界面
-                        Repaint();
-                        isExecuting = false;
-                    }
-                });
-
-                // 如果回调立即执行，返回结果；否则返回null表示异步执行
-                return callbackExecuted ? callResult : null;
-            }
-            else
-            {
-                throw new ArgumentException("输入的JSON必须包含 'func' 字段（单个调用）或 'funcs' 字段（批量调用）");
-            }
+                // 刷新界面
+                Repaint();
+                isExecuting = false;
+            });
         }
 
-        /// <summary>
-        /// 执行剪贴板批量函数调用，支持异步回调
-        /// </summary>
-        private object ExecuteBatchCallsForClipboard(JArray funcsArray, DateTime startTime, string originalJson)
-        {
-            var results = new List<object>();
-            var errors = new List<string>();
-            int totalCalls = funcsArray.Count;
-            int successfulCalls = 0;
-            int failedCalls = 0;
-            int completedCalls = 0;
-            var lockObject = new object(); // 专用锁对象
-            bool hasAsyncCalls = false;
 
-            for (int i = 0; i < funcsArray.Count; i++)
-            {
-                try
-                {
-                    var funcCall = funcsArray[i] as JObject;
-                    if (funcCall == null)
-                    {
-                        errors.Add($"第{i + 1}个函数调用格式错误: 不是有效的JSON对象");
-                        failedCalls++;
-                        results[i] = null; // 使用索引而非Add
-                        completedCalls++;
-                        continue;
-                    }
-
-                    var functionCall = new FunctionCall();
-                    object callResult = null;
-                    bool callbackExecuted = false;
-                    int callIndex = i; // 捕获当前索引
-
-                    functionCall.HandleCommand(funcCall, (result) =>
-                    {
-                        callResult = result;
-                        callbackExecuted = true;
-
-                        // 更新结果
-                        lock (lockObject) // 线程安全
-                        {
-                            // 安全设置结果，防止越界
-                            if (callIndex >= 0 && callIndex < results.Count)
-                            {
-                                results[callIndex] = result;
-                            }
-
-                            if (result != null && !IsErrorResponse(result))
-                            {
-                                successfulCalls++;
-                            }
-                            else
-                            {
-                                failedCalls++;
-                                if (result != null)
-                                {
-                                    errors.Add($"第{callIndex + 1}个调用: {ExtractErrorMessage(result)}");
-                                }
-                            }
-
-                            completedCalls++;
-
-                            // 检查是否所有调用都完成了
-                            if (completedCalls == totalCalls && isExecuting)
-                            {
-                                // 生成最终结果
-                                var finalResult = new
-                                {
-                                    success = failedCalls == 0,
-                                    results = results,
-                                    errors = errors,
-                                    total_calls = totalCalls,
-                                    successful_calls = successfulCalls,
-                                    failed_calls = failedCalls
-                                };
-
-                                DateTime endTime = DateTime.Now;
-                                TimeSpan duration = endTime - startTime;
-
-                                // 存储当前结果并格式化（剪贴板格式）
-                                currentResult = finalResult;
-                                string formattedResult = FormatResult(finalResult, duration);
-                                resultText = $"📋 从剪贴板执行\n原始JSON:\n{originalJson}\n\n{formattedResult}";
-
-                                // 刷新界面
-                                Repaint();
-                                isExecuting = false;
-                            }
-                        }
-                    });
-
-                    // 设置结果位置
-                    results[i] = callResult;
-
-                    if (callbackExecuted)
-                    {
-                        // 同步执行
-                        if (callResult != null && !IsErrorResponse(callResult))
-                        {
-                            successfulCalls++;
-                        }
-                        else
-                        {
-                            failedCalls++;
-                            if (callResult != null)
-                            {
-                                errors.Add($"第{i + 1}个调用: {ExtractErrorMessage(callResult)}");
-                            }
-                        }
-                        completedCalls++;
-                    }
-                    else
-                    {
-                        hasAsyncCalls = true;
-                    }
-                }
-                catch (Exception e)
-                {
-                    string error = $"第{i + 1}个函数调用失败: {e.Message}";
-                    errors.Add(error);
-                    results[i] = null; // 使用索引而非Add
-                    failedCalls++;
-                    completedCalls++;
-                }
-            }
-
-            // 如果所有调用都是同步的，直接返回结果
-            if (!hasAsyncCalls)
-            {
-                return new
-                {
-                    success = failedCalls == 0,
-                    results = results,
-                    errors = errors,
-                    total_calls = totalCalls,
-                    successful_calls = successfulCalls,
-                    failed_calls = failedCalls
-                };
-            }
-
-            // 有异步调用，返回null等待回调完成
-            return null;
-        }
 
         /// <summary>
         /// 粘贴剪贴板内容到输入框
@@ -1139,32 +981,6 @@ namespace UnityMcp.Tools
             catch (Exception e)
             {
                 EditorUtility.DisplayDialog("预览失败", $"无法预览剪贴板内容: {e.Message}", "确定");
-            }
-        }
-
-        /// <summary>
-        /// 获取剪贴板状态信息
-        /// </summary>
-        private string GetClipboardStatus()
-        {
-            try
-            {
-                string clipboardContent = EditorGUIUtility.systemCopyBuffer;
-
-                if (string.IsNullOrWhiteSpace(clipboardContent))
-                {
-                    return "剪贴板: 空";
-                }
-
-                bool isValidJson = ValidateClipboardJson(clipboardContent, out _);
-                string status = isValidJson ? "✅ JSON" : "❌ 非JSON";
-
-                // 显示字符长度
-                return $"剪贴板: {status} ({clipboardContent.Length} 字符)";
-            }
-            catch
-            {
-                return "剪贴板: 读取失败";
             }
         }
 

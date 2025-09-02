@@ -992,7 +992,7 @@ namespace UnityMcp.Windows
                 case "layer":
                     return "Default";
 
-                case "component_name":
+                case "component_type":
                     return "Rigidbody";
 
                 case "search_method":

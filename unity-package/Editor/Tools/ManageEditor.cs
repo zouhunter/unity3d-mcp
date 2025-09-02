@@ -24,12 +24,14 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("action", "操作类型：play, pause, stop, get_state, set_active_tool, add_tag, add_layer, execute_menu", false),
+                new MethodKey("action", "操作类型：play, pause, stop, get_state, set_active_tool, add_tag, add_layer, execute_menu, set_resolution", false),
                 new MethodKey("wait_for_completion", "是否等待操作完成", true),
                 new MethodKey("tool_name", "工具名称（设置活动工具时使用）", true),
                 new MethodKey("tag_name", "标签名称（添加标签时使用）", true),
                 new MethodKey("layer_name", "层名称（添加层时使用）", true),
-                new MethodKey("menu_path", "菜单路径（执行菜单时使用）", true)
+                new MethodKey("menu_path", "菜单路径（执行菜单时使用）", true),
+                new MethodKey("width", "游戏窗口宽度（设置分辨率时使用）", true),
+                new MethodKey("height", "游戏窗口高度（设置分辨率时使用）", true)
             };
         }
 
@@ -68,6 +70,9 @@ namespace UnityMcp.Tools
 
                     // Menu Management
                     .Leaf("execute_menu", MenuUtils.HandleExecuteMenu)
+
+                    // Resolution Management
+                    .Leaf("set_resolution", HandleSetResolutionAction)
                 .Build();
         }
 
@@ -267,6 +272,33 @@ namespace UnityMcp.Tools
         {
             LogInfo("[ManageEditor] Getting layers");
             return GetLayers();
+        }
+
+        /// <summary>
+        /// 处理设置游戏窗口分辨率的操作
+        /// </summary>
+        private object HandleSetResolutionAction(JObject args)
+        {
+            var widthToken = args["width"];
+            var heightToken = args["height"];
+
+            if (widthToken == null || heightToken == null)
+            {
+                return Response.Error("Both 'width' and 'height' parameters are required for set_resolution.");
+            }
+
+            if (!int.TryParse(widthToken.ToString(), out int width) || width <= 0)
+            {
+                return Response.Error("Width must be a positive integer.");
+            }
+
+            if (!int.TryParse(heightToken.ToString(), out int height) || height <= 0)
+            {
+                return Response.Error("Height must be a positive integer.");
+            }
+
+            LogInfo($"[ManageEditor] Setting game view resolution to {width}x{height}");
+            return SetGameViewResolution(width, height);
         }
 
         // --- Editor State/Info Methods ---
@@ -690,10 +722,111 @@ namespace UnityMcp.Tools
             }
         }
 
+        /// <summary>
+        /// 设置游戏窗口分辨率
+        /// </summary>
+        private object SetGameViewResolution(int width, int height)
+        {
+            try
+            {
+                // 使用反射访问GameView类，因为它不是公开的API
+                var gameViewType = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView");
+                if (gameViewType == null)
+                {
+                    return Response.Error("Could not find GameView type.");
+                }
+
+                // 获取当前的GameView窗口
+                var gameView = EditorWindow.GetWindow(gameViewType, false, null, false);
+                if (gameView == null)
+                {
+                    return Response.Error("Could not get GameView window.");
+                }
+
+                // 获取GameViewSizes类
+                var gameViewSizesType = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameViewSizes");
+                var gameViewSizeType = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameViewSize");
+                var gameViewSizeTypeEnum = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameViewSizeType");
+
+                if (gameViewSizesType == null || gameViewSizeType == null || gameViewSizeTypeEnum == null)
+                {
+                    return Response.Error("Could not find GameView size types.");
+                }
+
+                // 获取单例实例
+                var singletonMethod = gameViewSizesType.GetMethod("instance", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
+                var gameViewSizes = singletonMethod.Invoke(null, null);
+
+                // 获取当前平台的游戏视图尺寸组
+                var currentGroupMethod = gameViewSizes.GetType().GetMethod("GetCurrentGroupType");
+                var currentGroup = (int)currentGroupMethod.Invoke(gameViewSizes, null);
+
+                var getGroupMethod = gameViewSizes.GetType().GetMethod("GetGroup");
+                var group = getGroupMethod.Invoke(gameViewSizes, new object[] { currentGroup });
+
+                // 创建自定义分辨率
+                var freeAspectValue = System.Enum.GetValues(gameViewSizeTypeEnum).GetValue(1); // GameViewSizeType.FreeAspectRatio
+                var customSize = System.Activator.CreateInstance(gameViewSizeType, freeAspectValue, width, height, $"Custom {width}x{height}");
+
+                // 检查是否已存在相同的自定义尺寸
+                var getSizeCountMethod = group.GetType().GetMethod("GetBuiltinCount");
+                var getCustomSizeCountMethod = group.GetType().GetMethod("GetCustomCount");
+                var getTotalCountMethod = group.GetType().GetMethod("GetTotalCount");
+
+                int totalCount = (int)getTotalCountMethod.Invoke(group, null);
+                bool foundExistingSize = false;
+                int targetIndex = -1;
+
+                // 查找是否有匹配的分辨率
+                var getSizeAtMethod = group.GetType().GetMethod("GetGameViewSize");
+                for (int i = 0; i < totalCount; i++)
+                {
+                    var size = getSizeAtMethod.Invoke(group, new object[] { i });
+                    var sizeWidth = (int)size.GetType().GetProperty("width").GetValue(size);
+                    var sizeHeight = (int)size.GetType().GetProperty("height").GetValue(size);
+
+                    if (sizeWidth == width && sizeHeight == height)
+                    {
+                        foundExistingSize = true;
+                        targetIndex = i;
+                        break;
+                    }
+                }
+
+                // 如果没找到，添加新的自定义尺寸
+                if (!foundExistingSize)
+                {
+                    var addCustomSizeMethod = group.GetType().GetMethod("AddCustomSize");
+                    addCustomSizeMethod.Invoke(group, new object[] { customSize });
+                    targetIndex = totalCount; // 新添加的索引
+                }
+
+                // 设置GameView使用该分辨率
+                var selectedSizeIndexProperty = gameViewType.GetProperty("selectedSizeIndex",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+
+                if (selectedSizeIndexProperty != null)
+                {
+                    selectedSizeIndexProperty.SetValue(gameView, targetIndex, null);
+
+                    // 刷新GameView
+                    gameView.Repaint();
+
+                    return Response.Success($"Game view resolution set to {width}x{height}");
+                }
+                else
+                {
+                    return Response.Error("Could not set game view resolution: selectedSizeIndex property not found.");
+                }
+            }
+            catch (System.Exception e)
+            {
+                return Response.Error($"Error setting game view resolution: {e.Message}");
+            }
+        }
 
         // --- Example Implementations for Settings ---
         /*
-        private object SetGameViewResolution(int width, int height) { ... }
         private object SetQualityLevel(JToken qualityLevelToken) { ... }
         */
     }

@@ -57,7 +57,7 @@ namespace UnityMcp.Tools
                 .Key("action")
                     .Leaf("get_component_propertys", (Func<StateTreeContext, object>)HandleGetComponentPropertysAction)
                     .Leaf("set_component_propertys", (Func<StateTreeContext, object>)HandleSetComponentPropertysAction)
-                .DefaultLeaf((Func<StateTreeContext, object>)HandleDefaultAction)
+                    .DefaultLeaf((Func<StateTreeContext, object>)HandleDefaultAction)
                 .Build();
         }
 
@@ -66,6 +66,10 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleDefaultAction(StateTreeContext args)
         {
+            if (args.ContainsKey("properties"))
+            {
+                return HandleSetComponentPropertysAction(args);
+            }
             return Response.Error("Action is required for edit_component. Valid actions are: get_component_propertys, set_component_propertys.");
         }
 

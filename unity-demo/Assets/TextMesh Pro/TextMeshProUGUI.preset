@@ -74,7 +74,7 @@ Preset:
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_text
-    value: "\u7528\u6237\u767B\u5F55"
+    value: World Peas
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_isRightToLeft
@@ -87,7 +87,7 @@ Preset:
   - target: {fileID: 0}
     propertyPath: m_sharedMaterial
     value: 
-    objectReference: {fileID: 0}
+    objectReference: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   - target: {fileID: 0}
     propertyPath: m_fontSharedMaterials.Array.size
     value: 0
@@ -102,19 +102,19 @@ Preset:
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_fontColor32.rgba
-    value: 4294967295
+    value: 4280249154
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_fontColor.r
-    value: 1
+    value: 0.259
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_fontColor.g
-    value: 1
+    value: 0.42
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_fontColor.b
-    value: 1
+    value: 0.122
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_fontColor.a
@@ -222,11 +222,11 @@ Preset:
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_fontSize
-    value: 48
+    value: 32
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_fontSizeBase
-    value: 48
+    value: 32
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_fontWeight
@@ -238,11 +238,11 @@ Preset:
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_fontSizeMin
-    value: 0
+    value: 18
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_fontSizeMax
-    value: 0
+    value: 72
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_fontStyle
@@ -306,7 +306,7 @@ Preset:
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_enableKerning
-    value: 0
+    value: 1
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_enableExtraPadding
@@ -326,7 +326,7 @@ Preset:
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_isOrthographic
-    value: 0
+    value: 1
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_isCullingEnabled
@@ -390,7 +390,7 @@ Preset:
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_hasFontAssetChanged
-    value: 1
+    value: 0
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: m_baseMaterial

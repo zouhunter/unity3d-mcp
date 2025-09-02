@@ -184,7 +184,7 @@ namespace UnityMcp.Tools
                     // Iterate through the properties JSON: keys are component names, values are properties objects for that component
                     foreach (var prop in properties.Properties())
                     {
-                        string component_name = prop.Name; // e.g., "Collectible"
+                        string component_type = prop.Name; // e.g., "Collectible"
                         // Check if the value associated with the component name is actually an object containing properties
                         if (
                             prop.Value is JObject component_properties
@@ -194,12 +194,12 @@ namespace UnityMcp.Tools
                             // Find the component on the GameObject using the name from the JSON key
                             // Using GetComponent(string) is convenient but might require exact type name or be ambiguous.
                             // Consider using FindType helper if needed for more complex scenarios.
-                            Component targetComponent = gameObject.GetComponent(component_name);
+                            Component targetComponent = gameObject.GetComponent(component_type);
 
                             if (targetComponent != null)
                             {
                                 // Record the component state for Undo before modification
-                                Undo.RecordObject(targetComponent, $"Modify Component '{component_name}' on '{gameObject.name}'");
+                                Undo.RecordObject(targetComponent, $"Modify Component '{component_type}' on '{gameObject.name}'");
 
                                 // Apply the nested properties (e.g., bobSpeed) to the found component instance
                                 // Use |= to ensure 'modified' becomes true if any component is successfully modified
@@ -212,13 +212,13 @@ namespace UnityMcp.Tools
                             {
                                 // Log a warning if a specified component couldn't be found
                                 Debug.LogWarning(
-                                    $"[ManageAsset.ModifyAsset] Component '{component_name}' not found on GameObject '{gameObject.name}' in asset '{fullPath}'. Skipping modification for this component."
+                                    $"[ManageAsset.ModifyAsset] Component '{component_type}' not found on GameObject '{gameObject.name}' in asset '{fullPath}'. Skipping modification for this component."
                                 );
                             }
                         }
                         else
                         {
-                            // Log a warning if the structure isn't {"component_name": {"prop": value}}
+                            // Log a warning if the structure isn't {"component_type": {"prop": value}}
                             // We could potentially try to apply this property directly to the GameObject here if needed,
                             // but the primary goal is component modification.
                             Debug.LogWarning(

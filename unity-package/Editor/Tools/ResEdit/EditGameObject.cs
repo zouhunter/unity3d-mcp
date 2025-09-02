@@ -48,12 +48,13 @@ namespace UnityMcp.Tools
                 new MethodKey("tag", "GameObject标签", true),
                 new MethodKey("layer", "GameObject所在层", true),
                 new MethodKey("parent_id", "父对象的InstanceID", true),
+                new MethodKey("parent_path", "父对象的场景路径", true),
                 new MethodKey("position", "位置坐标 [x, y, z]", true),
                 new MethodKey("rotation", "旋转角度 [x, y, z]", true),
                 new MethodKey("scale", "缩放比例 [x, y, z]", true),
                 new MethodKey("active", "设置激活状态", true),
                 // 组件操作参数
-                new MethodKey("component_name", "组件名称", true),
+                new MethodKey("component_type", "组件名称", true),
                 new MethodKey("component_properties", "组件属性字典", true),
             };
         }
@@ -74,13 +75,13 @@ namespace UnityMcp.Tools
             return StateTreeBuilder
                 .Create()
                 .Key("action")
-                .Leaf("create", (Func<StateTreeContext, object>)HandleCreateAction)
-                .Leaf("modify", (Func<StateTreeContext, object>)HandleModifyAction)
-                .Leaf("get_components", (Func<StateTreeContext, object>)HandleGetComponentsAction)
-                .Leaf("add_component", (Func<StateTreeContext, object>)HandleAddComponentAction)
-                .Leaf("remove_component", (Func<StateTreeContext, object>)HandleRemoveComponentAction)
-                .Leaf("set_parent", (Func<StateTreeContext, object>)HandleSetParentAction)
-                .DefaultLeaf((Func<StateTreeContext, object>)HandleDefaultAction)
+                    .Leaf("create", (Func<StateTreeContext, object>)HandleCreateAction)
+                    .Leaf("modify", (Func<StateTreeContext, object>)HandleModifyAction)
+                    .Leaf("get_components", (Func<StateTreeContext, object>)HandleGetComponentsAction)
+                    .Leaf("add_component", (Func<StateTreeContext, object>)HandleAddComponentAction)
+                    .Leaf("remove_component", (Func<StateTreeContext, object>)HandleRemoveComponentAction)
+                    .Leaf("set_parent", (Func<StateTreeContext, object>)HandleSetParentAction)
+                    .DefaultLeaf((Func<StateTreeContext, object>)HandleDefaultAction)
                 .Build();
         }
 
@@ -122,6 +123,10 @@ namespace UnityMcp.Tools
         private object HandleDefaultAction(StateTreeContext args)
         {
             LogInfo("[GameObjectModify] No action specified, using default modify action");
+            if (args.TryGetValue("action", out object actionObj))
+            {
+                return Response.Error("Invalid action specified: " + actionObj);
+            }
             return HandleModifyAction(args);
         }
 
@@ -627,9 +632,13 @@ namespace UnityMcp.Tools
                     newParent = GameObjectUtils.FindObjectByIdOrPath(JToken.FromObject(parentIdObj));
                     // 如果parent_id为0或找不到，newParent为null，表示设置为根对象
                 }
+                else if (args.TryGetValue("parent_path", out object parentPathObj) && parentPathObj != null)
+                {
+                    newParent = GameObjectUtils.FindByHierarchyPath(parentPathObj.ToString(), typeof(GameObject)) as GameObject;
+                }
                 else
                 {
-                    return Response.Error("parent_id is required for set_parent action.");
+                    return Response.Error("parent_id or parent_path is required for set_parent action.");
                 }
 
                 // 检查循环引用
@@ -641,8 +650,10 @@ namespace UnityMcp.Tools
                 // 记录撤销操作
                 Undo.RecordObject(target.transform, "Set Parent");
 
-                // 设置父级
-                target.transform.SetParent(newParent?.transform, true);
+                if (newParent != null)
+                {
+                    target.transform.SetParent(newParent?.transform, true);
+                }
 
                 LogInfo($"[EditGameObject] Set parent of '{target.name}' to '{newParent?.name ?? "null"}'");
 
@@ -869,7 +880,7 @@ namespace UnityMcp.Tools
             JObject properties = null;
 
             // Allow adding component specified directly or via components array (take first)
-            if (cmd.TryGetValue("component_name", out object componentNameObj))
+            if (cmd.TryGetValue("component_type", out object componentNameObj))
             {
                 typeName = componentNameObj?.ToString();
 
@@ -901,7 +912,7 @@ namespace UnityMcp.Tools
             if (string.IsNullOrEmpty(typeName))
             {
                 return Response.Error(
-                    "Component type name ('component_name' or first element in 'components') is required."
+                    "Component type name ('component_type' or first element in 'components') is required."
                 );
             }
 
@@ -935,7 +946,7 @@ namespace UnityMcp.Tools
         {
             string typeName = null;
             // Allow removing component specified directly or via components_to_remove array (take first)
-            if (cmd.TryGetValue("component_name", out object componentNameObj))
+            if (cmd.TryGetValue("component_type", out object componentNameObj))
             {
                 typeName = componentNameObj?.ToString();
             }
@@ -949,7 +960,7 @@ namespace UnityMcp.Tools
             if (string.IsNullOrEmpty(typeName))
             {
                 return Response.Error(
-                    "Component type name ('component_name' or first element in 'components_to_remove') is required."
+                    "Component type name ('component_type' or first element in 'components_to_remove') is required."
                 );
             }
 
@@ -966,9 +977,9 @@ namespace UnityMcp.Tools
 
         private object SetComponentPropertyOnTarget(StateTreeContext cmd, GameObject targetGo)
         {
-            if (!cmd.TryGetValue("component_name", out object compNameObj) || compNameObj == null)
+            if (!cmd.TryGetValue("component_type", out object compNameObj) || compNameObj == null)
             {
-                return Response.Error("'component_name' parameter is required.");
+                return Response.Error("'component_type' parameter is required.");
             }
 
             string compName = compNameObj.ToString();

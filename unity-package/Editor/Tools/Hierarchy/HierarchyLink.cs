@@ -13,11 +13,11 @@ using UnityMcp.Models; // For Response class
 namespace UnityMcp.Tools
 {
     /// <summary>
-    /// Handles GameObject prefab linking and connection operations.
-    /// 对应方法名: hierarchy_link
+    /// Handles GameObject prefab applying and connection operations.
+    /// 对应方法名: hierarchy_apply
     /// </summary>
-    [ToolName("hierarchy_link")]
-    public class HierarchyLink : StateMethodBase
+    [ToolName("hierarchy_apply")]
+    public class HierarchyApply : StateMethodBase
     {
         /// <summary>
         /// 创建当前方法支持的参数键列表
@@ -26,11 +26,11 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("action", "操作类型：link", false),
-                new MethodKey("target_object", "目标GameObject标识符（用于link操作）", false),
+                new MethodKey("action", "操作类型：apply", false),
+                new MethodKey("target_object", "目标GameObject标识符（用于apply操作）", false),
                 new MethodKey("prefab_path", "预制体路径", true),
-                new MethodKey("link_type", "链接类型：connect_to_prefab, apply_prefab_changes, break_prefab_connection", true),
-                new MethodKey("force_link", "是否强制创建链接（覆盖现有连接）", true)
+                new MethodKey("apply_type", "链接类型：connect_to_prefab, apply_prefab_changes, break_prefab_connection", true),
+                new MethodKey("force_apply", "是否强制创建链接（覆盖现有连接）", true)
             };
         }
 
@@ -39,14 +39,14 @@ namespace UnityMcp.Tools
             return StateTreeBuilder
                 .Create()
                 .Key("action")
-                    .Branch("link")
-                        .OptionalKey("link_type")
+                    .Branch("apply")
+                        .OptionalKey("apply_type")
                             .Leaf("connect_to_prefab", HandleConnectToPrefab)
                             .Leaf("apply_prefab_changes", HandleApplyPrefabChanges)
                             .Leaf("break_prefab_connection", HandleBreakPrefabConnection)
                             .DefaultLeaf(HandleConnectToPrefab)
                         .Up()
-                        .DefaultLeaf(HandleLinkAction)
+                        .DefaultLeaf(HandleapplyAction)
                     .Up()
                 .Build();
         }
@@ -56,17 +56,17 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 处理链接预制体的操作
         /// </summary>
-        private object HandleLinkAction(JObject args)
+        private object HandleapplyAction(JObject args)
         {
-            string linkType = args["link_type"]?.ToString()?.ToLower();
-            if (string.IsNullOrEmpty(linkType))
+            string applyType = args["apply_type"]?.ToString()?.ToLower();
+            if (string.IsNullOrEmpty(applyType))
             {
-                linkType = "connect_to_prefab"; // 默认连接到预制体
+                applyType = "connect_to_prefab"; // 默认连接到预制体
             }
 
-            LogInfo($"[HierarchyLink] Executing link action with type: '{linkType}'");
+            LogInfo($"[Hierarchyapply] Executing apply action with type: '{applyType}'");
 
-            switch (linkType)
+            switch (applyType)
             {
                 case "connect_to_prefab":
                     return HandleConnectToPrefab(args);
@@ -75,7 +75,7 @@ namespace UnityMcp.Tools
                 case "break_prefab_connection":
                     return HandleBreakPrefabConnection(args);
                 default:
-                    return Response.Error($"未知的链接类型: '{linkType}'");
+                    return Response.Error($"未知的链接类型: '{applyType}'");
             }
         }
 
@@ -84,7 +84,7 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleConnectToPrefab(JObject args)
         {
-            LogInfo("[HierarchyLink] Connecting GameObject to prefab");
+            LogInfo("[Hierarchyapply] Connecting GameObject to prefab");
             return ConnectGameObjectToPrefab(args);
         }
 
@@ -93,7 +93,7 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleApplyPrefabChanges(JObject args)
         {
-            LogInfo("[HierarchyLink] Applying prefab changes");
+            LogInfo("[Hierarchyapply] Applying prefab changes");
             return ApplyPrefabChanges(args);
         }
 
@@ -102,11 +102,11 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleBreakPrefabConnection(JObject args)
         {
-            LogInfo("[HierarchyLink] Breaking prefab connection");
+            LogInfo("[Hierarchyapply] Breaking prefab connection");
             return BreakPrefabConnection(args);
         }
 
-        // --- Prefab Link Methods ---
+        // --- Prefab apply Methods ---
 
         /// <summary>
         /// 连接GameObject到指定的预制体
@@ -119,7 +119,7 @@ namespace UnityMcp.Tools
                 JToken targetToken = args["target_object"];
                 if (targetToken == null)
                 {
-                    return Response.Error("'target_object' parameter is required for link operation.");
+                    return Response.Error("'target_object' parameter is required for apply operation.");
                 }
 
                 GameObject targetGo = GameObjectUtils.FindObjectByIdOrPath(targetToken);
@@ -150,12 +150,12 @@ namespace UnityMcp.Tools
                 }
 
                 // 检查是否强制链接
-                bool forceLink = args["force_link"]?.ToObject<bool>() ?? false;
+                bool forceapply = args["force_apply"]?.ToObject<bool>() ?? false;
 
                 // 检查现有连接
-                if (PrefabUtility.GetPrefabInstanceStatus(targetGo) != PrefabInstanceStatus.NotAPrefab && !forceLink)
+                if (PrefabUtility.GetPrefabInstanceStatus(targetGo) != PrefabInstanceStatus.NotAPrefab && !forceapply)
                 {
-                    return Response.Error($"GameObject '{targetGo.name}' is already connected to a prefab. Use 'force_link': true to override.");
+                    return Response.Error($"GameObject '{targetGo.name}' is already connected to a prefab. Use 'force_apply': true to override.");
                 }
 
                 // 记录撤销操作
@@ -164,13 +164,13 @@ namespace UnityMcp.Tools
                 // 连接到预制体 - 使用现代API
                 // 先检查GameObject是否与预制体兼容
                 bool canConnect = CanGameObjectConnectToPrefab(targetGo, prefabAsset);
-                if (!canConnect && !forceLink)
+                if (!canConnect && !forceapply)
                 {
-                    return Response.Error($"GameObject '{targetGo.name}' structure doesn't match prefab '{prefabAsset.name}'. Use 'force_link': true to force connection.");
+                    return Response.Error($"GameObject '{targetGo.name}' structure doesn't match prefab '{prefabAsset.name}'. Use 'force_apply': true to force connection.");
                 }
 
                 GameObject connectedInstance;
-                if (forceLink)
+                if (forceapply)
                 {
                     // 强制连接：先创建一个新的预制体实例，然后替换原对象
                     GameObject newInstance = PrefabUtility.InstantiatePrefab(prefabAsset) as GameObject;
@@ -202,7 +202,7 @@ namespace UnityMcp.Tools
                     }
                 }
 
-                LogInfo($"[HierarchyLink] Successfully connected GameObject '{targetGo.name}' to prefab '{resolvedPath}'");
+                LogInfo($"[Hierarchyapply] Successfully connected GameObject '{targetGo.name}' to prefab '{resolvedPath}'");
 
                 // 选择连接后的对象
                 Selection.activeGameObject = connectedInstance;
@@ -214,7 +214,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                LogInfo($"[HierarchyLink] Error connecting GameObject to prefab: {e.Message}");
+                LogInfo($"[Hierarchyapply] Error connecting GameObject to prefab: {e.Message}");
                 return Response.Error($"Error connecting GameObject to prefab: {e.Message}");
             }
         }
@@ -257,7 +257,7 @@ namespace UnityMcp.Tools
                 // 应用预制体更改
                 PrefabUtility.ApplyPrefabInstance(targetGo, InteractionMode.UserAction);
 
-                LogInfo($"[HierarchyLink] Applied changes from instance '{targetGo.name}' to prefab '{prefabPath}'");
+                LogInfo($"[Hierarchyapply] Applied changes from instance '{targetGo.name}' to prefab '{prefabPath}'");
 
                 return Response.Success(
                     $"Successfully applied changes from instance '{targetGo.name}' to prefab '{prefabAsset.name}'.",
@@ -266,7 +266,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                LogInfo($"[HierarchyLink] Error applying prefab changes: {e.Message}");
+                LogInfo($"[Hierarchyapply] Error applying prefab changes: {e.Message}");
                 return Response.Error($"Error applying prefab changes: {e.Message}");
             }
         }
@@ -307,9 +307,9 @@ namespace UnityMcp.Tools
                 // 断开预制体连接
                 // 注意：UnpackPrefabInstance 方法在某些Unity版本中可能不可用
                 // PrefabUtility.UnpackPrefabInstance(targetGo, PrefabUnpackMode.Completely, InteractionMode.UserAction);
-                LogWarning($"[HierarchyLink] UnpackPrefabInstance method not supported in current Unity version");
+                LogWarning($"[Hierarchyapply] UnpackPrefabInstance method not supported in current Unity version");
 
-                LogInfo($"[HierarchyLink] Successfully broke prefab connection for GameObject '{targetGo.name}'");
+                LogInfo($"[Hierarchyapply] Successfully broke prefab connection for GameObject '{targetGo.name}'");
 
                 // 选择断开连接后的对象
                 Selection.activeGameObject = targetGo;
@@ -321,7 +321,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                LogInfo($"[HierarchyLink] Error breaking prefab connection: {e.Message}");
+                LogInfo($"[Hierarchyapply] Error breaking prefab connection: {e.Message}");
                 return Response.Error($"Error breaking prefab connection: {e.Message}");
             }
         }
@@ -342,7 +342,7 @@ namespace UnityMcp.Tools
                 {
                     if (!gameObjectComponents.Contains(prefabComponentType))
                     {
-                        LogInfo($"[HierarchyLink] GameObject missing component: {prefabComponentType.Name}");
+                        LogInfo($"[Hierarchyapply] GameObject missing component: {prefabComponentType.Name}");
                         return false;
                     }
                 }
@@ -351,7 +351,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                LogInfo($"[HierarchyLink] Error checking prefab compatibility: {e.Message}");
+                LogInfo($"[Hierarchyapply] Error checking prefab compatibility: {e.Message}");
                 return false;
             }
         }
@@ -393,12 +393,12 @@ namespace UnityMcp.Tools
                 // 删除原对象
                 Undo.DestroyObjectImmediate(originalGo);
 
-                LogInfo($"[HierarchyLink] Replaced GameObject with prefab instance: '{originalName}'");
+                LogInfo($"[Hierarchyapply] Replaced GameObject with prefab instance: '{originalName}'");
                 return newInstance;
             }
             catch (Exception e)
             {
-                LogInfo($"[HierarchyLink] Error replacing with prefab instance: {e.Message}");
+                LogInfo($"[Hierarchyapply] Error replacing with prefab instance: {e.Message}");
                 return null;
             }
         }
@@ -442,7 +442,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                LogInfo($"[HierarchyLink] Warning: Could not copy all component properties: {e.Message}");
+                LogInfo($"[Hierarchyapply] Warning: Could not copy all component properties: {e.Message}");
             }
         }
 
@@ -457,7 +457,7 @@ namespace UnityMcp.Tools
             if (!prefabPath.Contains("/") && !prefabPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
             {
                 string prefabNameOnly = prefabPath;
-                LogInfo($"[HierarchyLink] Searching for prefab named: '{prefabNameOnly}'");
+                LogInfo($"[Hierarchyapply] Searching for prefab named: '{prefabNameOnly}'");
 
                 string[] guids = AssetDatabase.FindAssets($"t:Prefab {prefabNameOnly}");
                 if (guids.Length == 0)
@@ -467,17 +467,17 @@ namespace UnityMcp.Tools
                 else if (guids.Length > 1)
                 {
                     string foundPaths = string.Join(", ", guids.Select(g => AssetDatabase.GUIDToAssetPath(g)));
-                    LogInfo($"[HierarchyLink] Multiple prefabs found matching name '{prefabNameOnly}': {foundPaths}. Using first one.");
+                    LogInfo($"[Hierarchyapply] Multiple prefabs found matching name '{prefabNameOnly}': {foundPaths}. Using first one.");
                 }
 
                 string resolvedPath = AssetDatabase.GUIDToAssetPath(guids[0]);
-                LogInfo($"[HierarchyLink] Found prefab at path: '{resolvedPath}'");
+                LogInfo($"[Hierarchyapply] Found prefab at path: '{resolvedPath}'");
                 return resolvedPath;
             }
             else if (!prefabPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
             {
                 // 自动添加.prefab扩展名
-                LogInfo($"[HierarchyLink] Adding .prefab extension to path: '{prefabPath}'");
+                LogInfo($"[Hierarchyapply] Adding .prefab extension to path: '{prefabPath}'");
                 return prefabPath + ".prefab";
             }
 

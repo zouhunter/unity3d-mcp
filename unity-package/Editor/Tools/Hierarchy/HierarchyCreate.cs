@@ -408,9 +408,6 @@ namespace UnityMcp.Tools
 
             try
             {
-                // 等待对象完全初始化
-                //Thread.Sleep(25);
-
                 LogInfo($"[HierarchyCreate] Starting finalization for '{newGo.name}' (ID: {newGo.GetInstanceID()})");
 
                 // 记录变换和属性的变更
@@ -419,9 +416,6 @@ namespace UnityMcp.Tools
 
                 // 应用通用设置（包括名称设置）
                 GameObjectUtils.ApplyCommonGameObjectSettings(args, newGo, LogInfo);
-
-                // 再次等待，确保所有设置都已应用
-                //Thread.Sleep(10);
 
                 LogInfo($"[HierarchyCreate] Applied settings to '{newGo.name}' (ID: {newGo.GetInstanceID()})");
 

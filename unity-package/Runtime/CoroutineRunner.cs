@@ -83,7 +83,7 @@ namespace UnityMcp.Tools
         {
             var completedCoroutines = new List<CoroutineInfo>();
 
-            foreach (var coroutineInfo in _coroutines)
+            foreach (var coroutineInfo in _coroutines.ToArray())
             {
                 if (!coroutineInfo.IsRunning) continue;
 

@@ -26,7 +26,7 @@ namespace UnityMcp.Tools
             {
                 new MethodKey("action", "操作类型：delete(删除单个), deletes(删除多个)", false),
                 new MethodKey("target", "目标GameObject标识符（名称、ID或路径）", false),
-                new MethodKey("search_method", "搜索方法：by_name, by_id, by_tag, by_layer, by_component, by_path, by_guid等", false),
+                new MethodKey("search_type", "搜索方法：by_name, by_id, by_tag, by_layer, by_component, by_path, by_guid等", false),
                 new MethodKey("targets", "多个目标GameObject标识符列表", true),
                 new MethodKey("find_all", "是否查找所有匹配项", true)
             };
@@ -38,7 +38,7 @@ namespace UnityMcp.Tools
                 .Create()
                 .Key("action")
                     .Key("delete")
-                        .Key("search_method")
+                        .Key("search_type")
                             .Leaf("by_name", HandleDeleteByName)
                             .Leaf("by_id", HandleDeleteById)
                             .Leaf("by_tag", HandleDeleteByTag)
@@ -48,7 +48,7 @@ namespace UnityMcp.Tools
                             .Leaf("by_guid", HandleDeleteByGuid)
                             .Leaf("default", HandleDeleteDefault)
                     .Key("deletes")
-                        .Key("search_method")
+                        .Key("search_type")
                             .Leaf("by_name", HandleDeletesByName)
                             .Leaf("by_id", HandleDeletesById)
                             .Leaf("by_tag", HandleDeletesByTag)

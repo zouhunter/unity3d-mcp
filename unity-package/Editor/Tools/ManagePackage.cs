@@ -26,10 +26,10 @@ namespace UnityMcp.Tools
             public TaskCompletionSource<object> CompletionSource { get; set; }
             public string OperationType { get; set; }
         }
-        
+
         // Queue of active package operations
         private readonly List<PackageOperation> _activeOperations = new List<PackageOperation>();
-        
+
         // Flag to track if the update callback is registered
         private bool _updateCallbackRegistered = false;
 
@@ -40,18 +40,18 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("action", "操作类型：add, remove, list, search, refresh, resolve", false),
-                new MethodKey("source", "包源类型：registry, github, disk (仅add操作使用)", true),
-                new MethodKey("package_name", "包名称 (add, remove操作使用)", true),
-                new MethodKey("package_identifier", "包完整标识符 (remove操作使用)", true),
-                new MethodKey("version", "包版本 (add操作使用)", true),
-                new MethodKey("repository_url", "GitHub仓库URL (github源使用)", true),
-                new MethodKey("branch", "GitHub分支名称 (github源使用)", true),
-                new MethodKey("path", "包路径 (github源子目录或disk源路径)", true),
-                new MethodKey("search_keywords", "搜索关键词 (search操作使用，为空时搜索所有包)", true),
-                new MethodKey("include_dependencies", "是否包含依赖信息 (list操作使用)", true),
-                new MethodKey("scope", "包范围过滤 (list操作使用)", true),
-                new MethodKey("timeout", "操作超时时间（秒），默认30秒", true)
+                new MethodKey("action", "Operation type: add, remove, list, search, refresh, resolve", false),
+                new MethodKey("source", "Package source type: registry, github, disk (used only for add operation)", true),
+                new MethodKey("package_name", "Package name (used for add, remove operations)", true),
+                new MethodKey("package_identifier", "Package full identifier (used for remove operation)", true),
+                new MethodKey("version", "Package version (used for add operation)", true),
+                new MethodKey("repository_url", "GitHub repository URL (used for github source)", true),
+                new MethodKey("branch", "GitHub branch name (used for github source)", true),
+                new MethodKey("path", "Package path (github source subdirectory or disk source path)", true),
+                new MethodKey("search_keywords", "Search keywords (used for search operation, searches all packages when empty)", true),
+                new MethodKey("include_dependencies", "Whether to include dependency information (used for list operation)", true),
+                new MethodKey("scope", "Package scope filter (used for list operation)", true),
+                new MethodKey("timeout", "Operation timeout (seconds), default 30 seconds", true)
             };
         }
 
@@ -152,20 +152,20 @@ namespace UnityMcp.Tools
                         request = AddFromDisk(args);
                         break;
                     default:
-                        return Response.Error($"未知的包源类型 '{source}'。支持的类型: registry, github, disk");
+                        return Response.Error($"Unknown package source type '{source}'. Supported types: registry, github, disk");
                 }
 
                 if (request == null)
                 {
-                    return Response.Error("创建包添加请求失败");
+                    return Response.Error("Failed to create package add request");
                 }
 
                 return MonitorAsyncOperation(request, "add", args);
             }
             catch (Exception e)
             {
-                LogError($"[ManagePackage] 添加包失败: {e.Message}");
-                return Response.Error($"添加包失败: {e.Message}");
+                LogError($"[ManagePackage] Failed to add package: {e.Message}");
+                return Response.Error($"Failed to add package: {e.Message}");
             }
         }
 
@@ -177,21 +177,21 @@ namespace UnityMcp.Tools
             try
             {
                 string packageName = args["package_name"]?.ToString() ?? args["package_identifier"]?.ToString();
-                
+
                 if (string.IsNullOrEmpty(packageName))
                 {
-                    return Response.Error("package_name 或 package_identifier 参数是必需的");
+                    return Response.Error("package_name or package_identifier parameter is required");
                 }
 
                 LogInfo($"[ManagePackage] 移除包: {packageName}");
                 var request = Client.Remove(packageName);
-                
+
                 return MonitorAsyncOperation(request, "remove", args);
             }
             catch (Exception e)
             {
                 LogError($"[ManagePackage] 移除包失败: {e.Message}");
-                return Response.Error($"移除包失败: {e.Message}");
+                return Response.Error($"Failed to remove package: {e.Message}");
             }
         }
 
@@ -204,15 +204,15 @@ namespace UnityMcp.Tools
             {
                 bool includeIndirect = args["include_dependencies"]?.ToObject<bool>() ?? false;
                 LogInfo($"[ManagePackage] 列出包 (包含间接依赖: {includeIndirect})");
-                
+
                 var request = Client.List(includeIndirect);
-                
+
                 return MonitorAsyncOperation(request, "list", args);
             }
             catch (Exception e)
             {
                 LogError($"[ManagePackage] 列出包失败: {e.Message}");
-                return Response.Error($"列出包失败: {e.Message}");
+                return Response.Error($"Failed to list packages: {e.Message}");
             }
         }
 
@@ -224,9 +224,9 @@ namespace UnityMcp.Tools
             try
             {
                 string keywords = args["search_keywords"]?.ToString();
-                
+
                 SearchRequest request;
-                
+
                 if (string.IsNullOrEmpty(keywords))
                 {
                     // 如果没有关键词，搜索所有包
@@ -239,13 +239,13 @@ namespace UnityMcp.Tools
                     LogInfo($"[ManagePackage] 搜索包: {keywords}");
                     request = Client.Search(keywords);
                 }
-                
+
                 return MonitorAsyncOperation(request, "search", args);
             }
             catch (Exception e)
             {
                 LogError($"[ManagePackage] 搜索包失败: {e.Message}");
-                return Response.Error($"搜索包失败: {e.Message}");
+                return Response.Error($"Failed to search packages: {e.Message}");
             }
         }
 
@@ -258,13 +258,13 @@ namespace UnityMcp.Tools
             {
                 LogInfo("[ManagePackage] 刷新包列表");
                 Client.Resolve();
-                
-                return Response.Success("包列表刷新操作已启动", new { operation = "refresh" });
+
+                return Response.Success("Package list refresh operation started", new { operation = "refresh" });
             }
             catch (Exception e)
             {
                 LogError($"[ManagePackage] 刷新包失败: {e.Message}");
-                return Response.Error($"刷新包失败: {e.Message}");
+                return Response.Error($"Failed to refresh packages: {e.Message}");
             }
         }
 
@@ -277,13 +277,13 @@ namespace UnityMcp.Tools
             {
                 LogInfo("[ManagePackage] 解析包依赖");
                 Client.Resolve();
-                
-                return Response.Success("包依赖解析操作已启动", new { operation = "resolve" });
+
+                return Response.Success("Package dependency resolution operation started", new { operation = "resolve" });
             }
             catch (Exception e)
             {
                 LogError($"[ManagePackage] 解析包依赖失败: {e.Message}");
-                return Response.Error($"解析包依赖失败: {e.Message}");
+                return Response.Error($"Failed to resolve package dependencies: {e.Message}");
             }
         }
 
@@ -398,14 +398,14 @@ namespace UnityMcp.Tools
             }
 
             int timeout = args["timeout"]?.ToObject<int>() ?? 30;
-            
+
             // 启动超时处理
             _ = Task.Run(async () =>
             {
                 await Task.Delay(timeout * 1000);
                 if (!tcs.Task.IsCompleted)
                 {
-                    tcs.TrySetResult(Response.Error($"操作超时 ({timeout}秒)"));
+                    tcs.TrySetResult(Response.Error($"Operation timeout ({timeout} seconds)"));
                 }
             });
 
@@ -417,7 +417,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                return Response.Error($"等待操作完成失败: {e.Message}");
+                return Response.Error($"Failed to wait for operation completion: {e.Message}");
             }
         }
 
@@ -468,11 +468,11 @@ namespace UnityMcp.Tools
                 }
                 else if (operation.Request.Status == StatusCode.Failure)
                 {
-                    result = Response.Error($"操作失败: {operation.Request.Error?.message ?? "未知错误"}");
+                    result = Response.Error($"Operation failed: {operation.Request.Error?.message ?? "Unknown error"}");
                 }
                 else
                 {
-                    result = Response.Error($"未知的操作状态: {operation.Request.Status}");
+                    result = Response.Error($"Unknown operation status: {operation.Request.Status}");
                 }
 
                 operation.CompletionSource.TrySetResult(result);
@@ -480,7 +480,7 @@ namespace UnityMcp.Tools
             catch (Exception e)
             {
                 LogError($"[ManagePackage] 处理完成操作时发生错误: {e.Message}");
-                operation.CompletionSource.TrySetResult(Response.Error($"处理操作结果失败: {e.Message}"));
+                operation.CompletionSource.TrySetResult(Response.Error($"Failed to process operation result: {e.Message}"));
             }
         }
 
@@ -500,7 +500,7 @@ namespace UnityMcp.Tools
                 case "search":
                     return ProcessSearchResult(operation.Request as SearchRequest);
                 default:
-                    return Response.Success($"{operation.OperationType} 操作完成");
+                    return Response.Success($"{operation.OperationType} operation completed");
             }
         }
 
@@ -530,7 +530,7 @@ namespace UnityMcp.Tools
                 );
             }
 
-            return Response.Success("包添加操作完成，但没有返回包信息");
+            return Response.Success("Package add operation completed, but no package information returned");
         }
 
         /// <summary>
@@ -578,7 +578,7 @@ namespace UnityMcp.Tools
                 );
             }
 
-            return Response.Success("包列表操作完成，但没有返回包信息");
+            return Response.Success("Package list operation completed, but no package information returned");
         }
 
         /// <summary>
@@ -610,7 +610,7 @@ namespace UnityMcp.Tools
                 );
             }
 
-            return Response.Success("包搜索操作完成，但没有返回搜索结果");
+            return Response.Success("Package search operation completed, but no search results returned");
         }
     }
-} 
+}

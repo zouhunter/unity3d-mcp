@@ -27,12 +27,12 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("search_method", "搜索方法：by_name, by_id, by_tag, by_layer, by_component, by_term等", false),
-                new MethodKey("select_many", "是否查找所有匹配项", true),
-                new MethodKey("search_term", "搜索条件可以是ID、名称或路径（支持通配符*）", true),
-                new MethodKey("root_only", "是否仅搜索根对象（不包括子物体）", true),
-                new MethodKey("include_inactive", "是否搜索非激活对象", true),
-                new MethodKey("use_regex", "是否使用正则表达式", true)
+                new MethodKey("search_type", "Search method: by_name, by_id, by_tag, by_layer, by_component, by_query, etc.", false),
+                new MethodKey("query", "Search criteria can be ID, name or path (supports wildcard *)", true),
+                new MethodKey("select_many", "Whether to find all matching items", true),
+                new MethodKey("root_only", "Whether to search only root objects (excluding child objects)", true),
+                new MethodKey("include_inactive", "Whether to search inactive objects", true),
+                new MethodKey("use_regex", "Whether to use regular expressions", true)
             };
         }
 
@@ -40,13 +40,13 @@ namespace UnityMcp.Tools
         {
             return StateTreeBuilder
                 .Create()
-                .Key("search_method")
+                .Key("search_type")
                     .Leaf("by_name", HandleSearchByName)
                     .Leaf("by_id", HandleSearchById)
                     .Leaf("by_tag", HandleSearchByTag)
                     .Leaf("by_layer", HandleSearchByLayer)
                     .Leaf("by_component", HandleSearchByComponent)
-                    .Leaf("by_term", HandleSearchByTerm)
+                    .Leaf("by_query", HandleSearchByquery)
                 .Build();
         }
 
@@ -57,17 +57,17 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleSearchByName(JObject args)
         {
-            string search_term = args["search_term"]?.ToString();
+            string query = args["query"]?.ToString();
             bool findAll = args["select_many"]?.ToObject<bool>() ?? false;
             bool rootOnly = args["root_only"]?.ToObject<bool>() ?? false;
             bool searchInInactive = args["include_inactive"]?.ToObject<bool>() ?? false;
 
             List<GameObject> foundObjects = new List<GameObject>();
 
-            if (!string.IsNullOrEmpty(search_term))
+            if (!string.IsNullOrEmpty(query))
             {
                 // 精确名称搜索 - 使用Unity内置API
-                GameObject exactMatch = GameObject.Find(search_term);
+                GameObject exactMatch = GameObject.Find(query);
                 if (exactMatch != null && (searchInInactive || exactMatch.activeInHierarchy))
                 {
                     foundObjects.Add(exactMatch);
@@ -81,7 +81,7 @@ namespace UnityMcp.Tools
 
                 foreach (GameObject go in allObjects)
                 {
-                    bool nameMatches = string.IsNullOrEmpty(search_term) || go.name.Contains(search_term, StringComparison.OrdinalIgnoreCase);
+                    bool nameMatches = string.IsNullOrEmpty(query) || go.name.Contains(query, StringComparison.OrdinalIgnoreCase);
 
                     if (nameMatches)
                     {
@@ -99,18 +99,18 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleSearchById(JObject args)
         {
-            string search_term = args["search_term"]?.ToString();
+            string query = args["query"]?.ToString();
             bool searchInInactive = args["include_inactive"]?.ToObject<bool>() ?? false;
 
-            if (string.IsNullOrEmpty(search_term))
+            if (string.IsNullOrEmpty(query))
             {
-                return Response.Error("search_term ID is required for by_id search.");
+                return Response.Error("query ID is required for by_id search.");
             }
 
             List<GameObject> foundObjects = new List<GameObject>();
 
             // 尝试解析ID并查找
-            if (int.TryParse(search_term, out int instanceId))
+            if (int.TryParse(query, out int instanceId))
             {
                 GameObject found = EditorUtility.InstanceIDToObject(instanceId) as GameObject;
                 if (found != null && (searchInInactive || found.activeInHierarchy))
@@ -127,7 +127,7 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleSearchByTag(JObject args)
         {
-            string searchTerm = args["search_term"]?.ToString();
+            string searchTerm = args["query"]?.ToString();
             bool findAll = args["select_many"]?.ToObject<bool>() ?? false;
             bool searchInInactive = args["include_inactive"]?.ToObject<bool>() ?? false;
 
@@ -163,7 +163,7 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleSearchByLayer(JObject args)
         {
-            string searchTerm = args["search_term"]?.ToString();
+            string searchTerm = args["query"]?.ToString();
             bool findAll = args["select_many"]?.ToObject<bool>() ?? false;
             bool searchInInactive = args["include_inactive"]?.ToObject<bool>() ?? false;
 
@@ -200,7 +200,7 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleSearchByComponent(JObject args)
         {
-            string searchTerm = args["search_term"]?.ToString();
+            string searchTerm = args["query"]?.ToString();
             bool findAll = args["select_many"]?.ToObject<bool>() ?? false;
             bool searchInInactive = args["include_inactive"]?.ToObject<bool>() ?? false;
 
@@ -235,9 +235,9 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 按通用术语搜索GameObject
         /// </summary>
-        private object HandleSearchByTerm(JObject args)
+        private object HandleSearchByquery(JObject args)
         {
-            string searchTerm = args["search_term"]?.ToString();
+            string searchTerm = args["query"]?.ToString();
             bool findAll = args["select_many"]?.ToObject<bool>() ?? false;
             bool rootOnly = args["root_only"]?.ToObject<bool>() ?? false;
             bool searchInInactive = args["include_inactive"]?.ToObject<bool>() ?? false;
@@ -245,7 +245,7 @@ namespace UnityMcp.Tools
 
             if (string.IsNullOrEmpty(searchTerm))
             {
-                return Response.Error("Search term is required for by_term search.");
+                return Response.Error("Search term is required for by_query search.");
             }
 
             // 检查是否是类型搜索（t:TypeName 格式）
@@ -305,8 +305,8 @@ namespace UnityMcp.Tools
             // 如果是类型搜索，直接使用FindObjectsOfType
             if (isTypeSearch)
             {
-                Type search_termType = GetComponentType(typeName);
-                if (search_termType == null)
+                Type queryType = GetComponentType(typeName);
+                if (queryType == null)
                 {
                     return Response.Error($"Component type '{typeName}' not found.");
                 }
@@ -318,7 +318,7 @@ namespace UnityMcp.Tools
                     // 检查是否仅搜索根对象
                     if (rootOnly && go.transform.parent != null) continue;
 
-                    if (go.GetComponent(search_termType) != null)
+                    if (go.GetComponent(queryType) != null)
                     {
                         if (uniqueObjects.Add(go))
                         {
@@ -530,11 +530,11 @@ namespace UnityMcp.Tools
             string message;
             if (results.Count == 0)
             {
-                message = $"未找到任何GameObject，搜索方式：{searchType}。";
+                message = $"No GameObjects found using search method: {searchType}.";
             }
             else
             {
-                message = $"已通过{searchType}找到{results.Count}个GameObject。";
+                message = $"Found {results.Count} GameObjects using {searchType}.";
             }
 
             // 构建响应对象，包含执行时间、成功标志、消息和数据
@@ -544,7 +544,7 @@ namespace UnityMcp.Tools
                 ["message"] = message,
                 ["data"] = JToken.FromObject(results),
                 ["exec_time_ms"] = 1.00,
-                ["mode"] = "异步模式"
+                ["mode"] = "Async mode"
             };
 
             return response;

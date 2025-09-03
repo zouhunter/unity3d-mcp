@@ -36,25 +36,25 @@ namespace UnityMcp.Tools
             return new[]
             {
                 // 目标查找参数
-                new MethodKey("id", "对象的InstanceID", true),
-                new MethodKey("path", "对象的Hierachy路径", false),
+                new MethodKey("id", "Object InstanceID", true),
+                new MethodKey("path", "Object Hierarchy path", false),
                 
                 // 操作参数
-                new MethodKey("action", "操作类型：do_layout(执行布局修改), get_layout(获取属性)", true),
+                new MethodKey("action", "Operation type: do_layout(execute layout modification), get_layout(get properties)", true),
                 
                 // RectTransform基本属性
-                new MethodKey("anchored_pos", "锚点位置 [x, y]", true),
-                new MethodKey("size_delta", "尺寸增量 [width, height]", true),
-                new MethodKey("anchor_min", "最小锚点 [x, y]", true),
-                new MethodKey("anchor_max", "最大锚点 [x, y]", true),
+                new MethodKey("anchored_pos", "Anchor position [x, y]", true),
+                new MethodKey("size_delta", "Size delta [width, height]", true),
+                new MethodKey("anchor_min", "Minimum anchor [x, y]", true),
+                new MethodKey("anchor_max", "Maximum anchor [x, y]", true),
                       // 预设锚点类型
-                new MethodKey("anchor_preset", "锚点预设：top_left, top_center, top_right, middle_left, middle_center, middle_right, bottom_left, bottom_center, bottom_right, stretch_horizontal, stretch_vertical, stretch_all", true),
-                new MethodKey("pivot", "轴心点 [x, y]", true),
+                new MethodKey("anchor_preset", "Anchor preset: top_left, top_center, top_right, middle_left, middle_center, middle_right, bottom_left, bottom_center, bottom_right, stretch_horizontal, stretch_vertical, stretch_all", true),
+                new MethodKey("pivot", "Pivot point [x, y]", true),
                 
                 // Transform继承属性
-                new MethodKey("local_position", "本地位置 [x, y, z]", true),
-                new MethodKey("local_rotation", "本地旋转 [x, y, z]", true),
-                new MethodKey("local_scale", "本地缩放 [x, y, z]", true),
+                new MethodKey("local_position", "Local position [x, y, z]", true),
+                new MethodKey("local_rotation", "Local rotation [x, y, z]", true),
+                new MethodKey("local_scale", "Local scale [x, y, z]", true),
             };
         }
 

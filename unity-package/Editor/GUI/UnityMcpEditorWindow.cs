@@ -995,7 +995,7 @@ namespace UnityMcp.Windows
                 case "component_type":
                     return "Rigidbody";
 
-                case "search_method":
+                case "search_type":
                     return "by_name";
 
                 case "url":

@@ -30,11 +30,11 @@ namespace UnityMcp.Tools
             return new[]
             {
                 // 目标查找参数
-                new MethodKey("instance_id", "对象的InstanceID", false),
-                new MethodKey("path", "对象的Hierachy路径", false),
-                new MethodKey("action", "操作类型：get_component_propertys,set_component_propertys", true),
-                new MethodKey("component_type", "组件类型名(继承自Component的类型名)", true),
-                new MethodKey("properties", "属性字典（set_component_propertys）", false),
+                new MethodKey("instance_id", "Object InstanceID", false),
+                new MethodKey("path", "Object Hierarchy path", false),
+                new MethodKey("action", "Operation type: get_component_propertys, set_component_propertys", true),
+                new MethodKey("component_type", "Component type name (type name inheriting from Component)", true),
+                new MethodKey("properties", "Properties dictionary (set_component_propertys)", false),
             };
         }
 
@@ -281,7 +281,7 @@ namespace UnityMcp.Tools
 
                 try
                 {
-                    if (SetComponentProperty(targetComponent, propName, propValue))
+                    if (SetComponentProperty(targetComponent, propName, propValue, out string error))
                     {
                         results[propName] = "Success";
                         successCount++;
@@ -289,7 +289,7 @@ namespace UnityMcp.Tools
                     else
                     {
                         results[propName] = "Failed";
-                        errors.Add($"Property '{propName}': Failed to set (property might not exist or be read-only)");
+                        errors.Add($"Property '{propName}': Failed to set {error}");
                     }
                 }
                 catch (Exception e)
@@ -548,7 +548,7 @@ namespace UnityMcp.Tools
         /// <summary>
         /// Helper to set a property or field via reflection, handling basic types.
         /// </summary>
-        private bool SetComponentProperty(object target, string memberName, JToken value)
+        private bool SetComponentProperty(object target, string memberName, JToken value, out string error)
         {
             Type type = target.GetType();
             BindingFlags flags =
@@ -560,7 +560,7 @@ namespace UnityMcp.Tools
                 // Examples: material.color, sharedMaterial.color, materials[0].color
                 if (memberName.Contains('.') || memberName.Contains('['))
                 {
-                    return SetNestedProperty(target, memberName, value);
+                    return SetNestedProperty(target, memberName, value, out error);
                 }
 
                 PropertyInfo propInfo = type.GetProperty(memberName, flags);
@@ -570,6 +570,7 @@ namespace UnityMcp.Tools
                     if (convertedValue != null)
                     {
                         propInfo.SetValue(target, convertedValue);
+                        error = null;
                         return true;
                     }
                 }
@@ -582,16 +583,19 @@ namespace UnityMcp.Tools
                         if (convertedValue != null)
                         {
                             fieldInfo.SetValue(target, convertedValue);
+                            error = null;
                             return true;
                         }
                     }
                 }
+                error = $"{target} ,Failed to set '{memberName}' on {type.Name}";
+                Debug.LogError(error);
+                return false;
             }
             catch (Exception ex)
             {
-                Debug.LogError(
-                    $"[SetComponentProperty] Failed to set '{memberName}' on {type.Name}: {ex.Message}"
-                );
+                error = $"{target} ,Failed to set '{memberName}' on {type.Name}: {ex.Message}";
+                Debug.LogError(error);
             }
             return false;
         }
@@ -599,14 +603,17 @@ namespace UnityMcp.Tools
         /// <summary>
         /// Sets a nested property using dot notation (e.g., "material.color") or array access (e.g., "materials[0]")
         /// </summary>
-        private bool SetNestedProperty(object target, string path, JToken value)
+        private bool SetNestedProperty(object target, string path, JToken value, out string error)
         {
             try
             {
                 // Split the path into parts (handling both dot notation and array indexing)
                 string[] pathParts = SplitPropertyPath(path);
                 if (pathParts.Length == 0)
+                {
+                    error = "Path parts length is 0";
                     return false;
+                }
 
                 object currentObject = target;
                 Type currentType = currentObject.GetType();
@@ -647,9 +654,8 @@ namespace UnityMcp.Tools
                         fieldInfo = currentType.GetField(part, flags);
                         if (fieldInfo == null)
                         {
-                            Debug.LogWarning(
-                                $"[SetNestedProperty] Could not find property or field '{part}' on type '{currentType.Name}'"
-                            );
+                            error = $"{currentObject} ,Could not find property or field '{part}' on type '{currentType.Name}'";
+                            Debug.LogWarning(error);
                             return false;
                         }
                     }
@@ -663,9 +669,8 @@ namespace UnityMcp.Tools
                     // If the current property is null, we need to stop
                     if (currentObject == null)
                     {
-                        Debug.LogWarning(
-                            $"[SetNestedProperty] Property '{part}' is null, cannot access nested properties."
-                        );
+                        error = $"{currentObject} ,Property '{part}' is null, cannot access nested properties.";
+                        Debug.LogWarning(error);
                         return false;
                     }
 
@@ -677,9 +682,8 @@ namespace UnityMcp.Tools
                             var materials = currentObject as Material[];
                             if (arrayIndex < 0 || arrayIndex >= materials.Length)
                             {
-                                Debug.LogWarning(
-                                    $"[SetNestedProperty] Material index {arrayIndex} out of range (0-{materials.Length - 1})"
-                                );
+                                error = $"{currentObject} ,Material index {arrayIndex} out of range (0-{materials.Length - 1})";
+                                Debug.LogWarning(error);
                                 return false;
                             }
                             currentObject = materials[arrayIndex];
@@ -689,18 +693,16 @@ namespace UnityMcp.Tools
                             var list = currentObject as System.Collections.IList;
                             if (arrayIndex < 0 || arrayIndex >= list.Count)
                             {
-                                Debug.LogWarning(
-                                    $"[SetNestedProperty] Index {arrayIndex} out of range (0-{list.Count - 1})"
-                                );
+                                error = $"{currentObject} ,Index {arrayIndex} out of range (0-{list.Count - 1})";
+                                Debug.LogWarning(error);
                                 return false;
                             }
                             currentObject = list[arrayIndex];
                         }
                         else
                         {
-                            Debug.LogWarning(
-                                $"[SetNestedProperty] Property '{part}' is not an array or list, cannot access by index."
-                            );
+                            error = $"{currentObject} ,Property '{part}' is not an array or list, cannot access by index.";
+                            Debug.LogWarning(error);
                             return false;
                         }
                     }
@@ -709,13 +711,29 @@ namespace UnityMcp.Tools
                     currentType = currentObject.GetType();
                 }
 
+                LogInfo($"{currentObject} ,Current type: {currentType}");
+                if (typeof(UnityEngine.Object).IsAssignableFrom(currentType))
+                {
+                    var assetPath = AssetDatabase.GetAssetPath(currentObject as UnityEngine.Object);
+                    if (string.IsNullOrEmpty(assetPath))
+                    {
+                        error = $"{currentObject} ,Asset path is null";
+                        return false;
+                    }
+                    if (!string.IsNullOrEmpty(assetPath) && !assetPath.StartsWith(Application.dataPath))
+                    {
+                        error = $"{currentObject} ,Asset path is not in the assets path";
+                        return false;
+                    }
+                }
+
                 // Set the final property
                 string finalPart = pathParts[pathParts.Length - 1];
 
                 // Special handling for Material properties (shader properties)
                 if (currentObject is Material material && finalPart.StartsWith("_"))
                 {
-                    return SetMaterialShaderProperty(material, finalPart, value);
+                    return SetMaterialShaderProperty(material, finalPart, value, out error);
                 }
 
                 // For standard properties (not shader specific)
@@ -726,6 +744,7 @@ namespace UnityMcp.Tools
                     if (convertedValue != null)
                     {
                         finalPropInfo.SetValue(currentObject, convertedValue);
+                        error = null;
                         return true;
                     }
                 }
@@ -741,31 +760,31 @@ namespace UnityMcp.Tools
                         if (convertedValue != null)
                         {
                             finalFieldInfo.SetValue(currentObject, convertedValue);
+                            error = null;
                             return true;
                         }
                     }
                     else
                     {
-                        Debug.LogWarning(
-                            $"[SetNestedProperty] Could not find final property or field '{finalPart}' on type '{currentType.Name}'"
-                        );
+                        error = $"{currentObject} ,Could not find final property or field '{finalPart}' on type '{currentType.Name}'";
+                        Debug.LogWarning(error);
                     }
                 }
+                error = null;
+                return true;
             }
             catch (Exception ex)
             {
-                Debug.LogError(
-                    $"[SetNestedProperty] Error setting nested property '{path}': {ex.Message}"
-                );
+                error = $"Error setting nested property '{path}': {ex.Message}";
+                Debug.LogError(error);
+                return false;
             }
-
-            return false;
         }
 
         /// <summary>
         /// Sets material shader properties
         /// </summary>
-        private bool SetMaterialShaderProperty(Material material, string propertyName, JToken value)
+        private bool SetMaterialShaderProperty(Material material, string propertyName, JToken value, out string error)
         {
             try
             {
@@ -783,6 +802,7 @@ namespace UnityMcp.Tools
                                 jArray[3].ToObject<float>()
                             );
                             material.SetColor(propertyName, color);
+                            error = null;
                             return true;
                         }
                         else
@@ -794,6 +814,7 @@ namespace UnityMcp.Tools
                                 jArray[3].ToObject<float>()
                             );
                             material.SetVector(propertyName, vec);
+                            error = null;
                             return true;
                         }
                     }
@@ -806,6 +827,7 @@ namespace UnityMcp.Tools
                             1.0f
                         );
                         material.SetColor(propertyName, color);
+                        error = null;
                         return true;
                     }
                     else if (jArray.Count == 2) // Vector2
@@ -815,17 +837,20 @@ namespace UnityMcp.Tools
                             jArray[1].ToObject<float>()
                         );
                         material.SetVector(propertyName, vec);
+                        error = null;
                         return true;
                     }
                 }
                 else if (value.Type == JTokenType.Float || value.Type == JTokenType.Integer)
                 {
                     material.SetFloat(propertyName, value.ToObject<float>());
+                    error = null;
                     return true;
                 }
                 else if (value.Type == JTokenType.Boolean)
                 {
                     material.SetFloat(propertyName, value.ToObject<bool>() ? 1f : 0f);
+                    error = null;
                     return true;
                 }
                 else if (value.Type == JTokenType.String)
@@ -838,17 +863,20 @@ namespace UnityMcp.Tools
                         if (texture != null)
                         {
                             material.SetTexture(propertyName, texture);
+                            error = null;
                             return true;
                         }
                     }
                 }
 
-                Debug.LogWarning($"[SetMaterialShaderProperty] Unsupported material property value type: {value.Type} for {propertyName}");
+                error = $"{material} ,Unsupported material property value type: {value.Type} for {propertyName}";
+                Debug.LogWarning(error);
                 return false;
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[SetMaterialShaderProperty] Error setting material property '{propertyName}': {ex.Message}");
+                error = $"{material} ,Error setting material property '{propertyName}': {ex.Message}";
+                Debug.LogError(error);
                 return false;
             }
         }

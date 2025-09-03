@@ -27,26 +27,26 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("action", "操作类型：get, post, put, delete, download, upload, ping, batch_download", false),
-                new MethodKey("url", "请求URL地址", false),
-                new MethodKey("data", "请求数据（POST/PUT时使用，JSON格式）", true),
-                new MethodKey("headers", "请求头字典", true),
-                new MethodKey("save_path", "保存路径（下载时使用，相对于Assets或绝对路径）", true),
-                new MethodKey("file_path", "文件路径（上传时使用）", true),
-                new MethodKey("timeout", "超时时间（秒），默认30秒", true),
-                new MethodKey("method", "HTTP方法（GET, POST, PUT, DELETE等）", true),
-                new MethodKey("content_type", "内容类型，默认application/json", true),
-                new MethodKey("user_agent", "用户代理字符串", true),
-                new MethodKey("accept_certificates", "是否接受所有证书（用于测试）", true),
-                new MethodKey("follow_redirects", "是否跟随重定向", true),
-                new MethodKey("encoding", "文本编码，默认UTF-8", true),
-                new MethodKey("form_data", "表单数据（键值对）", true),
-                new MethodKey("query_params", "查询参数（键值对）", true),
-                new MethodKey("auth_token", "认证令牌（Bearer Token）", true),
-                new MethodKey("basic_auth", "基础认证（username:password）", true),
-                new MethodKey("retry_count", "重试次数，默认0", true),
-                new MethodKey("retry_delay", "重试延迟（秒），默认1秒", true),
-                new MethodKey("urls", "URL数组（批量下载时使用）", true)
+                new MethodKey("action", "Operation type: get, post, put, delete, download, upload, ping, batch_download", false),
+                new MethodKey("url", "Request URL address", false),
+                new MethodKey("data", "Request data (used for POST/PUT, JSON format)", true),
+                new MethodKey("headers", "Request headers dictionary", true),
+                new MethodKey("save_path", "Save path (used for download, relative to Assets or absolute path)", true),
+                new MethodKey("file_path", "File path (used for upload)", true),
+                new MethodKey("timeout", "Timeout (seconds), default 30 seconds", true),
+                new MethodKey("method", "HTTP method (GET, POST, PUT, DELETE, etc.)", true),
+                new MethodKey("content_type", "Content type, default application/json", true),
+                new MethodKey("user_agent", "User agent string", true),
+                new MethodKey("accept_certificates", "Whether to accept all certificates (for testing)", true),
+                new MethodKey("follow_redirects", "Whether to follow redirects", true),
+                new MethodKey("encoding", "Text encoding, default UTF-8", true),
+                new MethodKey("form_data", "Form data (key-value pairs)", true),
+                new MethodKey("query_params", "Query parameters (key-value pairs)", true),
+                new MethodKey("auth_token", "Authentication token (Bearer Token)", true),
+                new MethodKey("basic_auth", "Basic authentication (username:password)", true),
+                new MethodKey("retry_count", "Retry count, default 0", true),
+                new MethodKey("retry_delay", "Retry delay (seconds), default 1 second", true),
+                new MethodKey("urls", "URL array (used for batch download)", true)
             };
         }
 
@@ -127,13 +127,13 @@ namespace UnityMcp.Tools
             // 参数验证
             if (string.IsNullOrEmpty(url))
             {
-                ctx.Complete(Response.Error("URL参数是必需的"));
+                ctx.Complete(Response.Error("URL parameter is required"));
                 return null;
             }
 
             if (string.IsNullOrEmpty(savePath))
             {
-                ctx.Complete(Response.Error("save_path参数是必需的"));
+                ctx.Complete(Response.Error("save_path parameter is required"));
                 return null;
             }
 
@@ -187,13 +187,13 @@ namespace UnityMcp.Tools
             // 参数验证
             if (urlsToken == null)
             {
-                ctx.Complete(Response.Error("urls参数是必需的"));
+                ctx.Complete(Response.Error("urls parameter is required"));
                 return null;
             }
 
             if (string.IsNullOrEmpty(saveDirectory))
             {
-                ctx.Complete(Response.Error("save_directory或save_path参数是必需的"));
+                ctx.Complete(Response.Error("save_directory or save_path parameter is required"));
                 return null;
             }
 
@@ -221,7 +221,7 @@ namespace UnityMcp.Tools
                 string url = ctx["url"]?.ToString();
                 if (string.IsNullOrEmpty(url))
                 {
-                    return Response.Error("URL参数是必需的");
+                    return Response.Error("URL parameter is required");
                 }
 
                 // 解析参数
@@ -243,7 +243,7 @@ namespace UnityMcp.Tools
             catch (Exception e)
             {
                 LogError($"[RequestHttp] HTTP请求执行失败: {e.Message}");
-                return Response.Error($"HTTP请求执行失败: {e.Message}");
+                return Response.Error($"HTTP request execution failed: {e.Message}");
             }
         }
 
@@ -295,7 +295,7 @@ namespace UnityMcp.Tools
                 if (!asyncOp.isDone)
                 {
                     request.Abort();
-                    return Response.Error($"请求超时 ({timeout}秒)");
+                    return Response.Error($"Request timeout ({timeout} seconds)");
                 }
 
                 // 处理响应
@@ -304,7 +304,7 @@ namespace UnityMcp.Tools
             catch (Exception e)
             {
                 LogError($"[RequestHttp] 请求执行错误: {e.Message}");
-                return Response.Error($"请求执行错误: {e.Message}");
+                return Response.Error($"Request execution error: {e.Message}");
             }
             finally
             {
@@ -501,11 +501,11 @@ namespace UnityMcp.Tools
 
             if (isSuccess)
             {
-                return Response.Success($"HTTP请求成功 (状态码: {responseCode})", result);
+                return Response.Success($"HTTP request successful (status code: {responseCode})", result);
             }
             else
             {
-                return Response.Error($"HTTP请求失败 (状态码: {responseCode}): {request.error}", result);
+                return Response.Error($"HTTP request failed (status code: {responseCode}): {request.error}", result);
             }
         }
 
@@ -527,13 +527,13 @@ namespace UnityMcp.Tools
             // 参数验证
             if (string.IsNullOrEmpty(url))
             {
-                callback?.Invoke(Response.Error("URL参数是必需的"));
+                callback?.Invoke(Response.Error("URL parameter is required"));
                 yield break;
             }
 
             if (string.IsNullOrEmpty(savePath))
             {
-                callback?.Invoke(Response.Error("save_path参数是必需的"));
+                callback?.Invoke(Response.Error("save_path parameter is required"));
                 yield break;
             }
 
@@ -551,7 +551,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                callback?.Invoke(Response.Error($"无法创建目录: {e.Message}"));
+                callback?.Invoke(Response.Error($"Unable to create directory: {e.Message}"));
                 yield break;
             }
 
@@ -582,7 +582,7 @@ namespace UnityMcp.Tools
                     if (elapsedTime > timeout)
                     {
                         request.Abort();
-                        callback?.Invoke(Response.Error($"下载超时 ({timeout}秒)"));
+                        callback?.Invoke(Response.Error($"Download timeout ({timeout} seconds)"));
                         yield break;
                     }
 
@@ -629,13 +629,13 @@ namespace UnityMcp.Tools
                     }
                     catch (Exception e)
                     {
-                        callback?.Invoke(Response.Error($"保存文件失败: {e.Message}"));
+                        callback?.Invoke(Response.Error($"Failed to save file: {e.Message}"));
                     }
                 }
                 else
                 {
                     // 下载失败
-                    string errorMessage = $"下载失败: {request.error}";
+                    string errorMessage = $"Download failed: {request.error}";
                     if (request.responseCode > 0)
                     {
                         errorMessage += $" (HTTP {request.responseCode})";
@@ -672,7 +672,7 @@ namespace UnityMcp.Tools
 
             if (urls == null || urls.Length == 0)
             {
-                callback?.Invoke(Response.Error("urls数组不能为空"));
+                callback?.Invoke(Response.Error("urls array cannot be empty"));
                 yield break;
             }
 
@@ -689,7 +689,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                callback?.Invoke(Response.Error($"无法创建目录: {e.Message}"));
+                callback?.Invoke(Response.Error($"Unable to create directory: {e.Message}"));
                 yield break;
             }
 
@@ -806,12 +806,12 @@ namespace UnityMcp.Tools
 
                 if (string.IsNullOrEmpty(url))
                 {
-                    return Response.Error("URL参数是必需的");
+                    return Response.Error("URL parameter is required");
                 }
 
                 if (string.IsNullOrEmpty(savePath))
                 {
-                    return Response.Error("save_path参数是必需的");
+                    return Response.Error("save_path parameter is required");
                 }
 
                 // 规范化保存路径
@@ -843,7 +843,7 @@ namespace UnityMcp.Tools
                     if (!asyncOp.isDone)
                     {
                         request.Abort();
-                        return Response.Error($"下载超时 ({timeout}秒)");
+                        return Response.Error($"Download timeout ({timeout} seconds)");
                     }
 
                     if (request.result == UnityWebRequest.Result.Success)
@@ -871,14 +871,14 @@ namespace UnityMcp.Tools
                     }
                     else
                     {
-                        return Response.Error($"下载失败: {request.error}");
+                        return Response.Error($"Download failed: {request.error}");
                     }
                 }
             }
             catch (Exception e)
             {
                 LogError($"[RequestHttp] 文件下载失败: {e.Message}");
-                return Response.Error($"文件下载失败: {e.Message}");
+                return Response.Error($"File download failed: {e.Message}");
             }
         }
 
@@ -894,18 +894,18 @@ namespace UnityMcp.Tools
 
                 if (string.IsNullOrEmpty(url))
                 {
-                    return Response.Error("URL参数是必需的");
+                    return Response.Error("URL parameter is required");
                 }
 
                 if (string.IsNullOrEmpty(filePath))
                 {
-                    return Response.Error("file_path参数是必需的");
+                    return Response.Error("file_path parameter is required");
                 }
 
                 string fullFilePath = GetFullPath(filePath);
                 if (!File.Exists(fullFilePath))
                 {
-                    return Response.Error($"文件不存在: {fullFilePath}");
+                    return Response.Error($"File does not exist: {fullFilePath}");
                 }
 
                 byte[] fileData = File.ReadAllBytes(fullFilePath);
@@ -942,7 +942,7 @@ namespace UnityMcp.Tools
                     if (!asyncOp.isDone)
                     {
                         request.Abort();
-                        return Response.Error($"上传超时 ({timeout}秒)");
+                        return Response.Error($"Upload timeout ({timeout} seconds)");
                     }
 
                     return ProcessHttpResponse(request);
@@ -951,7 +951,7 @@ namespace UnityMcp.Tools
             catch (Exception e)
             {
                 LogError($"[RequestHttp] 文件上传失败: {e.Message}");
-                return Response.Error($"文件上传失败: {e.Message}");
+                return Response.Error($"File upload failed: {e.Message}");
             }
         }
 
@@ -965,7 +965,7 @@ namespace UnityMcp.Tools
                 string url = ctx["url"]?.ToString();
                 if (string.IsNullOrEmpty(url))
                 {
-                    return Response.Error("URL参数是必需的");
+                    return Response.Error("URL parameter is required");
                 }
 
                 // 简单的连通性测试，使用HEAD请求
@@ -984,7 +984,7 @@ namespace UnityMcp.Tools
                     if (!asyncOp.isDone)
                     {
                         request.Abort();
-                        return Response.Error("Ping超时");
+                        return Response.Error("Ping timeout");
                     }
 
                     double responseTime = (EditorApplication.timeSinceStartup - startTime) * 1000; // 转换为毫秒
@@ -1004,7 +1004,7 @@ namespace UnityMcp.Tools
             catch (Exception e)
             {
                 LogError($"[RequestHttp] Ping失败: {e.Message}");
-                return Response.Error($"Ping失败: {e.Message}");
+                return Response.Error($"Ping failed: {e.Message}");
             }
         }
 
@@ -1047,7 +1047,7 @@ namespace UnityMcp.Tools
                 }
                 catch (Exception e)
                 {
-                    lastResult = Models.Response.Error($"重试 {i + 1}/{retryCount + 1} 失败: {e.Message}");
+                    lastResult = Models.Response.Error($"Retry {i + 1}/{retryCount + 1} failed: {e.Message}");
 
                     if (i == retryCount)
                     {
@@ -1097,7 +1097,7 @@ namespace UnityMcp.Tools
 
                 if (urlsToken == null)
                 {
-                    return Response.Error("urls参数是必需的");
+                    return Response.Error("urls parameter is required");
                 }
 
                 // 解析URL数组
@@ -1118,7 +1118,7 @@ namespace UnityMcp.Tools
 
                 if (urls.Length == 0)
                 {
-                    return Response.Error("没有找到有效的URL");
+                    return Response.Error("No valid URLs found");
                 }
 
                 if (string.IsNullOrEmpty(saveDirectory))
@@ -1229,7 +1229,7 @@ namespace UnityMcp.Tools
             catch (Exception e)
             {
                 LogError($"[RequestHttp] 批量下载失败: {e.Message}");
-                return Response.Error($"批量下载失败: {e.Message}");
+                return Response.Error($"Batch download failed: {e.Message}");
             }
         }
 

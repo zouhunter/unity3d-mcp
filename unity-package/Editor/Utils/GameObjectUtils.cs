@@ -229,7 +229,7 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 通过Hierarchy路径在当前场景中查找对象
         /// </summary>
-        /// <param name="path">Hierarchy路径，如"Parent/Child/Target"或"Parent/Child/Target:ComponentType"</param>
+        /// <param name="path">Hierarchy path, like "Parent/Child/Target" or "Parent/Child/Target:ComponentType"</param>
         /// <param name="type">查找类型</param>
         /// <returns>找到的对象，未找到则返回null</returns>
         public static object FindByHierarchyPath(string path, Type type)

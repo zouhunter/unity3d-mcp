@@ -23,6 +23,8 @@ alwaysApply: true
     + `project_operate`:编辑 Asset
     + `project_search`:搜索 Asset
     + `request_http`:请求 HTTP
+    + `console_read`:读取Unity控制台消息
+    + `console_write`:向Unity控制台写入日志消息
   
 除 `function_call` 和 `functions_call` 外，其余均为方法名，不能直接被MCP调用。
 
@@ -257,22 +259,22 @@ function_call(
 
 主要参数（放入 `args`）
 - `action` (string, 必需): 操作类型，固定为 `find`
-- `search_method` (string, 可选): 搜索方法，支持 `by_name`、`by_id`、`by_tag`、`by_layer`、`by_component`、`by_term`等
+- `search_type` (string, 可选): 搜索方法，支持 `by_name`、`by_id`、`by_tag`、`by_layer`、`by_component`、`by_query`等
 - `select_many` (bool, 可选): 是否查找所有匹配项，默认false
-- `search_term` (string, 可选): 搜索目标（可以是ID、名称或路径；支持通配符*）
+- `query` (string, 可选): 搜索目标（可以是ID、名称或路径；支持通配符*）
 - `root_only` (bool, 可选): 是否仅搜索根对象（不包括子物体），默认false（包括所有层级）
 - `include_inactive` (bool, 可选): 是否搜索非激活对象，默认false
 - `use_regex` (bool, 可选): 是否使用正则表达式，默认false
 
-支持的搜索方法 (search_method)
+支持的搜索方法 (search_type)
 - `by_name` - 按名称搜索
 - `by_id` - 按ID搜索
 - `by_tag` - 按标签搜索
 - `by_layer` - 按层级搜索
 - `by_component` - 按组件类型搜索
-- `by_term` - 通用术语搜索（搜索名称、标签、层级、组件类型等，支持通配符*、正则表达式和类型前缀）
+- `by_query` - 通用术语搜索（搜索名称、标签、层级、组件类型等，支持通配符*、正则表达式和类型前缀）
 
-通配符支持 (search_term)
+通配符支持 (query)
 - `*` - 匹配任意字符，如 `Player*` 匹配以Player开头的所有对象
 - `*Cube*` - 匹配包含Cube的所有对象
 - `Test*Object` - 匹配以Test开头、以Object结尾的对象
@@ -281,7 +283,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "search_term": "Player", "search_method": "by_name"}
+  args={"action": "find", "query": "Player", "search_type": "by_name"}
 )
 ```
 
@@ -289,7 +291,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "search_method": "by_tag", "search_term": "Enemy", "select_many": True}
+  args={"action": "find", "search_type": "by_tag", "query": "Enemy", "select_many": True}
 )
 ```
 
@@ -297,7 +299,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "search_term": "12345", "search_method": "by_id"}
+  args={"action": "find", "query": "12345", "search_type": "by_id"}
 )
 ```
 
@@ -305,7 +307,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "search_method": "by_component", "search_term": "Rigidbody", "select_many": True, "include_inactive": True}
+  args={"action": "find", "search_type": "by_component", "query": "Rigidbody", "select_many": True, "include_inactive": True}
 )
 ```
 
@@ -313,7 +315,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "search_method": "by_layer", "search_term": "Default", "select_many": True}
+  args={"action": "find", "search_type": "by_layer", "query": "Default", "select_many": True}
 )
 ```
 
@@ -321,7 +323,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "search_method": "by_term", "search_term": "Player", "select_many": True}
+  args={"action": "find", "search_type": "by_query", "query": "Player", "select_many": True}
 )
 ```
 
@@ -329,7 +331,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "search_method": "by_term", "search_term": "Player", "select_many": True, "root_only": True}
+  args={"action": "find", "search_type": "by_query", "query": "Player", "select_many": True, "root_only": True}
 )
 ```
 
@@ -337,7 +339,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "search_method": "by_term", "search_term": "Player*", "select_many": True}
+  args={"action": "find", "search_type": "by_query", "query": "Player*", "select_many": True}
 )
 ```
 
@@ -345,7 +347,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "search_method": "by_term", "search_term": "*Cube*", "select_many": True}
+  args={"action": "find", "search_type": "by_query", "query": "*Cube*", "select_many": True}
 )
 ```
 
@@ -353,7 +355,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "search_method": "by_term", "search_term": "^Test", "use_regex": True, "select_many": True}
+  args={"action": "find", "search_type": "by_query", "query": "^Test", "use_regex": True, "select_many": True}
 )
 ```
 
@@ -361,7 +363,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "search_method": "by_term", "search_term": "t:MeshRenderer", "select_many": True}
+  args={"action": "find", "search_type": "by_query", "query": "t:MeshRenderer", "select_many": True}
 )
 ```
 
@@ -369,7 +371,7 @@ function_call(
 ```python
 function_call(
   func="hierarchy_search",
-  args={"action": "find", "search_method": "by_term", "search_term": "*", "select_many": True}
+  args={"action": "find", "search_type": "by_query", "query": "*", "select_many": True}
 )
 ```
 
@@ -1977,6 +1979,74 @@ function_call(
 
 ---
 
+### console_write - Unity 控制台写入
+**功能**: 向Unity编辑器控制台写入不同类型的日志消息，包括错误、警告、普通日志、断言和异常信息。
+
+主要参数（放入 `args`）
+- `action` (string, 必需): 操作类型，支持 `error`、`warning`、`log`、`assert`、`exception`
+- `message` (string, 必需): 要写入的日志消息内容
+- `tag` (string, 可选): 日志标签，用于分类和过滤，可选
+- `context` (string, 可选): 上下文对象名称，用于在控制台中定位相关GameObject，可选
+- `condition` (string, 可选): 断言条件表达式（仅用于assert类型），可选
+
+支持的操作 (action)
+- `error` - 写入错误日志（Debug.LogError）
+- `warning` - 写入警告日志（Debug.LogWarning）
+- `log` - 写入普通日志（Debug.Log）
+- `assert` - 写入断言日志（Debug.LogAssertion）
+- `exception` - 写入异常日志（Debug.LogException）
+
+返回值格式
+```json
+{
+  "success": true,
+  "message": "Log written successfully: [tag][TYPE] message",
+  "error": ""
+}
+```
+
+示例：写入错误日志
+```python
+function_call(
+  func="console_write",
+  args={"action": "error", "message": "GameObject not found!", "tag": "GameLogic"}
+)
+```
+
+示例：写入警告日志（带上下文）
+```python
+function_call(
+  func="console_write",
+  args={"action": "warning", "message": "Performance issue detected", "tag": "Performance", "context": "Player"}
+)
+```
+
+示例：写入普通日志
+```python
+function_call(
+  func="console_write",
+  args={"action": "log", "message": "太极阵法创建完成", "tag": "TaijiArray"}
+)
+```
+
+示例：写入断言日志
+```python
+function_call(
+  func="console_write",
+  args={"action": "assert", "message": "Health should be positive", "condition": "health > 0", "tag": "PlayerStats"}
+)
+```
+
+示例：写入异常日志
+```python
+function_call(
+  func="console_write",
+  args={"action": "exception", "message": "Critical system failure", "tag": "SystemCore", "context": "GameManager"}
+)
+```
+
+---
+
 ### project_operate - Unity项目资产管理
 **功能**: 专门处理Unity项目中的资产管理操作，支持资产导入、修改、移动、复制、搜索、刷新等功能，提供全面的项目管理支持。
 
@@ -2072,34 +2142,68 @@ function_call(
 **功能**: 专门处理Unity项目窗口中的资产搜索操作，支持按类型、关键词、路径等多种条件进行精确搜索，提供强大的项目资产查找功能。
 
 主要参数（放入 `args`）
-- `search_type` (string, 必需): 搜索类型，支持 `asset`、`folder`、`script`、`texture`、`material`、`prefab`、`scene`、`audio`、`model`、`shader`、`animation`、`general`
-- `search_term` (string, 必需): 搜索关键词
-- `search_path` (string, 可选): 搜索路径（相对于Assets），默认为整个Assets目录
+- `search_target` (string, 必需): 搜索类型，支持 `asset`、`folder`、`script`、`texture`、`material`、`prefab`、`scene`、`audio`、`model`、`shader`、`animation`、`general`
+- `query` (string, 必需): 搜索关键词
+- `directory` (string, 可选): 搜索路径（相对于Assets），默认为整个Assets目录
 - `file_extension` (string, 可选): 文件扩展名过滤
 - `recursive` (bool, 可选): 是否递归搜索子文件夹，默认true
 - `case_sensitive` (bool, 可选): 是否区分大小写，默认false
 - `max_results` (int, 可选): 最大返回结果数，默认100
 - `include_meta` (bool, 可选): 是否包含.meta文件，默认false
 
-支持的搜索类型 (search_type)
+支持的搜索类型 (search_target)
 - `asset` - 搜索所有类型的资产
 - `folder` - 搜索文件夹
 - `script` - 搜索脚本文件(.cs, .js, .boo)
-- `texture` - 搜索纹理文件(.png, .jpg, .tga等)
+- `texture` - 搜索纹理文件(.png, .jpg, .jpeg, .tga, .tiff, .bmp, .psd, .exr)
 - `material` - 搜索材质文件(.mat)
 - `prefab` - 搜索预制体文件(.prefab)
 - `scene` - 搜索场景文件(.unity)
-- `audio` - 搜索音频文件(.mp3, .wav, .ogg等)
-- `model` - 搜索3D模型文件(.fbx, .obj, .blend等)
+- `audio` - 搜索音频文件(.mp3, .wav, .ogg, .aiff, .aif)
+- `model` - 搜索3D模型文件(.fbx, .obj, .dae, .3ds, .dxf, .skp, .blend, .max, .c4d, .ma, .mb)
 - `shader` - 搜索Shader文件(.shader, .cginc, .hlsl)
-- `animation` - 搜索动画文件(.anim, .controller等)
+- `animation` - 搜索动画文件(.anim, .controller, .playable)
 - `general` - 通用搜索
+
+返回值格式
+```json
+{
+  "success": true,
+  "message": "Found X asset(s) matching 'query' in 'path'",
+  "data": {
+    "query": "搜索关键词",
+    "directory": "搜索路径",
+    "search_target": "搜索类型",
+    "total_results": 5,
+    "max_results": 100,
+    "results": [
+      {
+        "name": "资产名称",
+        "path": "Assets/路径/文件.ext",
+        "guid": "资产GUID",
+        "type": "资产类型",
+        "instanceID": 12345,
+        "fileSize": 1024,
+        "lastModified": "2024-01-01 12:00:00",
+        // 根据资产类型包含特定属性：
+        // 纹理: width, height, format
+        // 材质: shader
+        // 预制体: prefabType
+        // 场景: sceneName
+        // 音频: length, frequency, channels
+        // 模型: vertexCount, triangleCount
+        // ScriptableObject: scriptableObjectType
+      }
+    ]
+  }
+}
+```
 
 示例：搜索所有脚本文件
 ```python
 function_call(
   func="project_search",
-  args={"search_type": "script", "search_term": "Player", "search_path": "Assets/Scripts", "recursive": true, "max_results": 50}
+  args={"search_target": "script", "query": "Player", "directory": "Assets/Scripts", "recursive": true, "max_results": 50}
 )
 ```
 
@@ -2107,7 +2211,7 @@ function_call(
 ```python
 function_call(
   func="project_search",
-  args={"search_type": "texture", "search_term": "icon", "search_path": "Assets/Textures", "max_results": 20}
+  args={"search_target": "texture", "query": "icon", "directory": "Assets/Textures", "max_results": 20}
 )
 ```
 
@@ -2115,7 +2219,7 @@ function_call(
 ```python
 function_call(
   func="project_search",
-  args={"search_type": "prefab", "search_term": "Enemy", "recursive": true}
+  args={"search_target": "prefab", "query": "Enemy", "recursive": true}
 )
 ```
 
@@ -2123,7 +2227,7 @@ function_call(
 ```python
 function_call(
   func="project_search",
-  args={"search_type": "material", "search_term": "Red", "search_path": "Assets/Materials"}
+  args={"search_target": "material", "query": "Red", "directory": "Assets/Materials"}
 )
 ```
 
@@ -2131,7 +2235,7 @@ function_call(
 ```python
 function_call(
   func="project_search",
-  args={"search_type": "audio", "search_term": "music", "search_path": "Assets/Audio", "case_sensitive": false}
+  args={"search_target": "audio", "query": "music", "directory": "Assets/Audio", "case_sensitive": false}
 )
 ```
 
@@ -2139,7 +2243,7 @@ function_call(
 ```python
 function_call(
   func="project_search",
-  args={"search_type": "scene", "search_term": "Level", "max_results": 10}
+  args={"search_target": "scene", "query": "Level", "max_results": 10}
 )
 ```
 
@@ -2147,9 +2251,45 @@ function_call(
 ```python
 function_call(
   func="project_search",
-  args={"search_type": "general", "search_term": "MainMenu", "search_path": "Assets", "recursive": true, "max_results": 30}
+  args={"search_target": "general", "query": "MainMenu", "directory": "Assets", "recursive": true, "max_results": 30}
 )
 ```
+
+示例：搜索模型文件
+```python
+function_call(
+  func="project_search",
+  args={"search_target": "model", "query": "Character", "directory": "Assets/Models", "max_results": 25}
+)
+```
+
+示例：搜索Shader文件
+```python
+function_call(
+  func="project_search",
+  args={"search_target": "shader", "query": "Custom", "directory": "Assets/Shaders", "recursive": true}
+)
+```
+
+示例：搜索动画文件
+```python
+function_call(
+  func="project_search",
+  args={"search_target": "animation", "query": "Walk", "directory": "Assets/Animations"}
+)
+```
+
+**特殊功能和注意事项**
+- **自动路径标准化**: 如果directory参数不以"Assets"开头，会自动添加"Assets/"前缀
+- **递归搜索控制**: recursive为false时，只搜索指定目录的直接子文件，不包含子文件夹
+- **扩展名自动匹配**: 每种搜索类型都有预设的文件扩展名，无需手动指定
+- **智能结果限制**: 通过max_results参数控制返回结果数量，避免过多结果影响性能
+- **资产类型特定信息**: 根据不同资产类型自动提取相关属性（纹理尺寸、材质Shader、音频时长等）
+- **文件系统信息**: 自动包含文件大小和最后修改时间
+- **GUID支持**: 返回Unity内部GUID，便于资产引用和操作
+- **Meta文件处理**: 默认排除.meta文件，可通过include_meta参数控制
+- **大小写敏感**: 支持区分大小写的搜索，默认不区分大小写
+- **容错处理**: 自动处理搜索过程中的异常情况，确保稳定性
 
 ---
 

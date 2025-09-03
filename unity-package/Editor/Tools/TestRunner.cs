@@ -45,7 +45,7 @@ namespace UnityMcp.Tools
 
         // Queue of active test operations
         private readonly List<TestOperation> _activeOperations = new List<TestOperation>();
-        
+
         // Flag to track if the update callback is registered
         private bool _updateCallbackRegistered = false;
 
@@ -56,13 +56,13 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("action", "操作类型：execute, validate", false),
-                new MethodKey("test_code", "C#测试代码内容", true),
-                new MethodKey("class_name", "测试类名称，默认为TestClass", true),
-                new MethodKey("namespace", "命名空间，默认为TestNamespace", true),
-                new MethodKey("includes", "引用的using语句列表，JSON数组格式", true),
-                new MethodKey("timeout", "执行超时时间（秒），默认30秒", true),
-                new MethodKey("cleanup", "执行后是否清理临时文件，默认true", true)
+                new MethodKey("action", "Operation type: execute, validate", false),
+                new MethodKey("test_code", "C# test code content", true),
+                new MethodKey("class_name", "Test class name, default is TestClass", true),
+                new MethodKey("namespace", "Namespace, default is TestNamespace", true),
+                new MethodKey("includes", "Referenced using statements list, JSON array format", true),
+                new MethodKey("timeout", "Execution timeout (seconds), default 30 seconds", true),
+                new MethodKey("cleanup", "Whether to clean up temporary files after execution, default true", true)
             };
         }
 
@@ -112,7 +112,7 @@ namespace UnityMcp.Tools
                 string testCode = args["test_code"]?.ToString();
                 if (string.IsNullOrEmpty(testCode))
                 {
-                    return Response.Error("test_code 参数是必需的");
+                    return Response.Error("test_code parameter is required");
                 }
 
                 string className = args["class_name"]?.ToString() ?? "TestClass";
@@ -121,14 +121,14 @@ namespace UnityMcp.Tools
                 int timeout = args["timeout"]?.ToObject<int>() ?? 30;
                 bool cleanup = args["cleanup"]?.ToObject<bool>() ?? true;
 
-                LogInfo($"[TestRunner] 执行测试类: {namespaceName}.{className}");
+                LogInfo($"[TestRunner] Executing test class: {namespaceName}.{className}");
 
                 return ExecuteTest(testCode, className, namespaceName, includes, timeout, cleanup);
             }
             catch (Exception e)
             {
-                LogError($"[TestRunner] 执行测试失败: {e.Message}");
-                return Response.Error($"执行测试失败: {e.Message}");
+                LogError($"[TestRunner] Test execution failed: {e.Message}");
+                return Response.Error($"Failed to execute test: {e.Message}");
             }
         }
 
@@ -142,21 +142,21 @@ namespace UnityMcp.Tools
                 string testCode = args["test_code"]?.ToString();
                 if (string.IsNullOrEmpty(testCode))
                 {
-                    return Response.Error("test_code 参数是必需的");
+                    return Response.Error("test_code parameter is required");
                 }
 
                 string className = args["class_name"]?.ToString() ?? "TestClass";
                 string namespaceName = args["namespace"]?.ToString() ?? "TestNamespace";
                 var includes = args["includes"]?.ToObject<string[]>() ?? GetDefaultIncludes();
 
-                LogInfo("[TestRunner] 验证测试代码语法");
+                LogInfo("[TestRunner] Validating test code syntax");
 
                 string fullCode = GenerateFullTestCode(testCode, className, namespaceName, includes);
                 var compilationResult = CompileCode(fullCode);
 
                 if (compilationResult.success)
                 {
-                    return Response.Success("测试代码语法验证通过", new
+                    return Response.Success("Test code syntax validation passed", new
                     {
                         operation = "validate",
                         class_name = className,
@@ -166,7 +166,7 @@ namespace UnityMcp.Tools
                 }
                 else
                 {
-                    return Response.Error("测试代码语法验证失败", new
+                    return Response.Error("Test code syntax validation failed", new
                     {
                         operation = "validate",
                         errors = compilationResult.errors
@@ -175,8 +175,8 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                LogError($"[TestRunner] 验证测试代码失败: {e.Message}");
-                return Response.Error($"验证测试代码失败: {e.Message}");
+                LogError($"[TestRunner] Test code validation failed: {e.Message}");
+                return Response.Error($"Failed to validate test code: {e.Message}");
             }
         }
 
@@ -191,13 +191,13 @@ namespace UnityMcp.Tools
             {
                 // 生成完整的测试代码
                 string fullCode = GenerateFullTestCode(testCode, className, namespaceName, includes);
-                LogInfo($"[TestRunner] 生成的完整代码:\n{fullCode}");
+                LogInfo($"[TestRunner] Generated complete code:\n{fullCode}");
 
                 // 编译代码
                 var compilationResult = CompileCode(fullCode);
                 if (!compilationResult.success)
                 {
-                    return Response.Error("代码编译失败", new
+                    return Response.Error("Code compilation failed", new
                     {
                         operation = "execute",
                         errors = compilationResult.errors
@@ -208,7 +208,7 @@ namespace UnityMcp.Tools
                 var testResults = ExecuteCompiledTests(compilationResult.assembly, namespaceName, className);
 
                 return Response.Success(
-                    $"测试执行完成，共执行 {testResults.Count} 个测试",
+                    $"Test execution completed, {testResults.Count} tests executed",
                     new
                     {
                         operation = "execute",
@@ -230,8 +230,8 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                LogError($"[TestRunner] 执行测试时发生错误: {e.Message}");
-                return Response.Error($"执行测试失败: {e.Message}");
+                LogError($"[TestRunner] Error occurred while executing test: {e.Message}");
+                return Response.Error($"Failed to execute test: {e.Message}");
             }
         }
 
@@ -290,7 +290,7 @@ namespace UnityMcp.Tools
                 var tempFileName = $"TestClass_{timestamp}_{randomId}.cs";
                 var tempFilePath = Path.Combine(tempDir, tempFileName);
                 var tempAssemblyPath = Path.ChangeExtension(tempFilePath, ".dll");
-                
+
                 try
                 {
                     // 写入代码到临时文件
@@ -298,14 +298,14 @@ namespace UnityMcp.Tools
 
                     // 使用Unity编译流水线编译
                     var assemblyBuilder = new AssemblyBuilder(tempAssemblyPath, new[] { tempFilePath });
-                    
+
                     // 添加必要的引用
                     var references = new List<string>();
-                    
+
                     // 获取Unity引擎和编辑器程序集
                     foreach (var assembly in CompilationPipeline.GetAssemblies())
                     {
-                        if (assembly.name.Contains("UnityEngine") || 
+                        if (assembly.name.Contains("UnityEngine") ||
                             assembly.name.Contains("UnityEditor") ||
                             assembly.name.Contains("nunit.framework"))
                         {
@@ -318,7 +318,7 @@ namespace UnityMcp.Tools
                     references.Add(typeof(System.Linq.Enumerable).Assembly.Location); // System.Core
                     references.Add(typeof(UnityEngine.Debug).Assembly.Location); // UnityEngine
                     references.Add(typeof(UnityEditor.EditorApplication).Assembly.Location); // UnityEditor
-                    
+
                     // 查找NUnit程序集
                     var nunitAssembly = System.AppDomain.CurrentDomain.GetAssemblies()
                         .FirstOrDefault(a => a.GetName().Name.Contains("nunit.framework"));
@@ -334,7 +334,7 @@ namespace UnityMcp.Tools
                     bool started = false;
                     int retryCount = 0;
                     const int maxRetries = 3;
-                    
+
                     while (!started && retryCount < maxRetries)
                     {
                         try
@@ -345,9 +345,9 @@ namespace UnityMcp.Tools
                                 retryCount++;
                                 if (retryCount < maxRetries)
                                 {
-                                    LogInfo($"[TestRunner] 编译启动失败，重试 {retryCount}/{maxRetries}");
+                                    LogInfo($"[TestRunner] Compilation startup failed, retry {retryCount}/{maxRetries}");
                                     System.Threading.Thread.Sleep(100 * retryCount); // 递增延迟
-                                    
+
                                     // 创建新的AssemblyBuilder
                                     var newAssemblyPath = Path.ChangeExtension(tempFilePath, $"_retry{retryCount}.dll");
                                     assemblyBuilder = new AssemblyBuilder(newAssemblyPath, new[] { tempFilePath });
@@ -361,9 +361,9 @@ namespace UnityMcp.Tools
                             retryCount++;
                             if (retryCount < maxRetries)
                             {
-                                LogInfo($"[TestRunner] 编译异常，重试 {retryCount}/{maxRetries}: {ex.Message}");
+                                LogInfo($"[TestRunner] Compilation exception, retry {retryCount}/{maxRetries}: {ex.Message}");
                                 System.Threading.Thread.Sleep(200 * retryCount);
-                                
+
                                 // 创建新的AssemblyBuilder
                                 var newAssemblyPath = Path.ChangeExtension(tempFilePath, $"_retry{retryCount}.dll");
                                 assemblyBuilder = new AssemblyBuilder(newAssemblyPath, new[] { tempFilePath });
@@ -376,7 +376,7 @@ namespace UnityMcp.Tools
                             }
                         }
                     }
-                    
+
                     if (!started)
                     {
                         return (false, null, new[] { $"Failed to start compilation after {maxRetries} retries" });
@@ -411,7 +411,7 @@ namespace UnityMcp.Tools
                     else
                     {
                         var errors = new List<string> { $"Compilation failed with status: {assemblyBuilder.status}" };
-                        
+
                         // 尝试获取编译错误信息
                         try
                         {
@@ -438,7 +438,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                LogError($"[TestRunner] 编译过程发生异常: {e.Message}");
+                LogError($"[TestRunner] Exception occurred during compilation: {e.Message}");
                 return (false, null, new[] { $"Compilation exception: {e.Message}" });
             }
         }
@@ -454,7 +454,7 @@ namespace UnityMcp.Tools
 
             if (testType == null)
             {
-                throw new Exception($"找不到测试类: {fullClassName}");
+                throw new Exception($"Test class not found: {fullClassName}");
             }
 
             // 获取所有标记了[Test]特性的方法
@@ -464,7 +464,7 @@ namespace UnityMcp.Tools
 
             if (testMethods.Length == 0)
             {
-                LogWarning($"[TestRunner] 在类 {fullClassName} 中没有找到任何标记了[Test]特性的方法");
+                LogWarning($"[TestRunner] No methods marked with [Test] attribute found in class {fullClassName}");
             }
 
             // 创建测试类实例
@@ -527,7 +527,7 @@ namespace UnityMcp.Tools
                 }
 
                 results.Add(testResult);
-                LogInfo($"[TestRunner] 测试 {testMethod.Name}: {(testResult.Success ? "PASSED" : "FAILED")} ({testResult.Duration:F2}ms)");
+                LogInfo($"[TestRunner] Test {testMethod.Name}: {(testResult.Success ? "PASSED" : "FAILED")} ({testResult.Duration:F2}ms)");
             }
 
             return results;
@@ -555,11 +555,11 @@ namespace UnityMcp.Tools
         private void CleanupTempFiles(string tempFilePath, string tempAssemblyPath)
         {
             var filesToClean = new List<string> { tempFilePath };
-            
+
             // 添加可能的程序集相关文件
             var assemblyDir = Path.GetDirectoryName(tempAssemblyPath);
             var assemblyNameWithoutExt = Path.GetFileNameWithoutExtension(tempAssemblyPath);
-            
+
             if (!string.IsNullOrEmpty(assemblyDir))
             {
                 try
@@ -588,7 +588,7 @@ namespace UnityMcp.Tools
 
             int retryCount = 0;
             const int maxRetries = 3;
-            
+
             while (retryCount < maxRetries)
             {
                 try
@@ -601,20 +601,20 @@ namespace UnityMcp.Tools
                     retryCount++;
                     if (retryCount < maxRetries)
                     {
-                        LogInfo($"[TestRunner] 清理文件失败，重试 {retryCount}/{maxRetries}: {filePath}");
+                        LogInfo($"[TestRunner] Failed to clean file, retry {retryCount}/{maxRetries}: {filePath}");
                         System.Threading.Thread.Sleep(100 * retryCount);
                     }
                     else
                     {
-                        LogWarning($"[TestRunner] 无法清理临时文件: {filePath}, 错误: {ex.Message}");
+                        LogWarning($"[TestRunner] Unable to clean temporary file: {filePath}, error: {ex.Message}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    LogWarning($"[TestRunner] 清理文件时发生意外错误: {filePath}, 错误: {ex.Message}");
+                    LogWarning($"[TestRunner] Unexpected error occurred while cleaning file: {filePath}, error: {ex.Message}");
                     break; // 非IO错误，不重试
                 }
             }
         }
     }
-} 
+}

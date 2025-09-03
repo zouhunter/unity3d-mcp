@@ -39,23 +39,23 @@ namespace UnityMcp.Tools
             return new[]
             {
                    // 目标查找参数
-                new MethodKey("instance_id", "对象的InstanceID", true),
-                new MethodKey("path", "对象的Hierachy路径", false),
+                new MethodKey("path", "Object Hierarchy path", false),
+                new MethodKey("instance_id", "Object InstanceID", true),
                 // 操作参数
-                new MethodKey("action", "操作类型：create,modify, get_components, add_component, remove_component, set_parent", false),
+                new MethodKey("action", "Operation type: create, modify, get_components, add_component, remove_component, set_parent", false),
                 // 基本修改参数
-                new MethodKey("name", "GameObject名称", true),
-                new MethodKey("tag", "GameObject标签", true),
-                new MethodKey("layer", "GameObject所在层", true),
-                new MethodKey("parent_id", "父对象的InstanceID", true),
-                new MethodKey("parent_path", "父对象的场景路径", true),
-                new MethodKey("position", "位置坐标 [x, y, z]", true),
-                new MethodKey("rotation", "旋转角度 [x, y, z]", true),
-                new MethodKey("scale", "缩放比例 [x, y, z]", true),
-                new MethodKey("active", "设置激活状态", true),
+                new MethodKey("name", "GameObject name", true),
+                new MethodKey("tag", "GameObject tag", true),
+                new MethodKey("layer", "GameObject layer", true),
+                new MethodKey("parent_id", "Parent object InstanceID", true),
+                new MethodKey("parent_path", "Parent object scene path", true),
+                new MethodKey("position", "Position coordinates [x, y, z]", true),
+                new MethodKey("rotation", "Rotation angles [x, y, z]", true),
+                new MethodKey("scale", "Scale ratios [x, y, z]", true),
+                new MethodKey("active", "Set active state", true),
                 // 组件操作参数
-                new MethodKey("component_type", "组件名称", true),
-                new MethodKey("component_properties", "组件属性字典", true),
+                new MethodKey("component_type", "Component name", true),
+                new MethodKey("component_properties", "Component properties dictionary", true),
             };
         }
 
@@ -276,14 +276,14 @@ namespace UnityMcp.Tools
             {
                 return Response.Success(
                     $"No modifications applied to GameObject '{targetGo.name}'.",
-                    GetGameObjectData(targetGo)
+                    JObject.FromObject(GetGameObjectData(targetGo))
                 );
             }
 
             EditorUtility.SetDirty(targetGo); // Mark scene as dirty
             return Response.Success(
                 $"GameObject '{targetGo.name}' modified successfully.",
-                GetGameObjectData(targetGo)
+                JObject.FromObject(GetGameObjectData(targetGo))
             );
         }
 
@@ -902,7 +902,7 @@ namespace UnityMcp.Tools
             EditorUtility.SetDirty(targetGo);
             return Response.Success(
                 $"Component '{typeName}' added to '{targetGo.name}'.",
-                GetGameObjectData(targetGo)
+               JObject.FromObject(GetGameObjectData(targetGo))
             ); // Return updated GO data
         }
 
@@ -935,7 +935,7 @@ namespace UnityMcp.Tools
             EditorUtility.SetDirty(targetGo);
             return Response.Success(
                 $"Component '{typeName}' removed from '{targetGo.name}'.",
-                GetGameObjectData(targetGo)
+                JObject.FromObject(GetGameObjectData(targetGo))
             );
         }
 
@@ -969,7 +969,7 @@ namespace UnityMcp.Tools
             EditorUtility.SetDirty(targetGo);
             return Response.Success(
                 $"Properties set for component '{compName}' on '{targetGo.name}'.",
-                GetGameObjectData(targetGo)
+                JObject.FromObject(GetGameObjectData(targetGo))
             );
         }
 
@@ -1977,7 +1977,9 @@ namespace UnityMcp.Tools
 
             try
             {
-                Component addedComponent = targetGo.AddComponent(componentType);
+                Component addedComponent = targetGo.GetComponent(componentType);
+                if (addedComponent == null)
+                    addedComponent = targetGo.AddComponent(componentType);
                 if (addedComponent == null)
                 {
                     return Response.Error($"Failed to add component '{typeName}' to '{targetGo.name}'.");

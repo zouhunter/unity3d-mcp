@@ -25,11 +25,11 @@ namespace UnityMCP.Tools
         {
             return new[]
             {
-                new MethodKey("action", "操作类型：create_rule(创建制作方案), get_rule(获取制作方案), add_modify(添加修改记录), get_modifys(获取修改记录), clear_modify(清除修改记录)", false),
-                new MethodKey("name", "UI名称，用于查找和记录", false),
-                new MethodKey("modify_desc", "修改描述", true),
-                new MethodKey("save_path", "保存路径，用于创建新的FigmaUGUIRuleObject", true),
-                new MethodKey("properties", "属性数据，JSON格式的字符串", true)
+                new MethodKey("action", "Operation type: create_rule(create production plan), get_rule(get production plan), add_modify(add modification record), get_modifys(get modification records), clear_modify(clear modification records)", false),
+                new MethodKey("name", "UI name, used for finding and recording", false),
+                new MethodKey("modify_desc", "Modification description", true),
+                new MethodKey("save_path", "Save path, used to create new FigmaUGUIRuleObject", true),
+                new MethodKey("properties", "Property data, JSON formatted string", true)
             };
         }
 

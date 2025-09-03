@@ -26,11 +26,11 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("action", "操作类型：apply", false),
-                new MethodKey("target_object", "目标GameObject标识符（用于apply操作）", false),
-                new MethodKey("prefab_path", "预制体路径", true),
-                new MethodKey("apply_type", "链接类型：connect_to_prefab, apply_prefab_changes, break_prefab_connection", true),
-                new MethodKey("force_apply", "是否强制创建链接（覆盖现有连接）", true)
+                new MethodKey("action", "Operation type: apply", false),
+                new MethodKey("target_object", "Target GameObject identifier (used for apply operation)", false),
+                new MethodKey("prefab_path", "Prefab path", true),
+                new MethodKey("apply_type", "Link type: connect_to_prefab, apply_prefab_changes, break_prefab_connection", true),
+                new MethodKey("force_apply", "Whether to force create link (overwrite existing connection)", true)
             };
         }
 
@@ -75,7 +75,7 @@ namespace UnityMcp.Tools
                 case "break_prefab_connection":
                     return HandleBreakPrefabConnection(args);
                 default:
-                    return Response.Error($"未知的链接类型: '{applyType}'");
+                    return Response.Error($"Unknown link type: '{applyType}'");
             }
         }
 

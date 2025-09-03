@@ -20,8 +20,8 @@ namespace UnityMcp.Tools
         {
             return new MethodKey[]
             {
-                new MethodKey("instance_id", "对象的InstanceID", true),
-                new MethodKey("path", "对象的Project路径", true)
+                new MethodKey("instance_id", "Object InstanceID", true),
+                new MethodKey("path", "Object Project path", true)
             };
         }
 
@@ -39,13 +39,13 @@ namespace UnityMcp.Tools
             // 获取ID参数
             if (!context.TryGetValue("instance_id", out object idObj) || idObj == null)
             {
-                return Response.Error("参数'id'是必需的。");
+                return Response.Error("Parameter 'id' is required.");
             }
 
             // 解析ID
             if (!int.TryParse(idObj.ToString(), out int instanceId))
             {
-                return Response.Error($"无效的ID格式：'{idObj}'。ID必须是整数。");
+                return Response.Error($"Invalid ID format: '{idObj}'. ID must be an integer.");
             }
 
             try
@@ -55,13 +55,13 @@ namespace UnityMcp.Tools
 
                 if (foundObject == null)
                 {
-                    return Response.Error($"未找到ID为'{instanceId}'的对象。");
+                    return Response.Error($"Object with ID '{instanceId}' not found.");
                 }
 
                 // 检查对象是否是项目资产
                 if (!IsProjectAsset(foundObject))
                 {
-                    return Response.Error($"ID为'{instanceId}'的对象不是项目资产。");
+                    return Response.Error($"Object with ID '{instanceId}' is not a project asset.");
                 }
 
                 // 检查对象类型是否匹配
@@ -71,12 +71,12 @@ namespace UnityMcp.Tools
                 }
                 else
                 {
-                    return Response.Error($"找到ID为'{instanceId}'的对象，但类型不匹配。期望类型：'{typeof(T).Name}'，实际类型：'{foundObject.GetType().Name}'。");
+                    return Response.Error($"Found object with ID '{instanceId}', but type mismatch. Expected type: '{typeof(T).Name}', actual type: '{foundObject.GetType().Name}'.");
                 }
             }
             catch (Exception ex)
             {
-                return Response.Error($"查找对象时发生错误：{ex.Message}");
+                return Response.Error($"Error occurred while searching object: {ex.Message}");
             }
         }
 
@@ -85,7 +85,7 @@ namespace UnityMcp.Tools
             // 获取path参数
             if (!context.TryGetValue("path", out object pathObj) || pathObj == null)
             {
-                return Response.Error("参数'path'是必需的。");
+                return Response.Error("Parameter 'path' is required.");
             }
 
             string path = pathObj.ToString();
@@ -99,11 +99,11 @@ namespace UnityMcp.Tools
                     return asset;
                 }
 
-                return Response.Error($"未找到路径为'{path}'的{typeof(T).Name}类型资产。");
+                return Response.Error($"Asset of type {typeof(T).Name} not found at path '{path}'.");
             }
             catch (Exception ex)
             {
-                return Response.Error($"查找路径'{path}'时发生错误：{ex.Message}");
+                return Response.Error($"Error occurred while searching path '{path}': {ex.Message}");
             }
         }
 
@@ -115,7 +115,7 @@ namespace UnityMcp.Tools
 
             if (!hasId && !hasPath)
             {
-                return Response.Error("必须提供'id'或'path'参数之一。");
+                return Response.Error("Either 'id' or 'path' parameter must be provided.");
             }
 
             // 优先使用id查找
@@ -130,7 +130,7 @@ namespace UnityMcp.Tools
                 return HandleByPathSearch(context);
             }
 
-            return Response.Error("未找到匹配的资产。");
+            return Response.Error("No matching asset found.");
         }
 
         /// <summary>
@@ -204,7 +204,7 @@ namespace UnityMcp.Tools
             string instanceId = obj.GetInstanceID().ToString();
             string assetPath = UnityEditor.AssetDatabase.GetAssetPath(obj);
 
-            return $"类型: {type}, 名称: {name}, InstanceID: {instanceId}, 资产路径: {assetPath}";
+            return $"Type: {type}, Name: {name}, InstanceID: {instanceId}, Asset Path: {assetPath}";
         }
 
         /// <summary>
@@ -231,7 +231,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception ex)
             {
-                Debug.LogError($"查找所有{typeof(T).Name}资产时发生错误：{ex.Message}");
+                Debug.LogError($"Error occurred while finding all {typeof(T).Name} assets: {ex.Message}");
             }
 
             return assets;
@@ -240,7 +240,7 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 在指定文件夹中查找资产
         /// </summary>
-        /// <param name="folderPath">文件夹路径，如"Assets/Scripts"</param>
+        /// <param name="folderPath">Folder path, e.g. "Assets/Scripts"</param>
         /// <returns>找到的T类型资产列表</returns>
         public List<T> FindAssetsInFolder(string folderPath)
         {
@@ -267,7 +267,7 @@ namespace UnityMcp.Tools
             }
             catch (Exception ex)
             {
-                Debug.LogError($"在文件夹'{folderPath}'中查找{typeof(T).Name}资产时发生错误：{ex.Message}");
+                Debug.LogError($"Error occurred while finding {typeof(T).Name} assets in folder '{folderPath}': {ex.Message}");
             }
 
             return assets;

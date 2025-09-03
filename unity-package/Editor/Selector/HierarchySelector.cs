@@ -22,8 +22,8 @@ namespace UnityMcp.Tools
         {
             return new MethodKey[]
             {
-                new MethodKey("instance_id", "对象的InstanceID", true),
-                new MethodKey("path", "对象的Hierarchy路径", true)
+                new MethodKey("instance_id", "Object InstanceID", true),
+                new MethodKey("path", "Object Hierarchy path", true)
             };
         }
 
@@ -41,13 +41,13 @@ namespace UnityMcp.Tools
             // 获取ID参数
             if (!context.TryGetValue("instance_id", out object idObj) || idObj == null)
             {
-                return Response.Error("参数'id'是必需的。");
+                return Response.Error("Parameter 'id' is required.");
             }
 
             // 解析ID
             if (!int.TryParse(idObj.ToString(), out int instanceId))
             {
-                return Response.Error($"无效的ID格式：'{idObj}'。ID必须是整数。");
+                return Response.Error($"Invalid ID format: '{idObj}'. ID must be an integer.");
             }
 
             try
@@ -57,13 +57,13 @@ namespace UnityMcp.Tools
 
                 if (foundObject == null)
                 {
-                    return Response.Error($"未找到ID为'{instanceId}'的对象。");
+                    return Response.Error($"Object with ID '{instanceId}' not found.");
                 }
 
                 // 检查对象是否在当前场景的Hierarchy中
                 if (!IsInCurrentSceneHierarchy(foundObject))
                 {
-                    return Response.Error($"ID为'{instanceId}'的对象不在当前场景的Hierarchy中。");
+                    return Response.Error($"Object with ID '{instanceId}' is not in the current scene's Hierarchy.");
                 }
 
                 // 检查对象类型是否匹配
@@ -73,12 +73,12 @@ namespace UnityMcp.Tools
                 }
                 else
                 {
-                    return Response.Error($"找到ID为'{instanceId}'的对象，但类型不匹配。期望类型：'{typeof(T).Name}'，实际类型：'{foundObject.GetType().Name}'。");
+                    return Response.Error($"Found object with ID '{instanceId}', but type mismatch. Expected type: '{typeof(T).Name}', actual type: '{foundObject.GetType().Name}'.");
                 }
             }
             catch (Exception ex)
             {
-                return Response.Error($"查找对象时发生错误：{ex.Message}");
+                return Response.Error($"Error occurred while searching object: {ex.Message}");
             }
         }
 
@@ -87,7 +87,7 @@ namespace UnityMcp.Tools
             // 获取path参数
             if (!context.TryGetValue("path", out object pathObj) || pathObj == null)
             {
-                return Response.Error("参数'path'是必需的。");
+                return Response.Error("Parameter 'path' is required.");
             }
 
             string path = pathObj.ToString();
@@ -101,11 +101,11 @@ namespace UnityMcp.Tools
                     return hierarchyObject;
                 }
 
-                return Response.Error($"未找到路径为'{path}'的{typeof(T).Name}类型对象。");
+                return Response.Error($"Object of type {typeof(T).Name} not found at path '{path}'.");
             }
             catch (Exception ex)
             {
-                return Response.Error($"查找路径'{path}'时发生错误：{ex.Message}");
+                return Response.Error($"Error occurred while searching path '{path}': {ex.Message}");
             }
         }
 
@@ -117,7 +117,7 @@ namespace UnityMcp.Tools
 
             if (!hasId && !hasPath)
             {
-                return Response.Error("必须提供'id'或'path'参数之一。");
+                return Response.Error("Either 'id' or 'path' parameter must be provided.");
             }
 
             // 优先使用id查找
@@ -132,7 +132,7 @@ namespace UnityMcp.Tools
                 return HandleByPathSearch(context);
             }
 
-            return Response.Error("未找到匹配的对象。");
+            return Response.Error("No matching object found.");
         }
 
 
@@ -219,7 +219,7 @@ namespace UnityMcp.Tools
             string name = obj.name;
             string instanceId = obj.GetInstanceID().ToString();
 
-            return $"类型: {type}, 名称: {name}, InstanceID: {instanceId}";
+            return $"Type: {type}, Name: {name}, InstanceID: {instanceId}";
         }
 
     }

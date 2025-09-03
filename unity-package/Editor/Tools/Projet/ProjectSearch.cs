@@ -22,9 +22,9 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("search_type", "搜索类型：asset, folder, script, texture, material, prefab, scene等", false),
-                new MethodKey("search_term", "搜索关键词", false),
-                new MethodKey("search_path", "搜索路径（相对于Assets）", true),
+                new MethodKey("search_target", "搜索类型：asset, folder, script, texture, material, prefab, scene等", false),
+                new MethodKey("query", "搜索关键词", false),
+                new MethodKey("directory", "搜索路径（相对于Assets）", true),
                 new MethodKey("file_extension", "文件扩展名过滤", true),
                 new MethodKey("recursive", "是否递归搜索子文件夹", true),
                 new MethodKey("case_sensitive", "是否区分大小写", true),
@@ -37,7 +37,7 @@ namespace UnityMcp.Tools
         {
             return StateTreeBuilder
                 .Create()
-                .Key("search_type")
+                .Key("search_target")
                      .Leaf("asset", HandleAssetSearch)
                      .Leaf("folder", HandleFolderSearch)
                      .Leaf("script", HandleScriptSearch)
@@ -154,8 +154,8 @@ namespace UnityMcp.Tools
         /// </summary>
         private object PerformSearch(JObject args, string searchType, string[] extensions = null)
         {
-            string searchTerm = args["search_term"]?.ToString();
-            string searchPath = args["search_path"]?.ToString() ?? "Assets";
+            string searchTerm = args["query"]?.ToString();
+            string searchPath = args["directory"]?.ToString() ?? "Assets";
             bool recursive = args["recursive"]?.ToObject<bool>() ?? true;
             bool caseSensitive = args["case_sensitive"]?.ToObject<bool>() ?? false;
             int maxResults = args["max_results"]?.ToObject<int>() ?? 100;
@@ -213,9 +213,9 @@ namespace UnityMcp.Tools
                 // 用JObject包装返回，保证序列化友好
                 var resultObj = new JObject
                 {
-                    ["search_term"] = searchTerm,
-                    ["search_path"] = searchPath,
-                    ["search_type"] = searchType,
+                    ["query"] = searchTerm,
+                    ["directory"] = searchPath,
+                    ["search_target"] = searchType,
                     ["total_results"] = results.Count,
                     ["max_results"] = maxResults,
                     ["results"] = JToken.FromObject(results),

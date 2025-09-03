@@ -24,14 +24,14 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("action", "操作类型：play, pause, stop, get_state, set_active_tool, add_tag, add_layer, execute_menu, set_resolution", false),
-                new MethodKey("wait_for_completion", "是否等待操作完成", true),
-                new MethodKey("tool_name", "工具名称（设置活动工具时使用）", true),
-                new MethodKey("tag_name", "标签名称（添加标签时使用）", true),
-                new MethodKey("layer_name", "层名称（添加层时使用）", true),
-                new MethodKey("menu_path", "菜单路径（执行菜单时使用）", true),
-                new MethodKey("width", "游戏窗口宽度（设置分辨率时使用）", true),
-                new MethodKey("height", "游戏窗口高度（设置分辨率时使用）", true)
+                new MethodKey("action", "Operation type: play, pause, stop, get_state, set_active_tool, add_tag, add_layer, execute_menu, set_resolution", false),
+                new MethodKey("wait_for_completion", "Whether to wait for operation completion", true),
+                new MethodKey("tool_name", "Tool name (used when setting active tool)", true),
+                new MethodKey("tag_name", "Tag name (used when adding tag)", true),
+                new MethodKey("layer_name", "Layer name (used when adding layer)", true),
+                new MethodKey("menu_path", "Menu path (used when executing menu)", true),
+                new MethodKey("width", "Game window width (used when setting resolution)", true),
+                new MethodKey("height", "Game window height (used when setting resolution)", true)
             };
         }
 

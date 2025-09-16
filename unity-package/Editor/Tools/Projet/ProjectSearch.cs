@@ -12,7 +12,7 @@ namespace UnityMcp.Tools
     /// Handles Project window search operations for finding assets and objects.
     /// 对应方法名: project_search
     /// </summary>
-    [ToolName("project_search")]
+    [ToolName("project_search", "项目管理")]
     public class ProjectSearch : StateMethodBase
     {
         /// <summary>

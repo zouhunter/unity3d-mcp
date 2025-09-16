@@ -1,6 +1,7 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
-using System.Linq; // Added for .Take()
+using System.Linq;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -9,14 +10,25 @@ using UnityMcp.Models; // For Response class
 namespace UnityMcp.Tools
 {
     /// <summary>
-    /// Handles GameObject deletion operations.
-    /// Scene hierarchy and creation operations are handled by ManageHierarchy.
-    /// Component operations are handled by ManageComponent.
+    /// Handles UnityEngine.Object deletion operations using dual state tree architecture with interactive confirmation.
+    /// Supports GameObjects, assets, and other Unity objects.
+    /// Target tree: IObjectSelector handles target location
+    /// Action tree: 'confirm' parameter determines confirmation behavior:
+    ///   - confirm=true: Always shows confirmation dialog before deletion
+    ///   - confirm=false/unset: Asset deletion requires confirmation, scene object deletion is direct
+    /// Uses coroutines with EditorUtility.DisplayDialog for interactive user confirmation.
     /// 对应方法名: object_delete
     /// </summary>
-    [ToolName("object_delete")]
-    public class ObjectDelete : StateMethodBase
+    [ToolName("object_delete", "对象编辑")]
+    public class ObjectDelete : DualStateMethodBase
     {
+        private IObjectSelector objectSelector;
+
+        public ObjectDelete()
+        {
+            objectSelector = new ObjectSelector<UnityEngine.Object>();
+        }
+
         /// <summary>
         /// 创建当前方法支持的参数键列表
         /// </summary>
@@ -24,591 +36,284 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("action", "操作类型：delete(删除单个), deletes(删除多个)", false),
-                new MethodKey("target", "目标GameObject标识符（名称、ID或路径）", false),
-                new MethodKey("search_type", "搜索方法：by_name, by_id, by_tag, by_layer, by_component, by_path, by_guid等", false),
-                new MethodKey("targets", "多个目标GameObject标识符列表", true),
-                new MethodKey("find_all", "是否查找所有匹配项", true)
+                // 目标查找参数（交给IObjectSelector处理）
+                new MethodKey("path", "Object Hierarchy path", false),
+                new MethodKey("instance_id", "Object InstanceID", true),
+                new MethodKey("confirm", "Force confirmation dialog: true=always confirm, false/unset=smart confirmation (auto ≤3, dialog >3)", true),
             };
         }
 
-        protected override StateTree CreateStateTree()
+        /// <summary>
+        /// 创建目标定位状态树（使用IObjectSelector）
+        /// </summary>
+        protected override StateTree CreateTargetTree()
+        {
+            return objectSelector.BuildStateTree();
+        }
+
+        /// <summary>
+        /// 创建操作执行状态树
+        /// </summary>
+        protected override StateTree CreateActionTree()
         {
             return StateTreeBuilder
                 .Create()
-                .Key("action")
-                    .Key("delete")
-                        .Key("search_type")
-                            .Leaf("by_name", HandleDeleteByName)
-                            .Leaf("by_id", HandleDeleteById)
-                            .Leaf("by_tag", HandleDeleteByTag)
-                            .Leaf("by_layer", HandleDeleteByLayer)
-                            .Leaf("by_component", HandleDeleteByComponent)
-                            .Leaf("by_path", HandleDeleteByPath)
-                            .Leaf("by_guid", HandleDeleteByGuid)
-                            .Leaf("default", HandleDeleteDefault)
-                    .Key("deletes")
-                        .Key("search_type")
-                            .Leaf("by_name", HandleDeletesByName)
-                            .Leaf("by_id", HandleDeletesById)
-                            .Leaf("by_tag", HandleDeletesByTag)
-                            .Leaf("by_layer", HandleDeletesByLayer)
-                            .Leaf("by_component", HandleDeletesByComponent)
-                            .Leaf("by_path", HandleDeletesByPath)
-                            .Leaf("by_guid", HandleDeletesByGuid)
-                            .Leaf("default", HandleDeletesDefault)
+                .Key("confirm")
+                    .Leaf("true", (Func<StateTreeContext, object>)HandleConfirmedDeleteAction) // 确认删除
+                    .Leaf("false", (Func<StateTreeContext, object>)HandleUnconfirmedDeleteAction) // 未确认删除
+                    .DefaultLeaf((Func<StateTreeContext, object>)HandleUnconfirmedDeleteAction) // 默认为未确认删除
                 .Build();
         }
 
-        // --- Delete Single Object Handlers ---
-
         /// <summary>
-        /// 按名称删除单个GameObject
+        /// 异步处理需要用户确认的删除操作（仅用于资源文件删除）
         /// </summary>
-        private object HandleDeleteByName(JObject args)
+        private IEnumerator HandleConfirmedDeleteActionAsync(StateTreeContext ctx)
         {
-            JToken targetToken = args["target"];
-            if (targetToken == null)
+            UnityEngine.Object target = ExtractTargetFromContext(ctx);
+            if (target == null)
             {
-                return Response.Error("Target parameter is required for by_name search method.");
+                yield return Response.Error("No target Object found for deletion.");
+                yield break;
             }
 
-            // 检查预制体重定向
-            object redirectResult = CheckPrefabRedirection(args);
-            if (redirectResult != null)
-                return redirectResult;
+            // 检查是否是资源文件删除
+            bool isAssetDeletion = IsAssetDeletion(ctx);
+            if (!isAssetDeletion)
+            {
+                // 不是资源删除，直接删除Object
+                var result = DeleteSingleObject(target);
+                yield return result;
+                yield break;
+            }
 
-            return DeleteSingleGameObject(targetToken, "by_name");
+            // 资源删除需要确认对话框
+            string confirmationMessage = $"Are you sure you want to delete the asset '{target.name}' ({target.GetType().Name})?\n\nThis action cannot be undone.";
+
+            bool confirmed = EditorUtility.DisplayDialog(
+                "Confirm Asset Deletion",
+                confirmationMessage,
+                "Delete Asset",
+                "Cancel"
+            );
+
+            if (!confirmed)
+            {
+                LogInfo($"[ObjectDelete] User cancelled asset deletion for Object '{target.name}'");
+                yield return Response.Success($"Asset deletion cancelled by user. Object '{target.name}' was not deleted.", new { cancelled = true, target_name = target.name });
+                yield break;
+            }
+
+            LogInfo($"[ObjectDelete] User confirmed asset deletion for Object '{target.name}'");
+
+            // 用户确认后执行删除
+            var deleteResult = DeleteSingleObject(target);
+            yield return deleteResult;
         }
 
         /// <summary>
-        /// 按ID删除单个GameObject
+        /// 处理需要用户确认的删除操作
         /// </summary>
-        private object HandleDeleteById(JObject args)
+        private object HandleConfirmedDeleteAction(StateTreeContext ctx)
         {
-            JToken targetToken = args["target"];
-            if (targetToken == null)
-            {
-                return Response.Error("Target parameter is required for by_id search method.");
-            }
-
-            // 检查预制体重定向
-            object redirectResult = CheckPrefabRedirection(args);
-            if (redirectResult != null)
-                return redirectResult;
-
-            return DeleteSingleGameObject(targetToken, "by_id");
+            return ctx.AsyncReturn(HandleConfirmedDeleteActionAsync(ctx));
         }
 
         /// <summary>
-        /// 按标签删除单个GameObject
+        /// 异步处理未明确确认的删除操作，检查是否是资源删除来决定是否需要确认
         /// </summary>
-        private object HandleDeleteByTag(JObject args)
+        private IEnumerator HandleUnconfirmedDeleteActionAsync(StateTreeContext ctx)
         {
-            JToken targetToken = args["target"];
-            if (targetToken == null)
+            UnityEngine.Object target = ExtractTargetFromContext(ctx);
+            if (target == null)
             {
-                return Response.Error("Target parameter is required for by_tag search method.");
+                yield return Response.Error("No target Object found for deletion.");
+                yield break;
             }
 
-            // 检查预制体重定向
-            object redirectResult = CheckPrefabRedirection(args);
-            if (redirectResult != null)
-                return redirectResult;
+            // 检查预制体重定向（仅对GameObject适用）
+            if (target is GameObject gameObject)
+            {
+                object redirectResult = CheckPrefabRedirection(gameObject);
+                if (redirectResult != null)
+                {
+                    yield return redirectResult;
+                    yield break;
+                }
+            }
 
-            return DeleteSingleGameObject(targetToken, "by_tag");
+            // 检查是否是资源删除
+            bool isAssetDeletion = IsAssetDeletion(ctx);
+            if (!isAssetDeletion)
+            {
+                // 场景Object删除，直接删除无需确认
+                LogInfo($"[ObjectDelete] Direct deletion of {target.GetType().Name} '{target.name}' without confirmation");
+                var result = DeleteSingleObject(target);
+                yield return result;
+                yield break;
+            }
+
+            // 资源删除需要用户确认
+            LogInfo($"[ObjectDelete] Asset deletion detected for '{target.name}', showing confirmation dialog");
+
+            string confirmationMessage = $"You are about to delete the asset '{target.name}' ({target.GetType().Name}).\n\nThis action cannot be undone. Continue?";
+
+            bool confirmed = EditorUtility.DisplayDialog(
+                "Confirm Asset Deletion",
+                confirmationMessage,
+                "Delete Asset",
+                "Cancel"
+            );
+
+            if (!confirmed)
+            {
+                LogInfo($"[ObjectDelete] User cancelled asset deletion for '{target.name}'");
+                yield return Response.Success($"Asset deletion cancelled by user. Object '{target.name}' was not deleted.", new { cancelled = true, target_name = target.name });
+                yield break;
+            }
+
+            LogInfo($"[ObjectDelete] User confirmed asset deletion for '{target.name}'");
+
+            // 用户确认后执行删除
+            var deleteResult = DeleteSingleObject(target);
+            yield return deleteResult;
         }
 
         /// <summary>
-        /// 按层级删除单个GameObject
+        /// 处理未确认的删除操作
         /// </summary>
-        private object HandleDeleteByLayer(JObject args)
+        private object HandleUnconfirmedDeleteAction(StateTreeContext ctx)
         {
-            JToken targetToken = args["target"];
-            if (targetToken == null)
-            {
-                return Response.Error("Target parameter is required for by_layer search method.");
-            }
-
-            // 检查预制体重定向
-            object redirectResult = CheckPrefabRedirection(args);
-            if (redirectResult != null)
-                return redirectResult;
-
-            return DeleteSingleGameObject(targetToken, "by_layer");
+            return ctx.AsyncReturn(HandleUnconfirmedDeleteActionAsync(ctx));
         }
 
         /// <summary>
-        /// 按组件删除单个GameObject
+        /// 从执行上下文中提取唯一目标UnityEngine.Object
         /// </summary>
-        private object HandleDeleteByComponent(JObject args)
+        private UnityEngine.Object ExtractTargetFromContext(StateTreeContext context)
         {
-            JToken targetToken = args["target"];
-            if (targetToken == null)
+            // 先尝试从ObjectReferences获取（避免序列化问题）
+            if (context.TryGetObjectReference("_resolved_targets", out object targetsObj))
             {
-                return Response.Error("Target parameter is required for by_component search method.");
+                if (targetsObj is UnityEngine.Object singleObject)
+                {
+                    return singleObject;
+                }
+                else if (targetsObj is UnityEngine.Object[] objectArray && objectArray.Length > 0)
+                {
+                    return objectArray[0]; // 只取第一个
+                }
+                else if (targetsObj is System.Collections.IList list && list.Count > 0)
+                {
+                    foreach (var item in list)
+                    {
+                        if (item is UnityEngine.Object obj)
+                            return obj; // 返回第一个找到的UnityEngine.Object
+                    }
+                }
             }
 
-            // 检查预制体重定向
-            object redirectResult = CheckPrefabRedirection(args);
-            if (redirectResult != null)
-                return redirectResult;
+            // 如果ObjectReferences中没有，尝试从JsonData获取（向后兼容）
+            if (context.TryGetJsonValue("_resolved_targets", out JToken targetToken))
+            {
+                if (targetToken is JArray targetArray && targetArray.Count > 0)
+                {
+                    return targetArray[0].ToObject<UnityEngine.Object>(); // 只取第一个
+                }
+                else
+                {
+                    // 单个对象的情况
+                    return targetToken.ToObject<UnityEngine.Object>();
+                }
+            }
 
-            return DeleteSingleGameObject(targetToken, "by_component");
+            return null;
         }
 
         /// <summary>
-        /// 按路径删除单个GameObject
+        /// 检查是否是资源删除操作
         /// </summary>
-        private object HandleDeleteByPath(JObject args)
+        private bool IsAssetDeletion(StateTreeContext context)
         {
-            JToken targetToken = args["target"];
-            if (targetToken == null)
+            // 通过path参数判断是否是资源路径
+            if (context.TryGetValue("path", out object pathObj) && pathObj != null)
             {
-                return Response.Error("Target parameter is required for by_path search method.");
+                string path = pathObj.ToString();
+                // 如果路径以Assets/开头，则认为是资源删除
+                if (!string.IsNullOrEmpty(path) && path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
             }
-
-            // 检查预制体重定向
-            object redirectResult = CheckPrefabRedirection(args);
-            if (redirectResult != null)
-                return redirectResult;
-
-            return DeleteSingleGameObject(targetToken, "by_path");
-        }
-
-        /// <summary>
-        /// 按GUID删除单个GameObject
-        /// </summary>
-        private object HandleDeleteByGuid(JObject args)
-        {
-            JToken targetToken = args["target"];
-            if (targetToken == null)
-            {
-                return Response.Error("Target parameter is required for by_guid search method.");
-            }
-
-            string guid = targetToken.ToString();
-            if (string.IsNullOrEmpty(guid))
-            {
-                return Response.Error("GUID cannot be empty for by_guid search method.");
-            }
-
-            // 检查预制体重定向
-            object redirectResult = CheckPrefabRedirection(args);
-            if (redirectResult != null)
-                return redirectResult;
-
-            return DeleteSingleGameObjectByGuid(guid);
-        }
-
-        /// <summary>
-        /// 默认删除单个GameObject
-        /// </summary>
-        private object HandleDeleteDefault(JObject args)
-        {
-            JToken targetToken = args["target"];
-            if (targetToken == null)
-            {
-                return Response.Error("Target parameter is required.");
-            }
-
-            // 检查预制体重定向
-            object redirectResult = CheckPrefabRedirection(args);
-            if (redirectResult != null)
-                return redirectResult;
-
-            return DeleteSingleGameObject(targetToken, "by_id_or_name_or_path");
-        }
-
-        // --- Delete Multiple Objects Handlers ---
-
-        /// <summary>
-        /// 按名称删除多个GameObject
-        /// </summary>
-        private object HandleDeletesByName(JObject args)
-        {
-            JToken targetsToken = args["targets"];
-            JToken targetToken = args["target"];
-            bool findAll = args["find_all"]?.ToObject<bool>() ?? false;
-
-            if (targetsToken == null && targetToken == null)
-            {
-                return Response.Error("Either targets or target parameter is required for by_name search method.");
-            }
-
-            // 检查预制体重定向
-            object redirectResult = CheckPrefabRedirection(args);
-            if (redirectResult != null)
-                return redirectResult;
-
-            return DeleteMultipleGameObjects(targetsToken ?? targetToken, "by_name", findAll);
-        }
-
-        /// <summary>
-        /// 按ID删除多个GameObject
-        /// </summary>
-        private object HandleDeletesById(JObject args)
-        {
-            JToken targetsToken = args["targets"];
-            JToken targetToken = args["target"];
-            bool findAll = args["find_all"]?.ToObject<bool>() ?? false;
-
-            if (targetsToken == null && targetToken == null)
-            {
-                return Response.Error("Either targets or target parameter is required for by_id search method.");
-            }
-
-            // 检查预制体重定向
-            object redirectResult = CheckPrefabRedirection(args);
-            if (redirectResult != null)
-                return redirectResult;
-
-            return DeleteMultipleGameObjects(targetsToken ?? targetToken, "by_id", findAll);
-        }
-
-        /// <summary>
-        /// 按标签删除多个GameObject
-        /// </summary>
-        private object HandleDeletesByTag(JObject args)
-        {
-            JToken targetsToken = args["targets"];
-            JToken targetToken = args["target"];
-            bool findAll = args["find_all"]?.ToObject<bool>() ?? false;
-
-            if (targetsToken == null && targetToken == null)
-            {
-                return Response.Error("Either targets or target parameter is required for by_tag search method.");
-            }
-
-            // 检查预制体重定向
-            object redirectResult = CheckPrefabRedirection(args);
-            if (redirectResult != null)
-                return redirectResult;
-
-            return DeleteMultipleGameObjects(targetsToken ?? targetToken, "by_tag", findAll);
-        }
-
-        /// <summary>
-        /// 按层级删除多个GameObject
-        /// </summary>
-        private object HandleDeletesByLayer(JObject args)
-        {
-            JToken targetsToken = args["targets"];
-            JToken targetToken = args["target"];
-            bool findAll = args["find_all"]?.ToObject<bool>() ?? false;
-
-            if (targetsToken == null && targetToken == null)
-            {
-                return Response.Error("Either targets or target parameter is required for by_layer search method.");
-            }
-
-            // 检查预制体重定向
-            object redirectResult = CheckPrefabRedirection(args);
-            if (redirectResult != null)
-                return redirectResult;
-
-            return DeleteMultipleGameObjects(targetsToken ?? targetToken, "by_layer", findAll);
-        }
-
-        /// <summary>
-        /// 按组件删除多个GameObject
-        /// </summary>
-        private object HandleDeletesByComponent(JObject args)
-        {
-            JToken targetsToken = args["targets"];
-            JToken targetToken = args["target"];
-            bool findAll = args["find_all"]?.ToObject<bool>() ?? false;
-
-            if (targetsToken == null && targetToken == null)
-            {
-                return Response.Error("Either targets or target parameter is required for by_component search method.");
-            }
-
-            // 检查预制体重定向
-            object redirectResult = CheckPrefabRedirection(args);
-            if (redirectResult != null)
-                return redirectResult;
-
-            return DeleteMultipleGameObjects(targetsToken ?? targetToken, "by_component", findAll);
-        }
-
-        /// <summary>
-        /// 按路径删除多个GameObject
-        /// </summary>
-        private object HandleDeletesByPath(JObject args)
-        {
-            JToken targetsToken = args["targets"];
-            JToken targetToken = args["target"];
-            bool findAll = args["find_all"]?.ToObject<bool>() ?? false;
-
-            if (targetsToken == null && targetToken == null)
-            {
-                return Response.Error("Either targets or target parameter is required for by_path search method.");
-            }
-
-            // 检查预制体重定向
-            object redirectResult = CheckPrefabRedirection(args);
-            if (redirectResult != null)
-                return redirectResult;
-
-            return DeleteMultipleGameObjects(targetsToken ?? targetToken, "by_path", findAll);
-        }
-
-        /// <summary>
-        /// 按GUID删除多个GameObject
-        /// </summary>
-        private object HandleDeletesByGuid(JObject args)
-        {
-            JToken targetsToken = args["targets"];
-            JToken targetToken = args["target"];
-            bool findAll = args["find_all"]?.ToObject<bool>() ?? false;
-
-            if (targetsToken == null && targetToken == null)
-            {
-                return Response.Error("Either targets or target parameter is required for by_guid search method.");
-            }
-
-            // 检查预制体重定向
-            object redirectResult = CheckPrefabRedirection(args);
-            if (redirectResult != null)
-                return redirectResult;
-
-            return DeleteMultipleGameObjectsByGuid(targetsToken ?? targetToken, findAll);
-        }
-
-        /// <summary>
-        /// 默认删除多个GameObject
-        /// </summary>
-        private object HandleDeletesDefault(JObject args)
-        {
-            JToken targetsToken = args["targets"];
-            JToken targetToken = args["target"];
-            bool findAll = args["find_all"]?.ToObject<bool>() ?? false;
-
-            if (targetsToken == null && targetToken == null)
-            {
-                return Response.Error("Either targets or target parameter is required.");
-            }
-
-            // 检查预制体重定向
-            object redirectResult = CheckPrefabRedirection(args);
-            if (redirectResult != null)
-                return redirectResult;
-
-            return DeleteMultipleGameObjects(targetsToken ?? targetToken, "by_id_or_name_or_path", findAll);
+            return false;
         }
 
         /// <summary>
         /// 检查预制体重定向逻辑
         /// </summary>
-        private object CheckPrefabRedirection(JObject args)
+        private object CheckPrefabRedirection(GameObject target)
         {
-            JToken targetToken = args["target"];
-            string targetPath = targetToken?.Type == JTokenType.String ? targetToken.ToString() : null;
+            if (target == null)
+                return null;
 
-            if (string.IsNullOrEmpty(targetPath) || !targetPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
-                return null; // 不是预制体，继续正常处理
+            // 检查是否是预制体实例，如果是预制体资产本身，应该使用manage_asset命令
+            string assetPath = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(target);
+            if (!string.IsNullOrEmpty(assetPath) && assetPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+            {
+                // 这是预制体实例，可以正常删除
+                return null;
+            }
 
-            return Response.Error($"Action 'delete' on a prefab asset ('{targetPath}') should be performed using the 'manage_asset' command.");
+            return null; // 继续正常处理
         }
 
         /// <summary>
-        /// 删除单个GameObject
+        /// 删除单个UnityEngine.Object
         /// </summary>
-        private object DeleteSingleGameObject(JToken targetToken, string searchMethod)
+        private object DeleteSingleObject(UnityEngine.Object targetObject)
         {
-            List<GameObject> targets = GameObjectUtils.FindObjectsInternal(targetToken, searchMethod, false); // find_all=false for single delete
-
-            if (targets.Count == 0)
+            if (targetObject == null)
             {
-                return Response.Error(
-                    $"Target GameObject ('{targetToken}') not found using method '{searchMethod ?? "default"}'."
-                );
+                return Response.Error("Target Object is null.");
             }
 
-            if (targets.Count > 1)
+            string objectName = targetObject.name;
+            int objectId = targetObject.GetInstanceID();
+            string objectType = targetObject.GetType().Name;
+
+            try
             {
-                return Response.Error(
-                    $"Multiple GameObjects found ('{targets.Count}'). Use 'deletes' action or set find_all=false for single deletion."
-                );
-            }
-
-            GameObject targetGo = targets[0];
-            if (targetGo != null)
-            {
-                string goName = targetGo.name;
-                int goId = targetGo.GetInstanceID();
-                Undo.DestroyObjectImmediate(targetGo);
-                var deletedObject = new { name = goName, instanceID = goId };
-                return Response.Success($"GameObject '{goName}' deleted successfully.", deletedObject);
-            }
-
-            return Response.Error("Failed to delete target GameObject.");
-        }
-
-        /// <summary>
-        /// 通过GUID删除单个GameObject
-        /// </summary>
-        private object DeleteSingleGameObjectByGuid(string guid)
-        {
-            string assetPath = AssetDatabase.GUIDToAssetPath(guid);
-            if (string.IsNullOrEmpty(assetPath))
-            {
-                return Response.Error($"No asset found with GUID '{guid}'.");
-            }
-
-            GameObject assetObject = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
-            if (assetObject == null)
-            {
-                return Response.Error($"Asset at path '{assetPath}' is not a GameObject.");
-            }
-
-            List<GameObject> instances = new List<GameObject>();
-            GameObject[] allObjects = UnityEngine.Object.FindObjectsOfType<GameObject>();
-
-            foreach (GameObject go in allObjects)
-            {
-                if (PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(go) == assetPath)
+                // 判断是否为资源文件
+                string assetPath = AssetDatabase.GetAssetPath(targetObject);
+                if (!string.IsNullOrEmpty(assetPath))
                 {
-                    instances.Add(go);
-                }
-            }
-
-            if (instances.Count == 0)
-            {
-                return Response.Error($"No instances of GameObject '{assetObject.name}' found in scene.");
-            }
-
-            if (instances.Count > 1)
-            {
-                return Response.Error(
-                    $"Multiple instances found ('{instances.Count}'). Use 'deletes' action for multiple deletion."
-                );
-            }
-
-            GameObject instance = instances[0];
-            string goName = instance.name;
-            int goId = instance.GetInstanceID();
-            Undo.DestroyObjectImmediate(instance);
-            var deletedObject = new { name = goName, instanceID = goId, guid = guid };
-            return Response.Success($"GameObject instance '{goName}' deleted successfully.", deletedObject);
-        }
-
-        /// <summary>
-        /// 删除多个GameObject
-        /// </summary>
-        private object DeleteMultipleGameObjects(JToken targetToken, string searchMethod, bool findAll)
-        {
-            List<GameObject> targets = GameObjectUtils.FindObjectsInternal(targetToken, searchMethod, findAll);
-
-            if (targets.Count == 0)
-            {
-                return Response.Error(
-                    $"No GameObjects found using method '{searchMethod ?? "default"}'."
-                );
-            }
-
-            List<object> deletedObjects = new List<object>();
-            foreach (var targetGo in targets)
-            {
-                if (targetGo != null)
-                {
-                    string goName = targetGo.name;
-                    int goId = targetGo.GetInstanceID();
-                    Undo.DestroyObjectImmediate(targetGo);
-                    deletedObjects.Add(new { name = goName, instanceID = goId });
-                }
-            }
-
-            if (deletedObjects.Count > 0)
-            {
-                string message = deletedObjects.Count == 1
-                    ? $"GameObject '{deletedObjects[0].GetType().GetProperty("name").GetValue(deletedObjects[0])}' deleted successfully."
-                    : $"{deletedObjects.Count} GameObjects deleted successfully.";
-                return Response.Success(message, deletedObjects);
-            }
-            else
-            {
-                return Response.Error("Failed to delete target GameObjects.");
-            }
-        }
-
-        /// <summary>
-        /// 通过GUID删除多个GameObject
-        /// </summary>
-        private object DeleteMultipleGameObjectsByGuid(JToken targetToken, bool findAll)
-        {
-            List<string> guids = new List<string>();
-
-            if (targetToken.Type == JTokenType.Array)
-            {
-                foreach (var guid in targetToken)
-                {
-                    guids.Add(guid.ToString());
-                }
-            }
-            else
-            {
-                guids.Add(targetToken.ToString());
-            }
-
-            List<object> allDeletedObjects = new List<object>();
-            int totalDeleted = 0;
-
-            foreach (string guid in guids)
-            {
-                string assetPath = AssetDatabase.GUIDToAssetPath(guid);
-                if (string.IsNullOrEmpty(assetPath))
-                {
-                    continue; // 跳过无效GUID
-                }
-
-                GameObject assetObject = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
-                if (assetObject == null)
-                {
-                    continue; // 跳过非GameObject资产
-                }
-
-                List<GameObject> instances = new List<GameObject>();
-                GameObject[] allObjects = UnityEngine.Object.FindObjectsOfType<GameObject>();
-
-                foreach (GameObject go in allObjects)
-                {
-                    if (PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(go) == assetPath)
+                    // 资源文件删除
+                    bool success = AssetDatabase.DeleteAsset(assetPath);
+                    if (success)
                     {
-                        instances.Add(go);
+                        var deletedObject = new { name = objectName, instanceID = objectId, type = objectType, assetPath = assetPath };
+                        return Response.Success($"{objectType} asset '{objectName}' deleted successfully.", deletedObject);
+                    }
+                    else
+                    {
+                        return Response.Error($"Failed to delete {objectType} asset '{objectName}' at path: {assetPath}");
                     }
                 }
-
-                if (!findAll && instances.Count > 1)
+                else
                 {
-                    instances = instances.Take(1).ToList(); // 只删除第一个实例
-                }
-
-                foreach (var instance in instances)
-                {
-                    if (instance != null)
-                    {
-                        string goName = instance.name;
-                        int goId = instance.GetInstanceID();
-                        Undo.DestroyObjectImmediate(instance);
-                        allDeletedObjects.Add(new { name = goName, instanceID = goId, guid = guid });
-                        totalDeleted++;
-                    }
+                    // 场景对象删除
+                    Undo.DestroyObjectImmediate(targetObject);
+                    var deletedObject = new { name = objectName, instanceID = objectId, type = objectType };
+                    return Response.Success($"{objectType} '{objectName}' deleted successfully.", deletedObject);
                 }
             }
-
-            if (totalDeleted > 0)
+            catch (Exception e)
             {
-                string message = totalDeleted == 1
-                    ? $"GameObject instance deleted successfully."
-                    : $"{totalDeleted} GameObject instances deleted successfully.";
-                return Response.Success(message, allDeletedObjects);
-            }
-            else
-            {
-                return Response.Error("No valid GameObject instances found to delete.");
+                return Response.Error($"Failed to delete {objectType} '{objectName}': {e.Message}");
             }
         }
+
+
+
     }
 }

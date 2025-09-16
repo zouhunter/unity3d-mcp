@@ -17,7 +17,7 @@ namespace UnityMcp.Tools
     /// Handles GameObject search and find operations in the scene hierarchy.
     /// 对应方法名: hierarchy_search
     /// </summary>
-    [ToolName("hierarchy_search")]
+    [ToolName("hierarchy_search", "层级管理")]
     public class HierarchySearch : StateMethodBase
     {
         /// <summary>

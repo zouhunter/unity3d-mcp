@@ -13,7 +13,7 @@ namespace UnityMcp.Tools
     /// 专门的预制体管理工具，提供预制体的创建、修改、复制、删除等操作
     /// 对应方法名: manage_prefab
     /// </summary>
-    [ToolName("edit_prefab")]
+    [ToolName("edit_prefab", "资源管理")]
     public class EditPrefab : StateMethodBase
     {
         /// <summary>

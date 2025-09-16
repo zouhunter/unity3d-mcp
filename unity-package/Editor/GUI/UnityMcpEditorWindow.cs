@@ -25,7 +25,7 @@ namespace UnityMcp.Windows
 
         // 工具方法列表相关变量
         private Dictionary<string, bool> methodFoldouts = new Dictionary<string, bool>();
-        private Dictionary<string, bool> assemblyFoldouts = new Dictionary<string, bool>(); // 程序集折叠状态
+        private Dictionary<string, bool> groupFoldouts = new Dictionary<string, bool>(); // 分组折叠状态
         private Vector2 methodsScrollPosition;
         private Dictionary<string, double> methodClickTimes = new Dictionary<string, double>();
         private const double doubleClickTime = 0.3; // 双击判定时间（秒）
@@ -438,7 +438,7 @@ namespace UnityMcp.Windows
         }
 
         /// <summary>
-        /// 绘制工具方法列表，支持折叠展开，按程序集分类显示
+        /// 绘制工具方法列表，支持折叠展开，按分组分类显示，程序集信息显示在方法名后
         /// </summary>
         private void DrawMethodsList()
         {
@@ -466,23 +466,25 @@ namespace UnityMcp.Windows
             FunctionCall.EnsureMethodsRegisteredStatic();
             var methodNames = FunctionCall.GetRegisteredMethodNames();
 
-            // 按程序集分组方法
-            var methodsByAssembly = new Dictionary<string, List<(string methodName, IToolMethod method)>>();
+            // 按分组分类方法
+            var methodsByGroup = new Dictionary<string, List<(string methodName, IToolMethod method, string assemblyName)>>();
 
             foreach (var methodName in methodNames)
             {
                 var method = FunctionCall.GetRegisteredMethod(methodName);
                 if (method == null) continue;
 
+                // 获取分组名称
+                string groupName = GetMethodGroupName(method);
                 // 获取程序集名称
                 string assemblyName = GetAssemblyDisplayName(method.GetType().Assembly);
 
-                if (!methodsByAssembly.ContainsKey(assemblyName))
+                if (!methodsByGroup.ContainsKey(groupName))
                 {
-                    methodsByAssembly[assemblyName] = new List<(string, IToolMethod)>();
+                    methodsByGroup[groupName] = new List<(string, IToolMethod, string)>();
                 }
 
-                methodsByAssembly[assemblyName].Add((methodName, method));
+                methodsByGroup[groupName].Add((methodName, method, assemblyName));
             }
 
             // 动态计算可用高度并应用到滚动视图
@@ -490,43 +492,43 @@ namespace UnityMcp.Windows
             methodsScrollPosition = EditorGUILayout.BeginScrollView(methodsScrollPosition,
                 GUILayout.Height(availableHeight));
 
-            // 按程序集名称排序并绘制
-            foreach (var assemblyGroup in methodsByAssembly.OrderBy(kvp => kvp.Key))
+            // 按分组名称排序并绘制
+            foreach (var groupKvp in methodsByGroup.OrderBy(kvp => kvp.Key))
             {
-                string assemblyName = assemblyGroup.Key;
-                var methods = assemblyGroup.Value.OrderBy(m => m.methodName).ToList();
+                string groupName = groupKvp.Key;
+                var methods = groupKvp.Value.OrderBy(m => m.methodName).ToList();
 
-                // 确保程序集在折叠字典中有条目
-                if (!assemblyFoldouts.ContainsKey(assemblyName))
+                // 确保分组在折叠字典中有条目
+                if (!groupFoldouts.ContainsKey(groupName))
                 {
-                    assemblyFoldouts[assemblyName] = false;
+                    groupFoldouts[groupName] = false;
                 }
 
-                // 绘制程序集折叠标题
+                // 绘制分组折叠标题
                 EditorGUILayout.BeginVertical("box");
 
-                GUIStyle assemblyFoldoutStyle = new GUIStyle(EditorStyles.foldout)
+                GUIStyle groupFoldoutStyle = new GUIStyle(EditorStyles.foldout)
                 {
                     fontStyle = FontStyle.Bold,
                     fontSize = 12
                 };
 
                 EditorGUILayout.BeginHorizontal();
-                assemblyFoldouts[assemblyName] = EditorGUILayout.Foldout(
-                    assemblyFoldouts[assemblyName],
-                    $"{assemblyName} ({methods.Count})",
+                groupFoldouts[groupName] = EditorGUILayout.Foldout(
+                    groupFoldouts[groupName],
+                    $"🔧 {groupName} ({methods.Count})",
                     true,
-                    assemblyFoldoutStyle
+                    groupFoldoutStyle
                 );
                 EditorGUILayout.EndHorizontal();
 
-                // 如果程序集展开，显示其中的方法
-                if (assemblyFoldouts[assemblyName])
+                // 如果分组展开，显示其中的方法
+                if (groupFoldouts[groupName])
                 {
                     EditorGUILayout.BeginVertical();
                     EditorGUI.indentLevel++;
 
-                    foreach (var (methodName, method) in methods)
+                    foreach (var (methodName, method, assemblyName) in methods)
                     {
                         // 确保该方法在字典中有一个条目
                         if (!methodFoldouts.ContainsKey(methodName))
@@ -549,43 +551,75 @@ namespace UnityMcp.Windows
                         // 绘制折叠标题
                         Rect foldoutRect = EditorGUILayout.GetControlRect(true, EditorGUIUtility.singleLineHeight, GUILayout.ExpandWidth(true));
 
-                        // 计算按钮的位置
+                        // 计算按钮和程序集标签的位置
                         float buttonWidth = 20f;
                         float buttonHeight = 18f;
-                        float padding = 2f;
+                        float padding = 4f; // 增加间距
                         float totalButtonsWidth = (buttonWidth + padding) * 2; // 两个按钮的总宽度
 
-                        // 分离出调试按钮的区域
+                        // 计算程序集标签宽度
+                        string assemblyLabel = $"({assemblyName})";
+                        GUIStyle assemblyLabelStyle = new GUIStyle(EditorStyles.miniLabel);
+                        // 确保标签有足够的宽度，避免文本被截断
+                        float calculatedWidth = assemblyLabelStyle.CalcSize(new GUIContent(assemblyLabel)).x;
+                        float assemblyLabelWidth = Mathf.Max(calculatedWidth + padding * 2, 80f); // 最小宽度80px
+
+                        // 从右到左计算各区域位置
+                        float rightEdge = foldoutRect.xMax;
+
+                        // 1. 调试按钮区域（最右侧）
                         Rect debugButtonRect = new Rect(
-                            foldoutRect.xMax - buttonWidth - padding,
+                            rightEdge - buttonWidth,
                             foldoutRect.y + (foldoutRect.height - buttonHeight) / 2,
                             buttonWidth,
                             buttonHeight
                         );
+                        rightEdge -= (buttonWidth + padding);
 
-                        // 分离出问号按钮的区域
+                        // 2. 问号按钮区域
                         Rect helpButtonRect = new Rect(
-                            foldoutRect.xMax - (buttonWidth + padding) * 2,
+                            rightEdge - buttonWidth,
                             foldoutRect.y + (foldoutRect.height - buttonHeight) / 2,
                             buttonWidth,
                             buttonHeight
                         );
+                        rightEdge -= (buttonWidth + padding * 2); // 按钮后增加更多间距
 
-                        // 留给折叠标题的区域
+                        // 3. 程序集标签区域
+                        Rect assemblyLabelRect = new Rect(
+                            rightEdge - assemblyLabelWidth,
+                            foldoutRect.y,
+                            assemblyLabelWidth,
+                            foldoutRect.height
+                        );
+                        rightEdge -= (assemblyLabelWidth + padding * 2); // 标签后增加更多间距
+
+                        // 4. 折叠标题区域（剩余空间）
                         Rect actualFoldoutRect = new Rect(
                             foldoutRect.x,
                             foldoutRect.y,
-                            foldoutRect.width - totalButtonsWidth - padding,
+                            rightEdge - foldoutRect.x,
                             foldoutRect.height
                         );
 
-                        // 绘制折叠标题
+                        // 绘制折叠标题（只显示方法名）
                         methodFoldouts[methodName] = EditorGUI.Foldout(
                             actualFoldoutRect,
                             methodFoldouts[methodName],
                             methodName,
                             true,
                             foldoutStyle);
+
+                        // 绘制程序集标签
+                        Color originalColor = GUI.color;
+                        GUI.color = new Color(0.6f, 0.6f, 0.6f, 0.8f); // 更淡的灰色
+
+                        // 设置右对齐的标签样式
+                        GUIStyle rightAlignedLabelStyle = new GUIStyle(EditorStyles.miniLabel);
+                        rightAlignedLabelStyle.alignment = TextAnchor.MiddleRight;
+
+                        EditorGUI.LabelField(assemblyLabelRect, assemblyLabel, rightAlignedLabelStyle);
+                        GUI.color = originalColor;
 
                         // 绘制问号按钮
                         GUIStyle helpButtonStyle = new GUIStyle(EditorStyles.miniButton);
@@ -598,7 +632,7 @@ namespace UnityMcp.Windows
 
                         // 绘制调试按钮
                         GUIStyle debugButtonStyle = new GUIStyle(EditorStyles.miniButton);
-                        Color originalColor = GUI.backgroundColor;
+                        Color originalBackgroundColor = GUI.backgroundColor;
                         GUI.backgroundColor = new Color(0.7f, 0.9f, 1f); // 淡蓝色背景
 
                         if (GUI.Button(debugButtonRect, "T", debugButtonStyle))
@@ -607,7 +641,7 @@ namespace UnityMcp.Windows
                             HandleMethodDebugClick(methodName, method);
                         }
 
-                        GUI.backgroundColor = originalColor;
+                        GUI.backgroundColor = originalBackgroundColor;
 
                         EditorGUILayout.EndHorizontal();
 
@@ -628,13 +662,13 @@ namespace UnityMcp.Windows
                                     EditorGUILayout.BeginHorizontal();
                                     // 参数名称 - 必需参数用粗体，可选参数用普通字体
                                     GUIStyle keyStyle = EditorStyles.miniBoldLabel;
-                                    originalColor = GUI.color;
+                                    Color originalKeyColor = GUI.color;
 
                                     // 必需参数用红色标记，可选参数用灰色标记
                                     GUI.color = key.Optional ? Color.red : Color.green;
                                     // 参数名称
                                     EditorGUILayout.SelectableLabel(key.Key, keyStyle, GUILayout.Width(120), GUILayout.Height(EditorGUIUtility.singleLineHeight));
-                                    GUI.color = originalColor;
+                                    GUI.color = originalKeyColor;
 
                                     // 参数描述
                                     EditorGUILayout.SelectableLabel(key.Desc, keyStyle, GUILayout.Height(EditorGUIUtility.singleLineHeight));
@@ -680,11 +714,32 @@ namespace UnityMcp.Windows
                 }
 
                 EditorGUILayout.EndVertical();
-                EditorGUILayout.Space(5);
+                EditorGUILayout.Space(10);
             }
 
             EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
+        }
+
+        /// <summary>
+        /// 获取方法的分组名称
+        /// </summary>
+        /// <param name="method">方法实例</param>
+        /// <returns>分组名称</returns>
+        private string GetMethodGroupName(IToolMethod method)
+        {
+            // 通过反射获取ToolNameAttribute
+            var methodType = method.GetType();
+            var toolNameAttribute = methodType.GetCustomAttributes(typeof(ToolNameAttribute), false)
+                                             .FirstOrDefault() as ToolNameAttribute;
+
+            if (toolNameAttribute != null)
+            {
+                return toolNameAttribute.GroupName;
+            }
+
+            // 如果没有ToolNameAttribute，返回默认分组
+            return "未分组";
         }
 
         /// <summary>

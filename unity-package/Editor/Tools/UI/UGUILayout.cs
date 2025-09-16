@@ -25,7 +25,7 @@ namespace UnityMcp.Tools
     /// 
     /// 对应方法名: edit_recttransform
     /// </summary>
-    [ToolName("ugui_layout")]
+    [ToolName("ugui_layout", "UI管理")]
     public class UGUILayout : DualStateMethodBase
     {
         /// <summary>

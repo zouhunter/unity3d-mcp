@@ -15,7 +15,7 @@ namespace UnityMcp.Tools
     /// Handles Unity asset management operations including import, modify, move, duplicate, etc.
     /// 对应方法名: manage_asset
     /// </summary>
-    [ToolName("project_operate")]
+    [ToolName("project_operate", "项目管理")]
     public class ProjectOperate : StateMethodBase
     {
         /// <summary>

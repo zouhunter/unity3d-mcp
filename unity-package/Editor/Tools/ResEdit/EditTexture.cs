@@ -12,7 +12,7 @@ namespace UnityMcp.Tools
     /// Handles texture import settings and modification operations.
     /// 对应方法名: manage_texture
     /// </summary>
-    [ToolName("edit_texture")]
+    [ToolName("edit_texture", "资源管理")]
     public class EditTexture : StateMethodBase
     {
         /// <summary>

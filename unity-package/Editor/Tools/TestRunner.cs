@@ -22,7 +22,7 @@ namespace UnityMcp.Tools
     /// Handles C# test script execution including compilation and running test methods.
     /// 对应方法名: test_runner
     /// </summary>
-    [ToolName("test_runner")]
+    [ToolName("test_runner", "开发工具")]
     public class TestRunner : StateMethodBase
     {
         // Test execution tracking

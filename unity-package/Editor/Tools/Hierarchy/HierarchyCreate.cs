@@ -17,7 +17,7 @@ namespace UnityMcp.Tools
     /// Handles GameObject creation operations in the scene hierarchy.
     /// 对应方法名: hierarchy_create
     /// </summary>
-    [ToolName("hierarchy_create")]
+    [ToolName("hierarchy_create", "层级管理")]
     public class HierarchyCreate : StateMethodBase
     {
         /// <summary>

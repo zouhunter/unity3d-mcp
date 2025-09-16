@@ -16,7 +16,7 @@ namespace UnityMcp.Tools
     /// Handles GameObject prefab applying and connection operations.
     /// 对应方法名: hierarchy_apply
     /// </summary>
-    [ToolName("hierarchy_apply")]
+    [ToolName("hierarchy_apply", "层级管理")]
     public class HierarchyApply : StateMethodBase
     {
         /// <summary>

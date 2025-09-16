@@ -6,19 +6,19 @@ Mesh:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: StarMesh
+  m_Name: PyramidMesh
   serializedVersion: 10
   m_SubMeshes:
   - serializedVersion: 2
     firstByte: 0
-    indexCount: 27
+    indexCount: 18
     topology: 0
     baseVertex: 0
     firstVertex: 0
-    vertexCount: 10
+    vertexCount: 5
     localAABB:
-      m_Center: {x: 0, y: 0.099999994, z: 0}
-      m_Extent: {x: 0.5, y: 0.4, z: 0}
+      m_Center: {x: 0, y: 1, z: 0}
+      m_Extent: {x: 1, y: 1, z: 1}
   m_Shapes:
     vertices: []
     shapes: []
@@ -35,13 +35,17 @@ Mesh:
   m_KeepVertices: 1
   m_KeepIndices: 1
   m_IndexFormat: 0
-  m_IndexBuffer: 000001000200000002000300000003000400000004000500000005000600000006000700000007000800000008000900000009000100
+  m_IndexBuffer: 000002000100000003000200000001000400010002000400020003000400030000000400
   m_VertexData:
     serializedVersion: 3
-    m_VertexCount: 10
+    m_VertexCount: 5
     m_Channels:
     - stream: 0
       offset: 0
+      format: 0
+      dimension: 3
+    - stream: 0
+      offset: 12
       format: 0
       dimension: 3
     - stream: 0
@@ -53,9 +57,9 @@ Mesh:
       format: 0
       dimension: 0
     - stream: 0
-      offset: 0
+      offset: 24
       format: 0
-      dimension: 0
+      dimension: 2
     - stream: 0
       offset: 0
       format: 0
@@ -92,12 +96,8 @@ Mesh:
       offset: 0
       format: 0
       dimension: 0
-    - stream: 0
-      offset: 0
-      format: 0
-      dimension: 0
-    m_DataSize: 120
-    _typelessdata: 000000000000003f00000000cdcc4c3ecdcc4c3e000000000000003fcdcc4c3e000000009a99993e0000000000000000cdcccc3e9a9999be0000000000000000cdccccbd00000000cdccccbe9a9999be000000009a9999be0000000000000000000000bfcdcc4c3e00000000cdcc4cbecdcc4c3e00000000
+    m_DataSize: 160
+    _typelessdata: 000080bf00000000000080bf3acd133f3acd133f3acd133f00000000000000000000803f00000000000080bff30435bf00000000f304353f0000803f000000000000803f000000000000803f3acd13bf3acd133f3acd13bf0000803f0000803f000080bf000000000000803ff304353f00000000f30435bf000000000000803f00000000000000400000000000000000000080bf000000000000003f0000003f
   m_CompressedMesh:
     m_Vertices:
       m_NumItems: 0
@@ -151,8 +151,8 @@ Mesh:
       m_BitSize: 0
     m_UVInfo: 0
   m_LocalAABB:
-    m_Center: {x: 0, y: 0.099999994, z: 0}
-    m_Extent: {x: 0.5, y: 0.4, z: 0}
+    m_Center: {x: 0, y: 1, z: 0}
+    m_Extent: {x: 1, y: 1, z: 1}
   m_MeshUsageFlags: 0
   m_BakedConvexCollisionMesh: 
   m_BakedTriangleCollisionMesh: 

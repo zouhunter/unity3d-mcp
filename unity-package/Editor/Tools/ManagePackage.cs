@@ -16,7 +16,7 @@ namespace UnityMcp.Tools
     /// Handles Unity Package Manager operations including adding, removing, listing, and searching packages.
     /// 对应方法名: manage_package
     /// </summary>
-    [ToolName("manage_package")]
+    [ToolName("manage_package", "包管理")]
     public class ManagePackage : StateMethodBase
     {
         // Class to track each package operation

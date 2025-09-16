@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: MirrorMaterial
-  m_Shader: {fileID: 10505, guid: 0000000000000000f000000000000000, type: 0}
+  m_Shader: {fileID: 4800000, guid: 91172a77c53e26c429feadb632b1cf12, type: 3}
   m_ValidKeywords: []
   m_InvalidKeywords: []
   m_LightmapFlags: 4
@@ -35,8 +35,8 @@ Material:
     m_Ints: []
     m_Floats:
     - _Metallic: 1
-    - _ReflectionStrength: 0.8
-    - _Smoothness: 0.9
+    - _ReflectionStrength: 0.9
+    - _Smoothness: 0.95
     m_Colors:
-    - _Color: {r: 0.8, g: 0.9, b: 1, a: 1}
+    - _Color: {r: 0.95, g: 0.95, b: 1, a: 1}
   m_BuildTextureStacks: []

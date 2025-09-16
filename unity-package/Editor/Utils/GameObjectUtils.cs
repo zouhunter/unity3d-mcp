@@ -465,7 +465,7 @@ namespace UnityMcp.Tools
                 },
                 parent_instance_id = go.transform.parent?.gameObject.GetInstanceID() ?? 0,
                 component_types = JToken.FromObject(go.GetComponents<Component>()
-                    .Select(c => c.GetType().FullName)
+                    .Select(c => c?.GetType()?.FullName + ":" + c?.GetInstanceID())
                     .ToList()),
                 children = JToken.FromObject(CreateChildIdMap(go)),
             };
@@ -802,7 +802,7 @@ namespace UnityMcp.Tools
 
                 try
                 {
-                    if (!SetComponentProperty(targetComponent, propName, propValue, logAction))
+                    if (!SetObjectPropertyDeepth(targetComponent, propName, propValue, logAction))
                     {
                         logAction?.Invoke($"Could not set property '{propName}' on component '{componentName}'. Property might not exist, be read-only, or type mismatch.");
                     }
@@ -819,7 +819,7 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 设置组件属性
         /// </summary>
-        private static bool SetComponentProperty(object target, string memberName, JToken value, Action<string> logAction = null)
+        public static bool SetObjectPropertyDeepth(object target, string memberName, JToken value, Action<string> logAction = null)
         {
             Type type = target.GetType();
             BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase;
@@ -926,7 +926,7 @@ namespace UnityMcp.Tools
 
             // 设置最终属性
             string finalPart = pathParts[pathParts.Length - 1];
-            return SetComponentProperty(currentObject, finalPart, value, logAction);
+            return SetObjectPropertyDeepth(currentObject, finalPart, value, logAction);
         }
 
         /// <summary>

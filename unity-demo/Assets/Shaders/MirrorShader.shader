@@ -147,42 +147,55 @@ Shader "Custom/MirrorShader"
             Cull Back
             
             HLSLPROGRAM
-            #pragma vertex ShadowPassVertex
-            #pragma fragment ShadowPassFragment
+            #pragma vertex vert
+            #pragma fragment frag
             
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
             
-            struct Attributes
+            struct appdata
             {
-                float4 positionOS : POSITION;
-                float3 normalOS : NORMAL;
+                float4 vertex : POSITION;
+                float3 normal : NORMAL;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
             };
             
-            struct Varyings
+            struct v2f
             {
-                float4 positionCS : SV_POSITION;
+                float4 pos : SV_POSITION;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+                UNITY_VERTEX_OUTPUT_STEREO
             };
             
-            Varyings ShadowPassVertex(Attributes input)
+            v2f vert(appdata v)
             {
-                Varyings output;
+                v2f o;
+                UNITY_SETUP_INSTANCE_ID(v);
+                UNITY_TRANSFER_INSTANCE_ID(v, o);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
                 
-                VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
-                VertexNormalInputs normalInput = GetVertexNormalInputs(input.normalOS);
+                // Simple shadow casting without bias for compatibility
+                float3 worldPos = TransformObjectToWorld(v.vertex.xyz);
+                o.pos = TransformWorldToHClip(worldPos);
                 
-                output.positionCS = GetShadowPositionHClip(input.positionOS.xyz, normalInput.normalWS);
+                // Clamp to near plane
+                #if UNITY_REVERSED_Z
+                    o.pos.z = max(o.pos.z, o.pos.w * UNITY_NEAR_CLIP_VALUE);
+                #else
+                    o.pos.z = min(o.pos.z, o.pos.w * UNITY_NEAR_CLIP_VALUE);
+                #endif
                 
-                return output;
+                return o;
             }
             
-            half4 ShadowPassFragment(Varyings input) : SV_Target
+            half4 frag(v2f i) : SV_Target
             {
+                UNITY_SETUP_INSTANCE_ID(i);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
                 return 0;
             }
             ENDHLSL
         }
     }
     
-    Fallback "Universal Render Pipeline/Lit"
+    Fallback "Diffuse"
 }

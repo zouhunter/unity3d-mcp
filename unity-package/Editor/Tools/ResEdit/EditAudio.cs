@@ -13,7 +13,7 @@ namespace UnityMcp.Tools
     /// 专门的音频管理工具，提供音频的导入、修改、复制、删除等操作
     /// 对应方法名: manage_audio
     /// </summary>
-    [ToolName("edit_audio")]
+    [ToolName("edit_audio", "资源管理")]
     public class EditAudio : StateMethodBase
     {
         /// <summary>

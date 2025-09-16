@@ -13,7 +13,7 @@ namespace UnityMcp.Tools
     /// 专门的材质管理工具，提供材质的创建、修改、复制、删除等操作
     /// 对应方法名: manage_material
     /// </summary>
-    [ToolName("edit_material")]
+    [ToolName("edit_material", "资源管理")]
     public class EditMaterial : StateMethodBase
     {
         /// <summary>

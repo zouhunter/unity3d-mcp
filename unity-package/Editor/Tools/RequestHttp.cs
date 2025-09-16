@@ -17,7 +17,7 @@ namespace UnityMcp.Tools
     /// Handles network operations including HTTP requests, file downloads, and API calls.
     /// 对应方法名: request_http
     /// </summary>
-    [ToolName("request_http")]
+    [ToolName("request_http", "网络功能")]
     public class RequestHttp : StateMethodBase
     {
         /// <summary>

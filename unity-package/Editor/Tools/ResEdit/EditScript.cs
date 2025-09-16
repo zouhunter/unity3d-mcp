@@ -13,7 +13,7 @@ namespace UnityMcp.Tools
     /// Handles C# script management operations in Unity.
     /// 对应方法名: manage_script
     /// </summary>
-    [ToolName("edit_script")]
+    [ToolName("edit_script", "资源管理")]
     public class EditScript : StateMethodBase
     {
         /// <summary>

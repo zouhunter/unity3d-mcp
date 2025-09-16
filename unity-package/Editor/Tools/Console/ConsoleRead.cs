@@ -16,7 +16,7 @@ namespace UnityMcp.Tools
     /// Uses reflection to access internal LogEntry methods/properties.
     /// 对应方法名: console_reader
     /// </summary>
-    [ToolName("console_read")]
+    [ToolName("console_read", "开发工具")]
     public class ConsoleRead : StateMethodBase
     {
         // 注意：实际的控制台操作功能已移至 ConsoleController

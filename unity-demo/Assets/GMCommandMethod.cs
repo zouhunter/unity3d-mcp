@@ -5,7 +5,7 @@ using UnityMcp.Tools;
 using Newtonsoft.Json.Linq;
 using UnityMcp.Models;
 
-[ToolName("gm_command")]
+[ToolName("gm_command", "调试工具")]
 public class GMCommandMethod : StateMethodBase
 {
     /// <summary>

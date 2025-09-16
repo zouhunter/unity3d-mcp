@@ -19,7 +19,7 @@ namespace UnityMcp.Tools
     /// Second tree: Property modification operations
     /// 对应方法名: gameobject_modify
     /// </summary>
-    [ToolName("edit_gameobject")]
+    [ToolName("edit_gameobject", "资源管理")]
     public class EditGameObject : DualStateMethodBase
     {
         private HierarchyCreate hierarchyCreate;

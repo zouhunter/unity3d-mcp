@@ -15,7 +15,7 @@ namespace UnityMcp.Tools
     /// Second tree: Component operation execution
     /// 对应方法名: edit_component
     /// </summary>
-    [ToolName("edit_component")]
+    [ToolName("edit_component", "资源管理")]
     public class EditComponent : DualStateMethodBase
     {
         /// <summary>
@@ -168,41 +168,23 @@ namespace UnityMcp.Tools
             }
 
             // 获取所有可读属性
-            var properties = new Dictionary<string, object>();
-            var componentType = targetComponent.GetType();
-            BindingFlags flags = BindingFlags.Public | BindingFlags.Instance;
+            var properties = cmd["properties"] as JObject;
 
             // 获取所有公共属性
-            PropertyInfo[] props = componentType.GetProperties(flags);
-            foreach (PropertyInfo prop in props)
-            {
-                if (prop.CanRead && !prop.GetIndexParameters().Any()) // 排除索引器属性
-                {
-                    try
-                    {
-                        var value = prop.GetValue(targetComponent);
-                        properties[prop.Name] = ConvertToSerializableValue(value);
-                    }
-                    catch (Exception ex)
-                    {
-                        // 记录无法访问的属性
-                        properties[prop.Name] = $"<Error: {ex.Message}>";
-                    }
-                }
-            }
-
-            // 获取所有公共字段
-            FieldInfo[] fields = componentType.GetFields(flags);
-            foreach (FieldInfo field in fields)
+            foreach (var pair in properties)
             {
                 try
                 {
-                    var value = field.GetValue(targetComponent);
-                    properties[field.Name] = ConvertToSerializableValue(value);
+                    var success = GameObjectUtils.SetObjectPropertyDeepth(targetComponent, pair.Key, pair.Value, LogInfo);
+                    if (!success)
+                    {
+                        return Response.Error($"Failed to set property '{pair.Key}' on '{compName}': {pair.Key}");
+                    }
                 }
                 catch (Exception ex)
                 {
-                    properties[field.Name] = $"<Error: {ex.Message}>";
+                    Debug.LogError($"[GetComponentPropertysFromTarget] Failed to set property '{pair.Key}' on '{compName}': {ex.Message}");
+                    return Response.Error($"Failed to set property '{pair.Key}' on '{compName}': {ex.Message}");
                 }
             }
 
@@ -210,7 +192,7 @@ namespace UnityMcp.Tools
                 $"Retrieved {properties.Count} properties from component '{compName}' on '{targetGo.name}'.",
                 new Dictionary<string, object>
                 {
-                    { "component_type", componentType.FullName },
+                    { "component_type", compName },
                     { "properties", properties }
                 }
             );
@@ -289,6 +271,7 @@ namespace UnityMcp.Tools
                     else
                     {
                         results[propName] = "Failed";
+                        Debug.LogError($"[SetComponentPropertysOnTarget] Failed to set property '{propName}': {error}");
                         errors.Add($"Property '{propName}': Failed to set {error}");
                     }
                 }
@@ -525,26 +508,6 @@ namespace UnityMcp.Tools
             }
         }
 
-
-
-
-
-        /// <summary>
-        /// Creates a serializable representation of a Component.
-        /// </summary>
-        private object GetComponentData(Component c)
-        {
-            if (c == null)
-                return null;
-            var data = new Dictionary<string, object>
-            {
-                { "typeName", c.GetType().FullName },
-                { "instanceID", c.GetInstanceID() },
-            };
-
-            return data;
-        }
-
         /// <summary>
         /// Helper to set a property or field via reflection, handling basic types.
         /// </summary>
@@ -720,7 +683,7 @@ namespace UnityMcp.Tools
                         error = $"{currentObject} ,Asset path is null";
                         return false;
                     }
-                    if (!string.IsNullOrEmpty(assetPath) && !assetPath.StartsWith(Application.dataPath))
+                    if (!string.IsNullOrEmpty(assetPath) && !assetPath.StartsWith(Application.dataPath) && !assetPath.StartsWith("Assets/"))
                     {
                         error = $"{currentObject} ,Asset path is not in the assets path";
                         return false;

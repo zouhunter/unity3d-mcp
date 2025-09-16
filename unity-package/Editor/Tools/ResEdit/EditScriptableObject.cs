@@ -14,7 +14,7 @@ namespace UnityMcp.Tools
     /// Handles Unity ScriptableObject asset management operations including create, modify, duplicate, etc.
     /// 对应方法名: manage_scriptableobject
     /// </summary>
-    [ToolName("edit_scriptableobject")]
+    [ToolName("edit_scriptableobject", "资源管理")]
     public class EditScriptableObject : StateMethodBase
     {
         /// <summary>

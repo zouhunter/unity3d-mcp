@@ -13,7 +13,7 @@ namespace UnityMcp.Tools
     /// Supports Error, Warning, Log, Assert, and Exception message types.
     /// 对应方法名: console_write
     /// </summary>
-    [ToolName("console_write")]
+    [ToolName("console_write", "开发工具")]
     public class ConsoleWrite : StateMethodBase
     {
         /// <summary>

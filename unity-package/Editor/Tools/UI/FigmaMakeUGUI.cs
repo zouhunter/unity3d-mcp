@@ -15,7 +15,7 @@ namespace UnityMCP.Tools
     /// Figma UI制作衔接工具，负责管理UI制作方案和修改记录
     /// 对应方法名: figma_make_ugui
     /// </summary>
-    [ToolName("figma_make_ugui")]
+    [ToolName("figma_make_ugui", "UI管理")]
     public class FigmaMakeUGUI : StateMethodBase
     {
         /// <summary>

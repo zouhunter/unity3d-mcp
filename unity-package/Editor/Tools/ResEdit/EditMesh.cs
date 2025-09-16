@@ -14,7 +14,7 @@ namespace UnityMcp.Tools
     /// Handles Unity mesh asset operations including generation, modification, optimization, etc.
     /// 对应方法名: asset_mesh
     /// </summary>
-    [ToolName("edit_mesh")]
+    [ToolName("edit_mesh", "资源管理")]
     public class EditMesh : StateMethodBase
     {
         /// <summary>
@@ -89,17 +89,17 @@ namespace UnityMcp.Tools
             try
             {
                 Mesh mesh = new Mesh();
-                
+
                 // Apply properties from JObject
                 bool meshModified = ApplyMeshProperties(mesh, properties);
                 if (meshModified)
                 {
                     EditorUtility.SetDirty(mesh);
                 }
-                
+
                 AssetDatabase.CreateAsset(mesh, fullPath);
                 AssetDatabase.SaveAssets();
-                
+
                 return Response.Success(
                     $"Mesh '{fullPath}' created successfully.",
                     GetMeshData(fullPath)
@@ -140,7 +140,7 @@ namespace UnityMcp.Tools
                 {
                     EditorUtility.SetDirty(mesh);
                     AssetDatabase.SaveAssets();
-                    
+
                     return Response.Success(
                         $"Mesh '{fullPath}' modified successfully.",
                         GetMeshData(fullPath)
@@ -204,7 +204,7 @@ namespace UnityMcp.Tools
 
                 EditorUtility.SetDirty(mesh);
                 AssetDatabase.SaveAssets();
-                
+
                 return Response.Success(
                     $"Mesh '{fullPath}' optimized with level '{optimizationLevel}' successfully.",
                     GetMeshData(fullPath)
@@ -241,7 +241,7 @@ namespace UnityMcp.Tools
             try
             {
                 Mesh mesh = new Mesh();
-                
+
                 // Generate primitive based on type
                 switch (meshType.ToLowerInvariant())
                 {
@@ -269,7 +269,7 @@ namespace UnityMcp.Tools
 
                 AssetDatabase.CreateAsset(mesh, fullPath);
                 AssetDatabase.SaveAssets();
-                
+
                 return Response.Success(
                     $"Primitive mesh '{meshType}' created at '{fullPath}' successfully.",
                     GetMeshData(fullPath)
@@ -305,7 +305,7 @@ namespace UnityMcp.Tools
 
                 // Create subdivided mesh
                 Mesh subdividedMesh = SubdivideMeshInternal(originalMesh, subdivisionLevel);
-                
+
                 // Copy subdivided data back to original mesh
                 originalMesh.vertices = subdividedMesh.vertices;
                 originalMesh.triangles = subdividedMesh.triangles;
@@ -315,7 +315,7 @@ namespace UnityMcp.Tools
 
                 EditorUtility.SetDirty(originalMesh);
                 AssetDatabase.SaveAssets();
-                
+
                 return Response.Success(
                     $"Mesh '{fullPath}' subdivided {subdivisionLevel} times successfully.",
                     GetMeshData(fullPath)
@@ -352,14 +352,14 @@ namespace UnityMcp.Tools
                 // Apply smoothing
                 Vector3[] vertices = mesh.vertices;
                 Vector3[] normals = mesh.normals;
-                
+
                 // Simple smoothing algorithm
                 for (int i = 0; i < vertices.Length; i++)
                 {
                     // Find connected vertices and average their positions
                     Vector3 smoothedPosition = Vector3.zero;
                     int connectedCount = 0;
-                    
+
                     for (int j = 0; j < mesh.triangles.Length; j += 3)
                     {
                         if (mesh.triangles[j] == i || mesh.triangles[j + 1] == i || mesh.triangles[j + 2] == i)
@@ -370,21 +370,21 @@ namespace UnityMcp.Tools
                             connectedCount += 3;
                         }
                     }
-                    
+
                     if (connectedCount > 0)
                     {
                         smoothedPosition /= connectedCount;
                         vertices[i] = Vector3.Lerp(vertices[i], smoothedPosition, smoothFactor);
                     }
                 }
-                
+
                 mesh.vertices = vertices;
                 mesh.RecalculateNormals();
                 mesh.RecalculateBounds();
 
                 EditorUtility.SetDirty(mesh);
                 AssetDatabase.SaveAssets();
-                
+
                 return Response.Success(
                     $"Mesh '{fullPath}' smoothed with factor {smoothFactor} successfully.",
                     GetMeshData(fullPath)
@@ -665,10 +665,6 @@ namespace UnityMcp.Tools
         /// </summary>
         private bool AssetExists(string sanitizedPath)
         {
-            if (!string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(sanitizedPath)))
-            {
-                return true;
-            }
             if (File.Exists(Path.Combine(Directory.GetCurrentDirectory(), sanitizedPath)))
             {
                 return true;
@@ -802,7 +798,7 @@ namespace UnityMcp.Tools
         private Mesh CreateCubeMesh()
         {
             Mesh mesh = new Mesh();
-            
+
             Vector3[] vertices = {
                 // Front face
                 new Vector3(-0.5f, -0.5f,  0.5f),
@@ -845,7 +841,7 @@ namespace UnityMcp.Tools
         private Mesh CreateSphereMesh()
         {
             Mesh mesh = new Mesh();
-            
+
             int segments = 16;
             int rings = 16;
             List<Vector3> vertices = new List<Vector3>();
@@ -900,7 +896,7 @@ namespace UnityMcp.Tools
         private Mesh CreateCylinderMesh()
         {
             Mesh mesh = new Mesh();
-            
+
             int segments = 16;
             List<Vector3> vertices = new List<Vector3>();
             List<int> triangles = new List<int>();
@@ -949,7 +945,7 @@ namespace UnityMcp.Tools
         private Mesh CreatePlaneMesh()
         {
             Mesh mesh = new Mesh();
-            
+
             Vector3[] vertices = {
                 new Vector3(-0.5f, 0, -0.5f),
                 new Vector3( 0.5f, 0, -0.5f),
@@ -983,61 +979,61 @@ namespace UnityMcp.Tools
         private Mesh SubdivideMeshInternal(Mesh originalMesh, int levels)
         {
             Mesh result = originalMesh;
-            
+
             for (int level = 0; level < levels; level++)
             {
                 Vector3[] vertices = result.vertices;
                 int[] triangles = result.triangles;
-                
+
                 List<Vector3> newVertices = new List<Vector3>(vertices);
                 List<int> newTriangles = new List<int>();
-                
+
                 // For each triangle, create 4 new triangles
                 for (int i = 0; i < triangles.Length; i += 3)
                 {
                     int v1 = triangles[i];
                     int v2 = triangles[i + 1];
                     int v3 = triangles[i + 2];
-                    
+
                     // Calculate midpoints
                     Vector3 mid1 = (vertices[v1] + vertices[v2]) * 0.5f;
                     Vector3 mid2 = (vertices[v2] + vertices[v3]) * 0.5f;
                     Vector3 mid3 = (vertices[v3] + vertices[v1]) * 0.5f;
-                    
+
                     // Add new vertices
                     int mid1Index = newVertices.Count;
                     int mid2Index = newVertices.Count + 1;
                     int mid3Index = newVertices.Count + 2;
-                    
+
                     newVertices.Add(mid1);
                     newVertices.Add(mid2);
                     newVertices.Add(mid3);
-                    
+
                     // Create 4 new triangles
                     newTriangles.Add(v1);
                     newTriangles.Add(mid1Index);
                     newTriangles.Add(mid3Index);
-                    
+
                     newTriangles.Add(mid1Index);
                     newTriangles.Add(v2);
                     newTriangles.Add(mid2Index);
-                    
+
                     newTriangles.Add(mid3Index);
                     newTriangles.Add(mid2Index);
                     newTriangles.Add(v3);
-                    
+
                     newTriangles.Add(mid1Index);
                     newTriangles.Add(mid2Index);
                     newTriangles.Add(mid3Index);
                 }
-                
+
                 result = new Mesh();
                 result.vertices = newVertices.ToArray();
                 result.triangles = newTriangles.ToArray();
                 result.RecalculateNormals();
                 result.RecalculateBounds();
             }
-            
+
             return result;
         }
 
@@ -1053,13 +1049,13 @@ namespace UnityMcp.Tools
                     writer.WriteLine("# Exported by Unity MCP AssetMesh");
                     writer.WriteLine($"# Vertices: {mesh.vertices.Length}");
                     writer.WriteLine($"# Triangles: {mesh.triangles.Length / 3}");
-                    
+
                     // Write vertices
                     foreach (Vector3 vertex in mesh.vertices)
                     {
                         writer.WriteLine($"v {vertex.x} {vertex.y} {vertex.z}");
                     }
-                    
+
                     // Write normals
                     if (mesh.normals != null && mesh.normals.Length > 0)
                     {
@@ -1068,7 +1064,7 @@ namespace UnityMcp.Tools
                             writer.WriteLine($"vn {normal.x} {normal.y} {normal.z}");
                         }
                     }
-                    
+
                     // Write UVs
                     if (mesh.uv != null && mesh.uv.Length > 0)
                     {
@@ -1077,7 +1073,7 @@ namespace UnityMcp.Tools
                             writer.WriteLine($"vt {uv.x} {uv.y}");
                         }
                     }
-                    
+
                     // Write faces (OBJ uses 1-based indexing)
                     for (int i = 0; i < mesh.triangles.Length; i += 3)
                     {
@@ -1087,7 +1083,7 @@ namespace UnityMcp.Tools
                         writer.WriteLine($"f {v1} {v2} {v3}");
                     }
                 }
-                
+
                 return true;
             }
             catch (Exception e)
@@ -1108,7 +1104,7 @@ namespace UnityMcp.Tools
                 List<Vector3> normals = new List<Vector3>();
                 List<Vector2> uvs = new List<Vector2>();
                 List<int> triangles = new List<int>();
-                
+
                 using (StreamReader reader = new StreamReader(filePath))
                 {
                     string line;
@@ -1117,11 +1113,11 @@ namespace UnityMcp.Tools
                         line = line.Trim();
                         if (string.IsNullOrEmpty(line) || line.StartsWith("#"))
                             continue;
-                            
+
                         string[] parts = line.Split(' ');
                         if (parts.Length < 2)
                             continue;
-                            
+
                         switch (parts[0])
                         {
                             case "v": // Vertex
@@ -1134,7 +1130,7 @@ namespace UnityMcp.Tools
                                     ));
                                 }
                                 break;
-                                
+
                             case "vn": // Normal
                                 if (parts.Length >= 4)
                                 {
@@ -1145,7 +1141,7 @@ namespace UnityMcp.Tools
                                     ));
                                 }
                                 break;
-                                
+
                             case "vt": // UV
                                 if (parts.Length >= 3)
                                 {
@@ -1155,7 +1151,7 @@ namespace UnityMcp.Tools
                                     ));
                                 }
                                 break;
-                                
+
                             case "f": // Face
                                 if (parts.Length >= 4)
                                 {
@@ -1171,25 +1167,25 @@ namespace UnityMcp.Tools
                         }
                     }
                 }
-                
+
                 // Create mesh
                 Mesh mesh = new Mesh();
                 mesh.vertices = vertices.ToArray();
                 mesh.triangles = triangles.ToArray();
-                
+
                 if (normals.Count > 0)
                     mesh.normals = normals.ToArray();
                 if (uvs.Count > 0)
                     mesh.uv = uvs.ToArray();
-                    
+
                 mesh.RecalculateBounds();
                 if (normals.Count == 0)
                     mesh.RecalculateNormals();
-                
+
                 // Save mesh asset
                 AssetDatabase.CreateAsset(mesh, assetPath);
                 AssetDatabase.SaveAssets();
-                
+
                 return true;
             }
             catch (Exception e)
@@ -1216,6 +1212,12 @@ namespace UnityMcp.Tools
             if (mesh == null)
                 return null;
 
+            // Convert mesh data to serializable format to avoid Unity object reference issues
+            var vertices = mesh.vertices?.Select(v => new float[] { v.x, v.y, v.z }).ToArray();
+            var normals = mesh.normals?.Select(n => new float[] { n.x, n.y, n.z }).ToArray();
+            var uv = mesh.uv?.Select(u => new float[] { u.x, u.y }).ToArray();
+            var tangents = mesh.tangents?.Select(t => new float[] { t.x, t.y, t.z, t.w }).ToArray();
+
             return new
             {
                 path = path,
@@ -1225,20 +1227,18 @@ namespace UnityMcp.Tools
                 fileName = Path.GetFileName(path),
                 vertexCount = mesh.vertexCount,
                 triangleCount = mesh.triangles.Length / 3,
-                bounds = new
-                {
-                    center = mesh.bounds.center,
-                    size = mesh.bounds.size,
-                    extents = mesh.bounds.extents
-                },
+                // Detailed mesh data
+                vertices = JArray.FromObject(vertices),
+                triangles = JArray.FromObject(mesh.triangles),
+                normals = JArray.FromObject(normals),
+                uv = JArray.FromObject(uv),
+                tangents = JArray.FromObject(tangents),
+                // Boolean flags for quick checking
                 hasNormals = mesh.normals != null && mesh.normals.Length > 0,
                 hasUVs = mesh.uv != null && mesh.uv.Length > 0,
                 hasTangents = mesh.tangents != null && mesh.tangents.Length > 0,
-                lastWriteTimeUtc = File.GetLastWriteTimeUtc(
-                        Path.Combine(Directory.GetCurrentDirectory(), path)
-                    )
-                    .ToString("o") // ISO 8601
+                lastWriteTimeUtc = File.GetLastWriteTimeUtc(Path.Combine(Directory.GetCurrentDirectory(), path)).ToString("o") // ISO 8601
             };
         }
     }
-} 
+}

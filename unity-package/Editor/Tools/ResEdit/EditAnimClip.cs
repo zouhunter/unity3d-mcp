@@ -13,7 +13,7 @@ namespace UnityMcp.Tools
     /// 专门的动画片段管理工具，提供动画片段的创建、修改、复制、删除等操作
     /// 对应方法名: manage_anim_clip
     /// </summary>
-    [ToolName("edit_anim_clip")]
+    [ToolName("edit_anim_clip", "资源管理")]
     public class EditAnimClip : StateMethodBase
     {
         /// <summary>

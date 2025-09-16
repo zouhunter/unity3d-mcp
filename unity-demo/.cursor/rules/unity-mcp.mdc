@@ -1,32 +1,84 @@
 ---
-description:当用户需要控制Unity时，请使用此规则
-globs:  [
-  "**/Assets/MCP/Tools/**"
+title: Unity MCP 工具规则
+description: 当用户需要控制Unity时，请使用此规则集。提供完整的Unity MCP工具API文档和使用指南。
+keywords: [unity, mcp, tools, gameobject, api]
+globs: [
+  "**/Assets/MCP/Tools/**",
+  "**/*.unity",
+  "**/*.prefab",
+  "**/*.cs",
+  "**/*.asset"
 ]
 alwaysApply: true
+version: "2.1.0"
+lastUpdated: "2024-12-21"
 ---
-# Unity MCP 工具规则 (mcp_rules)
+# Unity MCP 工具规则
 
-工具分为两类：
-- FacadeTools：`function_call`、`functions_call`，用于调用或批量调用方法（Methods）。
-- MethodTools：（仅通过 FacadeTool 间接调用，参数通过 `args` 字典传递。）
-    + `hierarchy_create` : Hierarchy 窗口内创建 GameObject创建
-    + `hierarchy_apply`:Hierarchy 应用到资源
-    + `hierarchy_search`:Hierarchy 搜索
-    + `figma_make_ugui`:Figma 创建UGUI的规则
-    + `edit_gameobject`:编辑 GameObject
-    + `edit_component`:编辑 Component
-    + `edit_material`:编辑材质
-    + `edit_mesh`:编辑 Mesh
-    + `edit_scene`:编辑场景
-    + `edit_script`:编辑脚本
-    + `project_operate`:编辑 Asset
-    + `project_search`:搜索 Asset
-    + `request_http`:请求 HTTP
-    + `console_read`:读取Unity控制台消息
-    + `console_write`:向Unity控制台写入日志消息
-  
-除 `function_call` 和 `functions_call` 外，其余均为方法名，不能直接被MCP调用。
+> 🎮 **全面的Unity编辑器控制工具集**  
+> 提供完整的GameObject管理、资源操作、UI制作、网络请求等功能
+
+## 📋 目录索引
+
+### 🔧 核心工具 (FacadeTools)
+- [function_call](#function_call---单次函数调用工具) - 单次函数调用
+- [functions_call](#functions_call---批量函数调用工具) - 批量函数调用
+
+### 🧩 功能模块 (MethodTools)
+**🏗️ 层级管理**
+- [hierarchy_create](#hierarchy_create---层级对象创建工具) - GameObject创建
+- [hierarchy_apply](#hierarchy_apply---层级预制体链接工具) - 预制体链接管理  
+- [hierarchy_search](#hierarchy_search---层级对象搜索工具) - 层级搜索
+
+**⚙️ 对象编辑**  
+- [edit_gameobject](#edit_gameobject---gameobject编辑工具) - GameObject编辑
+- [edit_component](#edit_component---组件属性操作管理) - 组件属性管理
+- [object_delete](#object_delete---unityengineobject删除工具) - 对象删除(支持确认)
+
+**🎨 资源管理**
+- [edit_material](#edit_material---材质编辑工具) - 材质编辑
+- [edit_mesh](#edit_mesh---网格资产管理) - 网格资产管理  
+- [edit_prefab](#edit_prefab---预制体管理) - 预制体管理
+- [edit_scene](#edit_scene---场景管理) - 场景管理
+- [project_operate](#project_operate---unity项目资产管理) - 项目资产操作
+- [project_search](#project_search---unity项目资产搜索) - 项目资产搜索
+
+**📦 包管理**
+- [manage_package](#manage_package---unity包管理工具) - Unity包管理器操作
+
+**💻 开发工具**
+- [edit_script](#edit_script---c脚本管理) - C#脚本管理
+- [edit_shader](#edit_shader---shader管理) - Shader管理
+- [console_read](#console_read---unity-控制台读取) - 控制台读取
+- [console_write](#console_write---unity-控制台写入) - 控制台写入
+
+**🌐 网络功能**
+- [request_http](#request_http---网络资源管理) - HTTP请求
+
+**🎯 界面设计**  
+- [ugui_layout](#ugui_layout---ugui布局管理工具) - UGUI布局管理
+- [figma_make_ugui](#figma_make_ugui---figma-ui制作衔接工具) - Figma UI制作
+
+**🛠️ 系统管理**
+- [manage_editor](#manage_editor---unity编辑器状态管理) - 编辑器状态管理
+
+---
+
+## 🔄 工具架构
+
+### 双层调用架构
+```
+用户 → FacadeTools → MethodTools → Unity API
+```
+
+**FacadeTools** (2个)
+- `function_call` - 单次方法调用
+- `functions_call` - 批量方法调用
+
+**MethodTools** (20+个)  
+专门的功能方法，仅通过FacadeTools调用，参数通过`args`字典传递。
+
+> ⚠️ **重要提醒**: 除`function_call`和`functions_call`外，其余均为方法名，不能直接被MCP调用。
 
 ---
 
@@ -526,9 +578,9 @@ function_call(
     "path": "Cube", 
     "component_type": "MeshRenderer",
     "properties": {
-      "material._Color": [1.0, 0.0, 0.0, 1.0],
-      "material._Metallic": 0.8,
-      "material._Smoothness": 0.9
+      "sharedMaterial._Color": [1.0, 0.0, 0.0, 1.0],
+      "sharedMaterial._Metallic": 0.8,
+      "sharedMaterial._Smoothness": 0.9
     }
   }
 )
@@ -543,7 +595,7 @@ function_call(
     "path": "Cube", 
     "component_type": "Renderer",
     "properties": {
-      "material.color": [1.0, 0.0, 0.0, 1.0]
+      "sharedMaterial.color": [1.0, 0.0, 0.0, 1.0]
     }
   }
 )
@@ -558,8 +610,8 @@ function_call(
     "path": "MultiMaterialCube", 
     "component_type": "Renderer",
     "properties": {
-      "materials[0].color": [1.0, 0.0, 0.0, 1.0],
-      "materials[1].color": [0.0, 1.0, 0.0, 1.0]
+      "sharedMaterials[0].color": [1.0, 0.0, 0.0, 1.0],
+      "sharedMaterials[1].color": [0.0, 1.0, 0.0, 1.0]
     }
   }
 )
@@ -574,8 +626,8 @@ function_call(
     "path": "Cube", 
     "component_type": "Renderer",
     "properties": {
-      "material": "Assets/Materials/RedMaterial.mat",
-      "material._MainTex": "Assets/Textures/brick.jpg"
+      "sharedMaterial": "Assets/Materials/RedMaterial.mat",
+      "sharedMaterial._MainTex": "Assets/Textures/brick.jpg"
     }
   }
 )
@@ -590,8 +642,8 @@ function_call(
     "path": "Cube", 
     "component_type": "Renderer",
     "properties": {
-      "material": -45550,
-      "material._MainTex": -36970
+      "sharedMaterial": -45550,
+      "sharedMaterial._MainTex": -36970
     }
   }
 )
@@ -656,7 +708,7 @@ function_call(
 - **智能类型转换**: 支持Unity常用数据类型（Vector3、Quaternion、Color等）的自动转换
 - **详细结果反馈**: 提供每个属性操作的详细结果和错误信息
 - **材质Shader属性支持**: 直接支持设置材质的Shader属性（以_开头的属性）
-- **嵌套属性访问**: 支持通过点号访问嵌套属性，如 "material._Color"
+- **嵌套属性访问**: 支持通过点号访问嵌套属性，如 "sharedMaterial._Color"
 - **撤销支持**: 所有操作都支持Unity的撤销功能
 - **错误容错**: 单个属性操作失败不会影响其他属性的处理
 
@@ -989,7 +1041,7 @@ function_call(
 - **双状态树架构**: 第一树负责目标定位，第二树负责操作执行，提供更强大的处理能力
 - **批量操作支持**: 通过 `select_many` 参数可以对多个匹配对象进行批量操作
 - **智能类型转换**: 自动处理Unity对象引用、Vector3、Color、Quaternion等类型
-- **嵌套属性支持**: 支持通过点号访问嵌套属性，如 "material.color"、"material._MainTex"
+- **嵌套属性支持**: 支持通过点号访问嵌套属性，如 "sharedMaterial.color"、"sharedMaterial._MainTex"
 - **数组索引支持**: 支持访问数组元素，如 "materials[0].color"、"materials[1]._Color"
 - **材质Shader属性**: 直接支持设置材质的Shader属性（以_开头的属性），包括颜色、浮点数、纹理等
 - **组件属性批量设置**: 通过component_properties字典可一次设置多个属性
@@ -999,6 +1051,124 @@ function_call(
 - **撤销支持**: 所有操作都支持Unity的撤销功能
 - **错误恢复**: 批量操作时单个对象失败不会影响其他对象的处理
 - **属性验证**: 自动验证属性类型和可访问性，避免运行时错误
+
+---
+
+### object_delete - UnityEngine.Object删除工具
+**功能**: 使用双状态树架构和协程处理GameObject删除操作，支持交互式用户确认。第一个状态树负责目标定位（IObjectSelector），第二个状态树根据确认参数决定删除行为，提供安全的单对象和批量删除功能。
+
+主要参数（放入 `args`）
+
+**目标定位参数**
+- `path` (string, 可选): UnityEngine.Object的Hierarchy路径或资源文件路径，支持通配符和模式匹配
+- `instance_id` (string, 可选): UnityEngine.Object的InstanceID
+
+**确认参数**  
+- `confirm` (bool, 可选): 确认删除行为控制
+  - `true`: 总是显示确认对话框，适用于需要明确确认的场景
+  - `false` 或未设置: 智能确认模式
+    - ≤3个对象: 直接删除，无需用户确认
+    - >3个对象: 显示确认对话框
+    - >删除资源文件: 显示确认对话框
+
+**确认行为说明**
+- **confirm=true路径**: 使用协程显示`EditorUtility.DisplayDialog`确认对话框，等待用户选择
+- **confirm=false/未设置路径**: 智能判断对象数量，少量对象直接删除，大量对象显示确认对话框
+- **用户取消**: 返回成功响应但标记为`cancelled: true`，不执行删除操作
+- **用户确认**: 执行删除并返回详细的删除统计信息
+
+**目标定位支持**
+- **路径匹配**: 支持精确路径、通配符、层级路径等多种匹配方式
+- **批量选择**: 自动支持多对象选择和批量删除
+- **智能查找**: 通过IObjectSelector提供强大的对象查找能力
+
+示例：删除单个GameObject（智能确认）
+```python
+function_call(
+  func="object_delete",
+  args={"path": "Player"}
+)
+```
+
+示例：删除多个GameObject（强制确认）
+```python
+function_call(
+  func="object_delete", 
+  args={"path": "Enemy*", "confirm": true}
+)
+```
+
+示例：通过InstanceID删除
+```python
+function_call(
+  func="object_delete",
+  args={"instance_id": "12345"}
+)
+```
+
+示例：批量删除（智能确认模式）
+```python
+function_call(
+  func="object_delete",
+  args={"path": "DebugObjects/*"}
+)
+```
+
+返回值格式（成功删除）
+```json
+{
+  "success": true,
+  "message": "5 GameObjects deleted successfully.",
+  "data": {
+    "deleted_count": 5,
+    "total_count": 5, 
+    "success_rate": 1.0,
+    "deleted_objects": [
+      {"name": "Enemy1", "instanceID": 12345},
+      {"name": "Enemy2", "instanceID": 12346}
+    ]
+  }
+}
+```
+
+返回值格式（用户取消）
+```json
+{
+  "success": true,
+  "message": "Deletion cancelled by user. 5 GameObject(s) were not deleted.",
+  "data": {
+    "cancelled": true,
+    "target_count": 5
+  }
+}
+```
+
+返回值格式（部分失败）
+```json
+{
+  "success": true,
+  "message": "Deleted 3 of 5 GameObjects. 2 failed.",
+  "data": {
+    "deleted_count": 3,
+    "total_count": 5,
+    "success_rate": 0.6,
+    "deleted_objects": [...],
+    "errors": ["Failed to delete 'LockedObject': Access denied"]
+  }
+}
+```
+
+特殊功能
+- **双状态树架构**: 目标定位和确认逻辑分离，架构清晰
+- **协程交互**: 使用协程和`EditorUtility.DisplayDialog`实现真正的用户交互
+- **智能确认**: 根据对象数量智能决定是否需要用户确认
+- **批量安全删除**: 支持大量对象的安全批量删除操作
+- **详细统计**: 提供删除成功率、失败信息等详细统计数据
+- **撤销支持**: 使用`Undo.DestroyObjectImmediate`支持Unity撤销功能
+- **错误容忍**: 单个对象删除失败不影响其他对象的处理
+- **用户友好**: 显示具体的对象名称和数量，让用户明确了解删除内容
+- **预制体识别**: 自动识别和处理预制体实例
+- **取消恢复**: 用户可以随时取消删除操作，提供安全退出机制
 
 ---
 
@@ -2373,6 +2543,148 @@ function_call(
 
 ---
 
+### manage_package - Unity包管理工具
+**功能**: 专门处理Unity包管理器操作，支持包的添加、移除、列表、搜索、刷新和依赖解析等功能。
+
+主要参数（放入 `args`）
+- `action` (string, 必需): 操作类型，支持 `add`、`remove`、`list`、`search`、`refresh`、`resolve`
+- `source` (string, 可选): 包源类型，支持 `registry`、`github`、`disk`（仅用于add操作）
+- `package_name` (string, 可选): 包名称（用于add、remove操作）
+- `package_identifier` (string, 可选): 包完整标识符（用于remove操作）
+- `version` (string, 可选): 包版本（用于add操作）
+- `repository_url` (string, 可选): GitHub仓库URL（用于github源）
+- `branch` (string, 可选): GitHub分支名（用于github源）
+- `path` (string, 可选): 包路径（github源子目录或disk源路径）
+- `search_keywords` (string, 可选): 搜索关键词（用于search操作，为空时搜索所有包）
+- `include_dependencies` (bool, 可选): 是否包含依赖信息（用于list操作）
+- `scope` (string, 可选): 包范围过滤器（用于list操作）
+- `timeout` (int, 可选): 操作超时时间（秒），默认30秒
+
+支持的操作 (action)
+- `add` - 添加包
+- `remove` - 移除包
+- `list` - 列出已安装包
+- `search` - 搜索可用包
+- `refresh` - 刷新包列表
+- `resolve` - 解析包依赖
+
+**包源类型** (source)
+- `registry` - Unity官方包注册表（默认）
+- `github` - GitHub仓库
+- `disk` - 本地磁盘路径
+
+示例：从Unity注册表添加包
+```python
+function_call(
+  func="manage_package",
+  args={"action": "add", "source": "registry", "package_name": "com.unity.hot-reload", "version": "1.0.0"}
+)
+```
+
+示例：从GitHub添加包
+```python
+function_call(
+  func="manage_package",
+  args={
+    "action": "add", 
+    "source": "github", 
+    "repository_url": "https://github.com/Unity-Technologies/com.unity.hot-reload.git",
+    "branch": "main"
+  }
+)
+```
+
+示例：从本地磁盘添加包
+```python
+function_call(
+  func="manage_package",
+  args={"action": "add", "source": "disk", "path": "D:/MyUnityPackages/CustomPackage"}
+)
+```
+
+示例：移除包
+```python
+function_call(
+  func="manage_package",
+  args={"action": "remove", "package_name": "com.unity.hot-reload"}
+)
+```
+
+示例：列出已安装包
+```python
+function_call(
+  func="manage_package",
+  args={"action": "list", "include_dependencies": True}
+)
+```
+
+示例：搜索包
+```python
+function_call(
+  func="manage_package",
+  args={"action": "search", "search_keywords": "hot reload"}
+)
+```
+
+示例：搜索所有可用包
+```python
+function_call(
+  func="manage_package",
+  args={"action": "search"}
+)
+```
+
+示例：刷新包列表
+```python
+function_call(
+  func="manage_package",
+  args={"action": "refresh"}
+)
+```
+
+示例：解析包依赖
+```python
+function_call(
+  func="manage_package",
+  args={"action": "resolve"}
+)
+```
+
+返回值格式
+```json
+{
+  "success": true,
+  "message": "Package operation completed successfully",
+  "data": {
+    "operation": "add",
+    "package_info": {
+      "name": "com.unity.hot-reload",
+      "display_name": "Hot Reload",
+      "version": "1.0.0",
+      "status": "installed"
+    }
+  }
+}
+```
+
+特点
+- **异步操作**: 包管理操作通过异步方式执行，避免阻塞Unity编辑器
+- **多源支持**: 支持Unity注册表、GitHub仓库和本地磁盘三种包源
+- **完整功能**: 覆盖包的完整生命周期管理
+- **错误处理**: 详细的错误信息和操作状态反馈
+- **版本控制**: 支持指定包版本和分支
+- **依赖管理**: 自动处理包依赖关系
+- **搜索功能**: 强大的包搜索和发现能力
+- **超时控制**: 可配置的操作超时时间
+
+注意事项
+- 添加GitHub包时需要提供完整的仓库URL
+- 本地磁盘包需要确保路径存在且包含有效的package.json
+- 移除包操作会同时清理相关依赖（如果没有其他包使用）
+- 刷新和解析操作通常用于解决包依赖冲突
+
+---
+
 ## 🎯 使用指南
 
 ### 1) 工具选择原则
@@ -2410,6 +2722,91 @@ function_call(
 
 ### 5) 调试建议
 - 使用 `console_read` 查看Unity控制台输出
-- 检查返回值中的 `success` 字段
-- 查看 `message` 和 `error` 字段获取详细信息 
-- 查看 `message` 和 `error` 字段获取详细信息 
+- 检查返回值中的 `success` 字段  
+- 查看 `message` 和 `error` 字段获取详细信息
+- 对于复杂操作，使用批量调用 `functions_call` 提高效率
+- 网格操作时注意循环引用问题，现已修复Vector3序列化问题
+
+---
+
+## 📝 版本历史
+
+### v2.1.0 (2024-12-21)
+**🔧 Bug修复**
+- **edit_mesh**: 修复了Vector3循环引用导致的JSON序列化问题
+  - 将`mesh.bounds.center/size/extents`从Vector3对象转换为float数组格式
+  - 避免`Vector3.normalized`属性造成的序列化循环引用
+- **文档更新**: 优化mdc格式，添加完整的目录索引和图标
+
+**⚡ 性能优化**  
+- 改进了网格数据的序列化性能
+- 减少了不必要的反射调用
+
+### v2.0.0 (2024-XX-XX)
+**🎉 主要功能**
+- 完整的Unity MCP工具集
+- 双状态树架构支持
+- 批量操作功能
+- 交互式确认机制
+
+---
+
+## 🚀 快速开始
+
+### 1. 基本调用模式
+```python
+# 单次调用
+function_call(
+    func="hierarchy_create",
+    args={"from": "primitive", "primitive_type": "Cube", "name": "MyCube"}
+)
+
+# 批量调用
+functions_call(
+    funcs=[
+        {"func": "hierarchy_create", "args": {"from": "primitive", "primitive_type": "Cube", "name": "Enemy1"}},
+        {"func": "edit_gameobject", "args": {"path": "Enemy1", "action": "add_component", "component_type": "Rigidbody"}}
+    ]
+)
+```
+
+### 2. 常用工作流
+```python
+# 创建 → 编辑 → 保存
+functions_call(
+    funcs=[
+        # 1. 创建GameObject
+        {"func": "hierarchy_create", "args": {"from": "primitive", "primitive_type": "Sphere", "name": "Player"}},
+        # 2. 添加组件
+        {"func": "edit_gameobject", "args": {"path": "Player", "action": "add_component", "component_type": "Rigidbody"}},
+        # 3. 设置属性
+        {"func": "edit_component", "args": {"path": "Player", "action": "set_component_propertys", "component_type": "Transform", "properties": {"localPosition": [0, 5, 0]}}},
+        # 4. 保存场景
+        {"func": "edit_scene", "args": {"action": "save", "name": "TestScene", "path": "Assets/Scenes/", "build_index": 0}}
+    ]
+)
+```
+
+---
+
+## ⚠️ 重要提醒
+
+### 数据格式说明
+- **Vector3数据**: 网格边界等空间数据以`[x, y, z]`数组格式返回，避免循环引用
+- **路径格式**: 统一使用`Assets/Folder/File.extension`格式
+- **组件引用**: 支持路径引用和InstanceID引用两种方式
+
+### 最佳实践
+1. **错误处理**: 始终检查返回值的`success`字段
+2. **批量操作**: 多个相关操作使用`functions_call`提高效率  
+3. **资源管理**: 操作前确保目标目录存在
+4. **调试支持**: 利用控制台工具辅助开发调试
+
+### 技术支持
+- 📖 完整API文档: 见各工具详细说明
+- 🐛 问题报告: 通过`console_read`查看错误信息
+- 💡 最新更新: 关注version字段获取版本信息
+
+---
+
+*Unity MCP工具集 - 让Unity开发更高效* 🚀

@@ -13,7 +13,7 @@ namespace UnityMcp.Tools
     /// 专门的模型管理工具，提供模型的导入、修改、复制、删除等操作
     /// 对应方法名: manage_model
     /// </summary>
-    [ToolName("edit_model")]
+    [ToolName("edit_model", "资源管理")]
     public class EditModel : StateMethodBase
     {
         /// <summary>

@@ -14,7 +14,7 @@ namespace UnityMcp.Tools
     /// Handles Unity Editor state management and controls.
     /// 对应方法名: manage_editor
     /// </summary>
-    [ToolName("manage_editor")]
+    [ToolName("manage_editor", "系统管理")]
     public class ManageEditor : StateMethodBase
     {
         /// <summary>

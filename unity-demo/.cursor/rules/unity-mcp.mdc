@@ -2719,6 +2719,7 @@ function_call(
 - 下载文件前确保目标目录存在
 - 敏感API请求使用认证令牌保护
 - 大文件操作时增加超时时间和重试机制
+- try-catch中不可放协程的yield return
 
 ### 5) 调试建议
 - 使用 `console_read` 查看Unity控制台输出

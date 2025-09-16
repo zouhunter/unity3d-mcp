@@ -3,6 +3,7 @@ using System;
 using Newtonsoft.Json.Linq;
 using System.Collections;
 using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace UnityMcp.Tools
 {

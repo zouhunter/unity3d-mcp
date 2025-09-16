@@ -445,7 +445,7 @@ namespace UnityMcp
                             // 异步执行命令，但不等待结果，让它在后台执行
                             try
                             {
-                                ExecuteCommand(command,tcs);
+                                ExecuteCommand(command, tcs);
                             }
                             catch (Exception asyncEx)
                             {
@@ -570,13 +570,14 @@ namespace UnityMcp
                 }
 
                 Log($"[UnityMcp] 找到工具: {tool.GetType().Name}，开始异步处理命令");
-                tool.HandleCommand(paramsObject,(result)=>
+                tool.HandleCommand(paramsObject, (result) =>
                 {
-                   Log($"[UnityMcp] 工具执行完成，结果类型: {result?.GetType().Name ?? "null"}");
-                   // Standard success response format
-                   var response = new { status = "success", result };
-                   Log($"[UnityMcp] 命令执行成功: Type={command.type}");
-                   tcs.SetResult(JsonConvert.SerializeObject(response));
+                    // Standard success response format
+                    var response = new { status = "success", result };
+                    Log($"[UnityMcp] 命令执行成功: Type={command.type}");
+                    var re = JsonConvert.SerializeObject(response);
+                    Log($"[UnityMcp] 工具执行完成，结果: {re}");
+                    tcs.SetResult(re);
                 });
 
             }

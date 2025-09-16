@@ -49,6 +49,8 @@ lastUpdated: "2024-12-21"
 **💻 开发工具**
 - [edit_script](#edit_script---c脚本管理) - C#脚本管理
 - [edit_shader](#edit_shader---shader管理) - Shader管理
+- [test_runner](#test_runner---c测试运行工具) - C#测试运行
+- [python_runner](#python_runner---python代码执行工具) - Python代码执行
 - [console_read](#console_read---unity-控制台读取) - 控制台读取
 - [console_write](#console_write---unity-控制台写入) - 控制台写入
 
@@ -2796,6 +2798,422 @@ functions_call(
 - **Vector3数据**: 网格边界等空间数据以`[x, y, z]`数组格式返回，避免循环引用
 - **路径格式**: 统一使用`Assets/Folder/File.extension`格式
 - **组件引用**: 支持路径引用和InstanceID引用两种方式
+
+---
+
+### test_runner - C#测试运行工具
+**功能**: 编译和执行C#测试代码，支持NUnit测试框架，提供代码验证和测试执行功能。
+
+主要参数（放入 `args`）
+- `action` (string, 可选): 操作类型，支持 `execute`、`validate`，默认为 `execute`
+- `test_code` (string, 必需): C#测试代码内容
+- `class_name` (string, 可选): 测试类名，默认为 `TestClass`
+- `namespace` (string, 可选): 命名空间，默认为 `TestNamespace`
+- `includes` (list, 可选): 引用的using语句列表，默认包含基础命名空间
+- `timeout` (string, 可选): 执行超时时间（秒），默认为 30 秒
+- `cleanup` (bool, 可选): 是否清理临时文件，默认为 true
+
+支持的操作 (action)
+
+**代码执行** (`execute`)
+- 编译并执行C#测试代码
+- 返回测试结果和执行统计
+- 支持NUnit测试框架
+- 自动处理程序集引用和编译
+
+**代码验证** (`validate`)
+- 验证C#测试代码语法
+- 检查编译错误
+- 不执行代码，仅验证语法正确性
+
+**NUnit测试支持**
+- [Test] 标记的测试方法
+- [SetUp] 和 [TearDown] 方法支持
+- [TestFixture] 类标记
+- Assert 断言支持
+
+示例：执行简单测试
+```python
+function_call(
+  func="test_runner",
+  args={
+    "action": "execute",
+    "test_code": """
+[Test]
+public void TestAddition()
+{
+    int result = 2 + 3;
+    Assert.AreEqual(5, result);
+}
+
+[Test] 
+public void TestString()
+{
+    string text = "Hello";
+    Assert.IsTrue(text.StartsWith("H"));
+}""",
+    "class_name": "MathTest",
+    "namespace": "MyTests"
+  }
+)
+```
+
+示例：验证代码语法
+```python
+function_call(
+  func="test_runner",
+  args={
+    "action": "validate",
+    "test_code": """
+[Test]
+public void TestMethod()
+{
+    Debug.Log("Test");
+    Assert.Pass("Test completed");
+}""",
+    "class_name": "ValidationTest"
+  }
+)
+```
+
+示例：使用自定义引用
+```python
+function_call(
+  func="test_runner", 
+  args={
+    "action": "execute",
+    "test_code": """
+[Test]
+public void TestVector()
+{
+    Vector3 pos = new Vector3(1, 2, 3);
+    Assert.AreEqual(1, pos.x);
+}""",
+    "includes": [
+      "System",
+      "UnityEngine", 
+      "NUnit.Framework"
+    ],
+    "timeout": 45
+  }
+)
+```
+
+返回值格式（执行成功）
+```json
+{
+  "success": true,
+  "message": "Test execution completed, 2 tests executed",
+  "data": {
+    "operation": "execute",
+    "class_name": "MathTest",
+    "namespace_name": "MyTests",
+    "test_count": 2,
+    "passed_count": 2,
+    "failed_count": 0,
+    "results": [
+      {
+        "test_name": "TestAddition",
+        "success": true,
+        "message": "Test passed",
+        "stack_trace": null,
+        "duration": 1.23
+      },
+      {
+        "test_name": "TestString", 
+        "success": true,
+        "message": "Test passed",
+        "stack_trace": null,
+        "duration": 0.85
+      }
+    ]
+  }
+}
+```
+
+返回值格式（验证成功）
+```json
+{
+  "success": true,
+  "message": "Test code syntax is valid",
+  "data": {
+    "operation": "validate",
+    "class_name": "ValidationTest",
+    "namespace_name": "TestNamespace",
+    "generated_code": "namespace TestNamespace\n{\n..."
+  }
+}
+```
+
+返回值格式（编译失败）
+```json
+{
+  "success": false,
+  "error": "Code compilation failed",
+  "data": {
+    "operation": "execute",
+    "errors": "CS1002: Syntax error, '(' expected\nline 5, column 10"
+  }
+}
+```
+
+**技术特性**
+- 动态代码编译和执行
+- 完整的Unity和.NET程序集引用
+- NUnit测试框架集成
+- 临时文件自动管理
+- 编译错误详细报告
+- 测试执行统计和时间测量
+
+**安全特性**
+- 临时文件隔离执行
+- 编译超时保护
+- 自动文件清理
+- 异常处理和错误捕获
+
+**使用场景**
+- 单元测试验证
+- 代码片段测试
+- 算法验证
+- Unity API测试
+- 快速原型验证
+
+---
+
+### python_runner - Python代码执行工具
+**功能**: 安全地执行Python脚本，支持代码验证、包安装和UTF-8中文编码，提供完整的Python开发环境支持。
+
+主要参数（放入 `args`）
+- `action` (string, 可选): 操作类型，支持 `execute`、`validate`、`install_package`，默认为 `execute`
+- `python_code` (string, 必需): Python脚本代码内容
+- `script_name` (string, 可选): Python脚本名称，默认为 `script.py`
+- `python_path` (string, 可选): Python解释器路径，默认为 `python`
+- `working_directory` (string, 可选): 工作目录路径，默认为Unity项目Assets目录
+- `timeout` (int, 可选): 执行超时时间（秒），默认为 30 秒
+- `cleanup` (bool, 可选): 是否清理临时文件，默认为 true
+- `packages` (string/list, 可选): 要安装的Python包，支持字符串或数组
+- `requirements_file` (string, 可选): requirements.txt文件路径
+- `virtual_env` (string, 可选): 虚拟环境路径
+
+支持的操作 (action)
+
+**代码执行** (`execute`)
+- 安全执行Python脚本
+- 自动UTF-8编码处理
+- 临时文件管理
+- 进程超时保护
+- 完整的输出捕获
+
+**代码验证** (`validate`)
+- Python语法验证
+- 编译检查（无执行）
+- 错误定位和报告
+- 安全的语法分析
+
+**包管理** (`install_package`)
+- pip包安装
+- requirements.txt支持
+- 虚拟环境兼容
+- 安装进度监控
+
+示例：执行基本Python代码
+```python
+function_call(
+  func="python_runner",
+  args={
+    "action": "execute",
+    "python_code": """
+import math
+import datetime
+
+print('=== Python脚本执行测试 ===')
+print(f'当前时间: {datetime.datetime.now()}')
+print(f'圆周率: {math.pi:.6f}')
+
+# 数学计算
+numbers = [1, 2, 3, 4, 5]
+squared = [x**2 for x in numbers]
+print(f'平方结果: {squared}')
+
+# 字符串处理
+text = 'Hello, Unity MCP!'
+print(f'文本长度: {len(text)}')
+print('脚本执行完成！')
+""",
+    "script_name": "basic_test.py",
+    "timeout": 30
+  }
+)
+```
+
+示例：验证Python语法
+```python
+function_call(
+  func="python_runner",
+  args={
+    "action": "validate",
+    "python_code": """
+def calculate_area(radius):
+    import math
+    return math.pi * radius ** 2
+
+def main():
+    radius = 5
+    area = calculate_area(radius)
+    print(f'圆的面积: {area:.2f}')
+
+if __name__ == '__main__':
+    main()
+""",
+    "script_name": "geometry.py"
+  }
+)
+```
+
+示例：安装Python包
+```python
+function_call(
+  func="python_runner",
+  args={
+    "action": "install_package",
+    "packages": ["requests", "numpy", "pandas"],
+    "timeout": 120
+  }
+)
+```
+
+示例：从requirements文件安装
+```python
+function_call(
+  func="python_runner",
+  args={
+    "action": "install_package",
+    "requirements_file": "requirements.txt",
+    "timeout": 180
+  }
+)
+```
+
+示例：使用虚拟环境
+```python
+function_call(
+  func="python_runner",
+  args={
+    "action": "execute",
+    "python_code": """
+import sys
+print(f'Python版本: {sys.version}')
+print(f'Python路径: {sys.executable}')
+
+# 检查已安装的包
+try:
+    import numpy as np
+    print(f'NumPy版本: {np.__version__}')
+except ImportError:
+    print('NumPy未安装')
+""",
+    "virtual_env": "C:/Python/venv",
+    "timeout": 45
+  }
+)
+```
+
+返回值格式（执行成功）
+```json
+{
+  "success": true,
+  "message": "Python script execution completed",
+  "data": {
+    "operation": "execute",
+    "script_name": "basic_test.py",
+    "success": true,
+    "output": "=== Python脚本执行测试 ===\n当前时间: 2024-12-21 10:30:45.123456\n圆周率: 3.141593\n平方结果: [1, 4, 9, 16, 25]\n文本长度: 18\n脚本执行完成！\n",
+    "error": "",
+    "exit_code": 0,
+    "duration": 125.75,
+    "temp_file": "C:/Temp/Unity/PythonRunner/basic_test_12345.py"
+  }
+}
+```
+
+返回值格式（验证成功）
+```json
+{
+  "success": true,
+  "message": "Python code syntax is valid",
+  "data": {
+    "operation": "validate",
+    "script_name": "geometry.py",
+    "python_path": "python",
+    "temp_file": "C:/Temp/Unity/PythonRunner/geometry_67890.py"
+  }
+}
+```
+
+返回值格式（语法错误）
+```json
+{
+  "success": false,
+  "error": "Python code syntax validation failed",
+  "data": {
+    "operation": "validate",
+    "error": "  File \"script.py\", line 5\n    print('Missing quote)\n                        ^\nSyntaxError: EOL while scanning string literal",
+    "output": ""
+  }
+}
+```
+
+返回值格式（包安装成功）
+```json
+{
+  "success": true,
+  "message": "Python packages installed successfully",
+  "data": {
+    "operation": "install_package",
+    "packages": ["requests", "numpy", "pandas"],
+    "output": "Successfully installed requests-2.28.1 numpy-1.24.3 pandas-2.0.2",
+    "exit_code": 0
+  }
+}
+```
+
+**技术特性**
+- **安全执行**: 临时文件隔离，自动清理
+- **编码支持**: 完整的UTF-8中文支持，Base64备用编码
+- **环境管理**: 支持虚拟环境和自定义Python路径
+- **超时控制**: 可配置的执行超时保护
+- **错误处理**: 详细的异常信息和堆栈跟踪
+- **包管理**: pip包安装和requirements.txt支持
+
+**安全特性**
+- 进程沙盒隔离
+- 临时文件自动清理
+- 超时自动终止
+- 异常安全处理
+- 环境变量控制
+
+**编码支持**
+- 自动UTF-8配置
+- 中文字符正确显示
+- Base64编码备用方案
+- 多层编码检测修复
+
+**使用场景**
+- 数据处理脚本
+- 算法验证
+- 批量文件操作
+- 网络API调用
+- 机器学习任务
+- 自动化测试
+- 开发工具集成
+
+**支持的Python版本**
+- Python 3.6+
+- Windows/Linux/macOS
+- 虚拟环境兼容
+- 自动路径检测
+
+---
 
 ### 最佳实践
 1. **错误处理**: 始终检查返回值的`success`字段

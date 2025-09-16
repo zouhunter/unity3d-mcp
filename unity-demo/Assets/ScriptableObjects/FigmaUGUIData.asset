@@ -12,7 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5e1012b4cffbb64cb70209e789e9b08, type: 3}
   m_Name: FigmaUGUIData
   m_EditorClassIdentifier: 
-  ui_nane: Homepage
   link_url: https://www.figma.com/design/oNOE3NSRYt023cdpXVHs4y/Figma-basics?node-id=4368-321123&t=pxf6n8pL7Y29CvKp-4
   picture_url: Assets/Pics/Shopping
   picture_level: 1

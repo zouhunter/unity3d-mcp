@@ -1,0 +1,211 @@
+# Unity MCP Tools Documentation
+
+This file contains the Model Context Protocol (MCP) tool definitions for Unity MCP Bridge.
+
+## Tool: python_runner
+
+**Name**: python_runner
+**Category**: 开发工具 (Development Tools)
+
+**Description**: 
+A comprehensive Python script execution tool that provides secure Python code execution, validation, and package management within Unity Editor. This tool supports UTF-8 encoding for Chinese characters and includes automatic encoding fixes.
+
+### Actions
+
+#### 1. Execute Python Code (`execute`)
+
+**Purpose**: Execute Python scripts with full UTF-8 support and automatic encoding handling.
+
+**Parameters**:
+- `action`: "execute" (required)
+- `python_code`: Python script code content (required)
+- `script_name`: Python script name, default is "script.py" (optional)
+- `python_path`: Path to Python interpreter, default is "python" (optional)  
+- `working_directory`: Working directory for script execution (optional)
+- `timeout`: Execution timeout in seconds, default 30 seconds (optional)
+- `cleanup`: Whether to clean up temporary files after execution, default true (optional)
+- `virtual_env`: Path to virtual environment to use (optional)
+
+**Features**:
+- Automatic UTF-8 encoding setup for Chinese character support
+- Base64 encoding fallback for complex character handling
+- Process timeout protection
+- Temporary file management with automatic cleanup
+- Environment variable configuration for UTF-8 support
+- Standard output and error capture with encoding fixes
+
+**Example Usage**:
+```json
+{
+  "func": "python_runner",
+  "args": {
+    "action": "execute",
+    "python_code": "print('Hello, 世界!')\nimport math\nprint(f'π = {math.pi:.4f}')",
+    "script_name": "hello_world.py",
+    "timeout": 30
+  }
+}
+```
+
+#### 2. Validate Python Code (`validate`)
+
+**Purpose**: Validate Python script syntax without execution.
+
+**Parameters**:
+- `action`: "validate" (required)
+- `python_code`: Python script code content to validate (required)
+- `script_name`: Python script name, default is "script.py" (optional)
+- `python_path`: Path to Python interpreter, default is "python" (optional)
+- `virtual_env`: Path to virtual environment to use (optional)
+
+**Features**:
+- Syntax validation using Python compiler
+- Error reporting with line numbers and descriptions
+- No code execution for security
+- UTF-8 file encoding support
+
+**Example Usage**:
+```json
+{
+  "func": "python_runner", 
+  "args": {
+    "action": "validate",
+    "python_code": "def hello():\n    print('Hello')\n    return 'success'",
+    "script_name": "validation_test.py"
+  }
+}
+```
+
+#### 3. Install Python Packages (`install_package`)
+
+**Purpose**: Install Python packages using pip with optional virtual environment support.
+
+**Parameters**:
+- `action`: "install_package" (required)
+- `packages`: Python packages to install (comma-separated string or JSON array) (optional)
+- `requirements_file`: Path to requirements.txt file (optional)
+- `python_path`: Path to Python interpreter, default is "python" (optional)
+- `virtual_env`: Path to virtual environment to use (optional)
+- `timeout`: Installation timeout in seconds, default 60 seconds (optional)
+
+**Note**: Either `packages` or `requirements_file` parameter is required.
+
+**Features**:
+- Individual package installation
+- Requirements file support
+- Virtual environment compatibility
+- Installation progress monitoring
+- Timeout protection for long installations
+
+**Example Usage**:
+```json
+{
+  "func": "python_runner",
+  "args": {
+    "action": "install_package", 
+    "packages": ["requests", "numpy", "pandas"],
+    "timeout": 120
+  }
+}
+```
+
+Or with requirements file:
+```json
+{
+  "func": "python_runner",
+  "args": {
+    "action": "install_package",
+    "requirements_file": "requirements.txt",
+    "timeout": 180
+  }
+}
+```
+
+### Return Format
+
+All actions return a standardized response format:
+
+#### Success Response:
+```json
+{
+  "success": true,
+  "message": "Operation completed successfully",
+  "data": {
+    "operation": "execute|validate|install_package",
+    "script_name": "script.py",
+    "success": true,
+    "output": "Script output content...",
+    "error": "Any error messages...",
+    "exit_code": 0,
+    "duration": 125.75,
+    "temp_file": "path/to/temporary/file.py"
+  }
+}
+```
+
+#### Error Response:
+```json
+{
+  "success": false,
+  "error": "Error description",
+  "data": {
+    "operation": "validate",
+    "error": "Detailed error message",
+    "output": "Any output before error"
+  }
+}
+```
+
+### Security Features
+
+1. **Temporary File Isolation**: All Python scripts run in isolated temporary files
+2. **Process Timeout**: Automatic termination of long-running processes
+3. **File Cleanup**: Automatic cleanup of temporary files and cache
+4. **Environment Sandboxing**: Controlled environment variable setup
+5. **Error Handling**: Comprehensive exception handling and error reporting
+
+### Encoding Support
+
+The tool includes advanced UTF-8 encoding support:
+
+1. **Automatic UTF-8 Setup**: Injects UTF-8 configuration code into Python scripts
+2. **Base64 Fallback**: Uses Base64 encoding for complex character handling
+3. **Multi-layer Encoding Fix**: Multiple encoding detection and correction methods
+4. **Environment Variables**: Sets proper PYTHONIOENCODING and locale variables
+
+### Technical Implementation
+
+- **Framework**: Unity Editor C# with coroutine-based async execution
+- **Process Management**: System.Diagnostics.Process with proper disposal
+- **Encoding**: UTF-8 with fallback mechanisms and Base64 encoding
+- **File Management**: Temporary file creation with automatic cleanup
+- **Error Handling**: Multi-level exception handling with detailed reporting
+
+### Supported Python Versions
+
+- Python 3.6+
+- Compatible with virtual environments
+- Supports both Windows and Unix-like systems
+- Automatic Python executable detection
+
+### Limitations
+
+1. Scripts run in isolated processes (no persistent state)
+2. Limited to text-based output (no GUI applications)
+3. Network access depends on system configuration
+4. File system access limited to working directory permissions
+5. Some complex encoding scenarios may still show display issues
+
+---
+
+## Version History
+
+- **v1.0.1**: Added comprehensive UTF-8 encoding support and Base64 fallback
+- **v1.0.0**: Initial release with basic Python execution and validation
+
+## Dependencies
+
+- Unity 2020.3+
+- Newtonsoft JSON 3.2.1+
+- System Python installation
+- Windows/Linux/macOS support

@@ -1458,7 +1458,7 @@ function_call(
 - `headers` (object): 请求头字典
 - `save_path` (string): 保存路径（下载时使用）
 - `file_path` (string): 文件路径（上传时使用）
-- `timeout` (int): 超时时间（秒），默认30秒
+- `timeout` (int): 超时时间（秒），默认300秒
 - `content_type` (string): 内容类型，默认application/json
 - `auth_token` (string): Bearer认证令牌
 - `basic_auth` (string): 基础认证（username:password）
@@ -3220,6 +3220,122 @@ except ImportError:
 2. **批量操作**: 多个相关操作使用`functions_call`提高效率  
 3. **资源管理**: 操作前确保目标目录存在
 4. **调试支持**: 利用控制台工具辅助开发调试
+
+---
+
+### gameplay - 游戏窗口控制与自动化
+**功能**: 提供Game窗口管理、输入模拟、截图和图像处理的综合解决方案。
+
+主要参数（放入 `args`）
+- `action` (string, 必需): 操作类型
+- `x`, `y` (float): 坐标位置（输入模拟用）
+- `width`, `height` (int): 窗口或图像尺寸
+- `save_path` (string): 保存路径
+- `format` (string): 图像格式(PNG/JPG)
+- `delay` (float): 延迟执行时间（秒）
+
+支持的操作 (action)
+
+**截图功能**
+- `screenshot` - 游戏窗口截图
+- `screenshot_region` - 区域截图
+- `batch_screenshot` - 批量截图
+
+**输入模拟**  
+- `simulate_click` - 模拟鼠标点击
+- `simulate_drag` - 模拟拖拽操作
+- `simulate_key` - 模拟按键
+- `simulate_scroll` - 模拟滚轮
+
+**窗口管理**
+- `set_size` - 设置窗口大小  
+- `get_info` - 获取窗口信息
+- `focus_window` - 聚焦窗口
+- `maximize` / `minimize` - 最大化/最小化
+
+**图像处理**
+- `compress_image` - 压缩图像
+- `resize_image` - 调整图像大小
+- `convert_format` - 转换图像格式
+
+示例：游戏窗口截图
+```python
+function_call(
+  func="gameplay",
+  args={"action": "screenshot", "save_path": "Assets/Screenshots/game.png", "format": "PNG", "quality": 90}
+)
+```
+
+示例：模拟点击
+```python
+function_call(
+  func="gameplay", 
+  args={"action": "simulate_click", "x": 100, "y": 200, "button": 0, "delay": 1.0}
+)
+```
+
+示例：设置窗口大小
+```python
+function_call(
+  func="gameplay",
+  args={"action": "set_size", "width": 1920, "height": 1080}
+)
+```
+
+示例：区域截图
+```python
+function_call(
+  func="gameplay",
+  args={"action": "screenshot_region", "region_x": 50, "region_y": 50, "region_width": 400, "region_height": 300, "save_path": "Assets/Screenshots/region.png"}
+)
+```
+
+示例：拖拽操作
+```python
+function_call(
+  func="gameplay",
+  args={"action": "simulate_drag", "x": 100, "y": 100, "target_x": 300, "target_y": 300, "duration": 2.0}
+)
+```
+
+示例：压缩图像
+```python
+function_call(
+  func="gameplay", 
+  args={"action": "compress_image", "source_path": "Assets/Original/big.png", "save_path": "Assets/Compressed/small.png", "compress_ratio": 0.5}
+)
+```
+
+示例：批量截图
+```python
+function_call(
+  func="gameplay",
+  args={"action": "batch_screenshot", "count": 10, "interval": 2.0, "base_path": "Assets/Screenshots/batch"}
+)
+```
+
+预定义窗口大小:
+- `HD` / `FHD` - 1920x1080
+- `4K` - 3840x2160  
+- `iPhone` - 375x667
+- `iPad` - 768x1024
+- `Android` - 360x640
+
+**特色功能**:
+- 🎮 **游戏自动化**: 模拟各种输入操作进行自动化测试
+- 📸 **智能截图**: 支持全屏、区域、批量截图
+- 🖼️ **图像处理**: 压缩、缩放、格式转换一体化
+- ⏱️ **延迟执行**: 精确控制操作时机
+- 📏 **窗口管理**: 动态调整游戏窗口大小和状态
+
+**使用场景**:
+- 自动化测试和UI验证
+- 游戏截图和素材制作
+- 性能测试和数据收集
+- 演示视频录制准备
+- 批量图像处理任务
+
+---
 
 ### 技术支持
 - 📖 完整API文档: 见各工具详细说明

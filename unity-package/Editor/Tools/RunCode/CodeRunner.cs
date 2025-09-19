@@ -10,8 +10,6 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityMcp.Models;
-using NUnit.Framework;
-using UnityEditor.TestTools.TestRunner.Api;
 using UnityEditor.Compilation;
 using CompilationAssembly = UnityEditor.Compilation.Assembly;
 using ReflectionAssembly = System.Reflection.Assembly;
@@ -19,32 +17,34 @@ using ReflectionAssembly = System.Reflection.Assembly;
 namespace UnityMcp.Tools
 {
     /// <summary>
-    /// Handles C# test script execution including compilation and running test methods.
-    /// 对应方法名: test_runner
+    /// Handles C# code execution including compilation and running arbitrary C# methods.
+    /// 对应方法名: code_runner
     /// </summary>
-    [ToolName("test_runner", "开发工具")]
-    public class TestRunner : StateMethodBase
+    [ToolName("code_runner", "开发工具")]
+    public class CodeRunner : StateMethodBase
     {
-        // Test execution tracking
-        private class TestOperation
+        // Code execution tracking
+        private class CodeOperation
         {
             public TaskCompletionSource<object> CompletionSource { get; set; }
-            public string TestCode { get; set; }
-            public string ClassName { get; set; }
-            public List<TestResult> Results { get; set; } = new List<TestResult>();
+            public string Code { get; set; }
+            public string MethodName { get; set; }
+            public List<ExecutionResult> Results { get; set; } = new List<ExecutionResult>();
         }
 
-        private class TestResult
+        private class ExecutionResult
         {
-            public string TestName { get; set; }
+            public string MethodName { get; set; }
             public bool Success { get; set; }
             public string Message { get; set; }
+            public string Output { get; set; }
             public string StackTrace { get; set; }
             public double Duration { get; set; }
+            public object ReturnValue { get; set; }
         }
 
-        // Queue of active test operations
-        private readonly List<TestOperation> _activeOperations = new List<TestOperation>();
+        // Queue of active code operations
+        private readonly List<CodeOperation> _activeOperations = new List<CodeOperation>();
 
         // Flag to track if the update callback is registered
         private bool _updateCallbackRegistered = false;
@@ -60,12 +60,15 @@ namespace UnityMcp.Tools
             return new[]
             {
                 new MethodKey("action", "Operation type: execute, validate", false),
-                new MethodKey("test_code", "C# test code content", true),
-                new MethodKey("class_name", "Test class name, default is TestClass", true),
-                new MethodKey("namespace", "Namespace, default is TestNamespace", true),
+                new MethodKey("code", "C# code content to execute", true),
+                new MethodKey("class_name", "Class name, default is CodeClass", true),
+                new MethodKey("method_name", "Method name to execute, default is Run", true),
+                new MethodKey("namespace", "Namespace, default is CodeNamespace", true),
                 new MethodKey("includes", "Referenced using statements list, JSON array format", true),
+                new MethodKey("parameters", "Method parameters, JSON array format", true),
                 new MethodKey("timeout", "Execution timeout (seconds), default 30 seconds", true),
-                new MethodKey("cleanup", "Whether to clean up temporary files after execution, default true", true)
+                new MethodKey("cleanup", "Whether to clean up temporary files after execution, default true", true),
+                new MethodKey("return_output", "Whether to capture and return console output, default true", true)
             };
         }
 
@@ -77,61 +80,64 @@ namespace UnityMcp.Tools
             return StateTreeBuilder
                 .Create()
                 .Key("action")
-                    .Leaf("execute", HandleExecuteTest)
-                    .Leaf("validate", HandleValidateTest)
-                    .DefaultLeaf(HandleExecuteTest)
+                    .Leaf("execute", HandleExecuteCode)
+                    .Leaf("validate", HandleValidateCode)
+                    .DefaultLeaf(HandleExecuteCode)
                 .Build();
         }
 
-        // --- 测试执行操作处理方法 ---
+        // --- 代码执行操作处理方法 ---
 
         /// <summary>
-        /// 处理执行测试操作
+        /// 处理执行代码操作
         /// </summary>
-        private object HandleExecuteTest(StateTreeContext ctx)
+        private object HandleExecuteCode(StateTreeContext ctx)
         {
-            LogInfo("[TestRunner] Executing test code");
-            return ctx.AsyncReturn(ExecuteTestCoroutine(ctx.JsonData));
+            LogInfo("[CodeRunner] Executing C# code");
+            return ctx.AsyncReturn(ExecuteCodeCoroutine(ctx.JsonData));
         }
 
         /// <summary>
-        /// 处理验证测试代码操作
+        /// 处理验证代码操作
         /// </summary>
-        private object HandleValidateTest(StateTreeContext ctx)
+        private object HandleValidateCode(StateTreeContext ctx)
         {
-            LogInfo("[TestRunner] Validating test code");
-            return ctx.AsyncReturn(ValidateTestCoroutine(ctx.JsonData));
+            LogInfo("[CodeRunner] Validating C# code");
+            return ctx.AsyncReturn(ValidateCodeCoroutine(ctx.JsonData));
         }
 
         // --- 异步执行方法 ---
 
         /// <summary>
-        /// 异步执行测试代码协程
+        /// 异步执行代码协程
         /// </summary>
-        private IEnumerator ExecuteTestCoroutine(JObject args)
+        private IEnumerator ExecuteCodeCoroutine(JObject args)
         {
             string tempFilePath = null;
             string tempAssemblyPath = null;
 
             try
             {
-                string testCode = args["test_code"]?.ToString();
-                if (string.IsNullOrEmpty(testCode))
+                string code = args["code"]?.ToString();
+                if (string.IsNullOrEmpty(code))
                 {
-                    yield return Response.Error("test_code parameter is required");
+                    yield return Response.Error("code parameter is required");
                     yield break;
                 }
 
-                string className = args["class_name"]?.ToString() ?? "TestClass";
-                string namespaceName = args["namespace"]?.ToString() ?? "TestNamespace";
+                string className = args["class_name"]?.ToString() ?? "CodeClass";
+                string methodName = args["method_name"]?.ToString() ?? "Run";
+                string namespaceName = args["namespace"]?.ToString() ?? "CodeNamespace";
                 var includes = args["includes"]?.ToObject<string[]>() ?? GetDefaultIncludes();
+                var parameters = args["parameters"]?.ToObject<object[]>() ?? new object[0];
                 int timeout = args["timeout"]?.ToObject<int>() ?? 30;
                 bool cleanup = args["cleanup"]?.ToObject<bool>() ?? true;
+                bool returnOutput = args["return_output"]?.ToObject<bool>() ?? true;
 
-                LogInfo($"[TestRunner] Executing test class: {namespaceName}.{className}");
+                LogInfo($"[CodeRunner] Executing method: {namespaceName}.{className}.{methodName}");
 
-                // 使用协程执行测试
-                yield return ExecuteTestCoroutineInternal(testCode, className, namespaceName, includes, timeout, cleanup,
+                // 使用协程执行代码
+                yield return ExecuteCodeCoroutineInternal(code, className, methodName, namespaceName, includes, parameters, timeout, cleanup, returnOutput,
                     (tFilePath, tAssemblyPath) => { tempFilePath = tFilePath; tempAssemblyPath = tAssemblyPath; });
                 yield return executionResult;
             }
@@ -146,42 +152,43 @@ namespace UnityMcp.Tools
         }
 
         /// <summary>
-        /// 验证测试代码协程
+        /// 验证代码协程
         /// </summary>
-        private IEnumerator ValidateTestCoroutine(JObject args)
+        private IEnumerator ValidateCodeCoroutine(JObject args)
         {
             string tempFilePath = null;
             string tempAssemblyPath = null;
 
             try
             {
-                string testCode = args["test_code"]?.ToString();
-                if (string.IsNullOrEmpty(testCode))
+                string code = args["code"]?.ToString();
+                if (string.IsNullOrEmpty(code))
                 {
-                    yield return Response.Error("test_code parameter is required");
+                    yield return Response.Error("code parameter is required");
                     yield break;
                 }
 
-                string className = args["class_name"]?.ToString() ?? "TestClass";
-                string namespaceName = args["namespace"]?.ToString() ?? "TestNamespace";
+                string className = args["class_name"]?.ToString() ?? "CodeClass";
+                string methodName = args["method_name"]?.ToString() ?? "Run";
+                string namespaceName = args["namespace"]?.ToString() ?? "CodeNamespace";
                 var includes = args["includes"]?.ToObject<string[]>() ?? GetDefaultIncludes();
 
-                LogInfo($"[TestRunner] Validating test class: {namespaceName}.{className}");
+                LogInfo($"[CodeRunner] Validating code class: {namespaceName}.{className}");
 
                 // 在协程外部处理异常
                 validationResult = null;
-                string fullCode = testCode;
+                string fullCode = code;
 
                 bool failed = false;
                 try
                 {
-                    fullCode = GenerateFullTestCode(testCode, className, namespaceName, includes);
-                    LogInfo($"[TestRunner] Generated code for validation");
+                    fullCode = GenerateFullCode(code, className, methodName, namespaceName, includes);
+                    LogInfo($"[CodeRunner] Generated code for validation");
                 }
                 catch (Exception e)
                 {
-                    LogError($"[TestRunner] Failed to generate validation code: {e.Message}");
-                    validationResult = Response.Error($"Failed to generate test code: {e.Message}");
+                    LogError($"[CodeRunner] Failed to generate validation code: {e.Message}");
+                    validationResult = Response.Error($"Failed to generate code: {e.Message}");
                     failed = true;
                 }
                 if (failed)
@@ -198,17 +205,18 @@ namespace UnityMcp.Tools
                         if (success)
                         {
                             validationResult = Response.Success(
-                                "Test code syntax is valid", new
+                                "Code syntax is valid", new
                                 {
                                     operation = "validate",
                                     class_name = className,
+                                    method_name = methodName,
                                     namespace_name = namespaceName,
                                     generated_code = fullCode
                                 });
                         }
                         else
                         {
-                            validationResult = Response.Error("Test code syntax validation failed", new
+                            validationResult = Response.Error("Code syntax validation failed", new
                             {
                                 operation = "validate",
                                 errors = string.Join("\n", errors ?? new string[] { "Unknown validation error" })
@@ -230,25 +238,25 @@ namespace UnityMcp.Tools
 
 
         /// <summary>
-        /// 执行测试代码的内部协程
+        /// 执行代码的内部协程
         /// </summary>
-        private IEnumerator ExecuteTestCoroutineInternal(string testCode, string className, string namespaceName, string[] includes, int timeout, bool cleanup, System.Action<string, string> onTempFilesCreated = null)
+        private IEnumerator ExecuteCodeCoroutineInternal(string code, string className, string methodName, string namespaceName, string[] includes, object[] parameters, int timeout, bool cleanup, bool returnOutput, System.Action<string, string> onTempFilesCreated = null)
         {
             // 在协程外部处理异常，避免在try-catch中使用yield return
             executionResult = null;
 
-            // 生成完整的测试代码
-            string fullCode = testCode;
+            // 生成完整的代码
+            string fullCode = code;
             bool failed = false;
             try
             {
-                fullCode = GenerateFullTestCode(testCode, className, namespaceName, includes);
-                LogInfo($"[TestRunner] Generated complete code");
+                fullCode = GenerateFullCode(code, className, methodName, namespaceName, includes);
+                LogInfo($"[CodeRunner] Generated complete code");
             }
             catch (Exception e)
             {
-                LogError($"[TestRunner] Failed to generate code: {e.Message}");
-                executionResult = Response.Error($"Failed to generate test code: {e.Message}");
+                LogError($"[CodeRunner] Failed to generate code: {e.Message}");
+                executionResult = Response.Error($"Failed to generate code: {e.Message}");
                 failed = true;
             }
             if (failed)
@@ -266,33 +274,38 @@ namespace UnityMcp.Tools
                     {
                         try
                         {
-                            // 执行测试
-                            var testResults = ExecuteCompiledTests(assembly, namespaceName, className);
+                            // 执行代码
+                            var executionResults = ExecuteCompiledCode(assembly, namespaceName, className, methodName, parameters, returnOutput);
+                            var result = executionResults.FirstOrDefault() ?? new ExecutionResult
+                            {
+                                MethodName = methodName,
+                                Success = false,
+                                Message = "No execution result",
+                                Output = "",
+                                Duration = 0
+                            };
+
                             executionResult = Response.Success(
-                                $"Test execution completed, {testResults.Count} tests executed",
+                                result.Success ? "Code execution completed successfully" : "Code execution completed with errors",
                                 new
                                 {
                                     operation = "execute",
                                     class_name = className,
+                                    method_name = methodName,
                                     namespace_name = namespaceName,
-                                    test_count = testResults.Count,
-                                    passed_count = testResults.Count(r => r.Success),
-                                    failed_count = testResults.Count(r => !r.Success),
-                                    results = testResults.Select(r => new
-                                    {
-                                        test_name = r.TestName,
-                                        success = r.Success,
-                                        message = r.Message,
-                                        stack_trace = r.StackTrace,
-                                        duration = r.Duration
-                                    }).ToArray()
+                                    success = result.Success,
+                                    message = result.Message,
+                                    output = result.Output,
+                                    return_value = result.ReturnValue?.ToString() ?? "null",
+                                    duration = result.Duration,
+                                    stack_trace = result.StackTrace
                                 }
                             );
                         }
                         catch (Exception e)
                         {
-                            LogError($"[TestRunner] Test execution failed: {e.Message}");
-                            executionResult = Response.Error($"Failed to execute compiled tests: {e.Message}");
+                            LogError($"[CodeRunner] Code execution failed: {e.Message}");
+                            executionResult = Response.Error($"Failed to execute compiled code: {e.Message}");
                         }
                     }
                     else
@@ -307,113 +320,11 @@ namespace UnityMcp.Tools
             yield return executionResult;
         }
 
-        /// <summary>
-        /// 验证测试代码语法
-        /// </summary>
-        private object ValidateTestCode(JObject args)
-        {
-            try
-            {
-                string testCode = args["test_code"]?.ToString();
-                if (string.IsNullOrEmpty(testCode))
-                {
-                    return Response.Error("test_code parameter is required");
-                }
-
-                string className = args["class_name"]?.ToString() ?? "TestClass";
-                string namespaceName = args["namespace"]?.ToString() ?? "TestNamespace";
-                var includes = args["includes"]?.ToObject<string[]>() ?? GetDefaultIncludes();
-
-                LogInfo("[TestRunner] Validating test code syntax");
-
-                string fullCode = GenerateFullTestCode(testCode, className, namespaceName, includes);
-                var compilationResult = CompileCode(fullCode);
-
-                if (compilationResult.success)
-                {
-                    return Response.Success("Test code syntax validation passed", new
-                    {
-                        operation = "validate",
-                        class_name = className,
-                        namespace_name = namespaceName,
-                        generated_code = fullCode
-                    });
-                }
-                else
-                {
-                    return Response.Error("Test code syntax validation failed", new
-                    {
-                        operation = "validate",
-                        errors = string.Join("\n", compilationResult.errors)
-                    });
-                }
-            }
-            catch (Exception e)
-            {
-                LogError($"[TestRunner] Test code validation failed: {e.Message}");
-                return Response.Error($"Failed to validate test code: {e.Message}");
-            }
-        }
-
-        // --- 核心执行方法 ---
 
         /// <summary>
-        /// 执行测试代码
+        /// 生成完整的代码
         /// </summary>
-        private object ExecuteTest(string testCode, string className, string namespaceName, string[] includes, int timeout, bool cleanup)
-        {
-            try
-            {
-                // 生成完整的测试代码
-                string fullCode = GenerateFullTestCode(testCode, className, namespaceName, includes);
-                LogInfo($"[TestRunner] Generated complete code:\n{fullCode}");
-
-                // 编译代码
-                var compilationResult = CompileCode(fullCode);
-                if (!compilationResult.success)
-                {
-                    return Response.Error("Code compilation failed", new
-                    {
-                        operation = "execute",
-                        errors = string.Join("\n", compilationResult.errors ?? new string[] { "Unknown compilation error" })
-                    });
-                }
-
-                // 执行测试
-                var testResults = ExecuteCompiledTests(compilationResult.assembly, namespaceName, className);
-
-                return Response.Success(
-                    $"Test execution completed, {testResults.Count} tests executed",
-                    new
-                    {
-                        operation = "execute",
-                        class_name = className,
-                        namespace_name = namespaceName,
-                        test_count = testResults.Count,
-                        passed_count = testResults.Count(r => r.Success),
-                        failed_count = testResults.Count(r => !r.Success),
-                        results = testResults.Select(r => new
-                        {
-                            test_name = r.TestName,
-                            success = r.Success,
-                            message = r.Message,
-                            stack_trace = r.StackTrace,
-                            duration = r.Duration
-                        }).ToArray()
-                    }
-                );
-            }
-            catch (Exception e)
-            {
-                LogError($"[TestRunner] Error occurred while executing test: {e.Message}");
-                return Response.Error($"Failed to execute test: {e.Message}");
-            }
-        }
-
-        /// <summary>
-        /// 生成完整的测试代码
-        /// </summary>
-        private string GenerateFullTestCode(string testCode, string className, string namespaceName, string[] includes)
+        private string GenerateFullCode(string code, string className, string methodName, string namespaceName, string[] includes)
         {
             var sb = new StringBuilder();
 
@@ -428,15 +339,48 @@ namespace UnityMcp.Tools
             // 添加命名空间和类
             sb.AppendLine($"namespace {namespaceName}");
             sb.AppendLine("{");
-            sb.AppendLine($"    [TestFixture]");
             sb.AppendLine($"    public class {className}");
             sb.AppendLine("    {");
 
-            // 缩进用户代码
-            var lines = testCode.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
+            // 检查用户代码是否已经包含方法定义
+            bool hasMethodDefinition = code.Contains("public") && (code.Contains("static") || code.Contains("void") || code.Contains("string") || code.Contains("int") || code.Contains("bool"));
+
+            if (hasMethodDefinition)
             {
-                sb.AppendLine($"        {line}");
+                // 如果用户代码已包含方法定义，直接缩进并添加
+                var lines = code.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var line in lines)
+                {
+                    sb.AppendLine($"        {line}");
+                }
+            }
+            else
+            {
+                // 如果用户代码只是代码片段，包装在指定的方法中
+                sb.AppendLine($"        public static object {methodName}()");
+                sb.AppendLine("        {");
+                sb.AppendLine("            try");
+                sb.AppendLine("            {");
+
+                var lines = code.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var line in lines)
+                {
+                    sb.AppendLine($"                {line}");
+                }
+
+                // 如果代码不包含return语句，添加默认返回值
+                if (!code.ToLower().Contains("return"))
+                {
+                    sb.AppendLine("                return \"Execution completed\";");
+                }
+
+                sb.AppendLine("            }");
+                sb.AppendLine("            catch (System.Exception ex)");
+                sb.AppendLine("            {");
+                sb.AppendLine("                UnityEngine.Debug.LogException(ex);");
+                sb.AppendLine("                throw;");
+                sb.AppendLine("            }");
+                sb.AppendLine("        }");
             }
 
             sb.AppendLine("    }");
@@ -962,167 +906,139 @@ namespace UnityMcp.Tools
         }
 
         /// <summary>
-        /// 执行编译后的测试
+        /// 执行编译后的代码
         /// </summary>
-        private List<TestResult> ExecuteCompiledTests(ReflectionAssembly assembly, string namespaceName, string className)
+        private List<ExecutionResult> ExecuteCompiledCode(ReflectionAssembly assembly, string namespaceName, string className, string methodName, object[] parameters, bool returnOutput)
         {
-            var results = new List<TestResult>();
+            var results = new List<ExecutionResult>();
             var fullClassName = $"{namespaceName}.{className}";
-            var testType = assembly.GetType(fullClassName);
+            var codeType = assembly.GetType(fullClassName);
 
-            if (testType == null)
+            if (codeType == null)
             {
-                throw new Exception($"Test class not found: {fullClassName}");
+                throw new Exception($"Code class not found: {fullClassName}");
             }
 
-            // 获取所有标记了[Test]特性的方法
-            var testMethods = testType.GetMethods()
-                .Where(m => m.GetCustomAttributes(typeof(TestAttribute), false).Length > 0)
-                .ToArray();
+            // 查找指定的方法
+            var targetMethod = codeType.GetMethod(methodName, BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance);
 
-            if (testMethods.Length == 0)
+            if (targetMethod == null)
             {
-                LogWarning($"[TestRunner] No methods marked with [Test] attribute found in class {fullClassName}");
+                // 如果找不到指定方法，尝试查找任何public方法
+                var allMethods = codeType.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                targetMethod = allMethods.FirstOrDefault(m => !m.IsSpecialName && m.DeclaringType == codeType);
+
+                if (targetMethod != null)
+                {
+                    LogWarning($"[CodeRunner] Method '{methodName}' not found, using '{targetMethod.Name}' instead");
+                    methodName = targetMethod.Name;
+                }
             }
 
-            // 创建测试类实例
-            var testInstance = Activator.CreateInstance(testType);
-
-            // 执行SetUp方法（如果存在）
-            var setupMethod = testType.GetMethods()
-                .FirstOrDefault(m => m.GetCustomAttributes(typeof(SetUpAttribute), false).Length > 0);
-
-            // 执行TearDown方法（如果存在）
-            var teardownMethod = testType.GetMethods()
-                .FirstOrDefault(m => m.GetCustomAttributes(typeof(TearDownAttribute), false).Length > 0);
-
-            foreach (var testMethod in testMethods)
+            if (targetMethod == null)
             {
-                var testResult = new TestResult
-                {
-                    TestName = testMethod.Name
-                };
-
-                var startTime = DateTime.Now;
-
-                try
-                {
-                    // 执行SetUp
-                    setupMethod?.Invoke(testInstance, null);
-
-                    // 执行测试方法
-                    testMethod.Invoke(testInstance, null);
-
-                    testResult.Success = true;
-                    testResult.Message = "Test passed";
-                }
-                catch (TargetInvocationException tie)
-                {
-                    var innerException = tie.InnerException ?? tie;
-
-                    // 检查是否是Assert.Pass抛出的成功异常
-                    if (IsTestPassException(innerException))
-                    {
-                        testResult.Success = true;
-                        testResult.Message = innerException.Message;
-                        LogInfo($"[TestRunner] Test {testMethod.Name} passed via Assert.Pass: {innerException.Message}");
-                    }
-                    else
-                    {
-                        testResult.Success = false;
-                        testResult.Message = innerException.Message;
-                        testResult.StackTrace = innerException.StackTrace;
-                        LogError($"[TestRunner] Test {testMethod.Name} failed: {innerException.Message}");
-                        Debug.LogException(innerException);
-                    }
-                }
-                catch (Exception e)
-                {
-                    testResult.Success = false;
-                    testResult.Message = e.Message;
-                    testResult.StackTrace = e.StackTrace;
-                    Debug.LogException(new Exception($"[TestRunner] Test {testMethod.Name} failed: {e.Message}", e));
-                }
-                finally
-                {
-                    try
-                    {
-                        // 执行TearDown
-                        teardownMethod?.Invoke(testInstance, null);
-                    }
-                    catch (Exception e)
-                    {
-                        LogWarning($"[TestRunner] TearDown failed for {testMethod.Name}: {e.Message}");
-                    }
-
-                    testResult.Duration = (DateTime.Now - startTime).TotalMilliseconds;
-                }
-
-                results.Add(testResult);
-                LogInfo($"[TestRunner] Test {testMethod.Name}: {(testResult.Success ? "PASSED" : "FAILED")} ({testResult.Duration:F2}ms)");
+                throw new Exception($"No suitable method found in class {fullClassName}");
             }
+
+            var executionResult = new ExecutionResult
+            {
+                MethodName = methodName
+            };
+
+            var startTime = DateTime.Now;
+
+            // 准备控制台输出捕获
+            StringWriter outputWriter = null;
+            TextWriter originalOutput = null;
+
+            try
+            {
+                if (returnOutput)
+                {
+                    outputWriter = new StringWriter();
+                    originalOutput = Console.Out;
+                    Console.SetOut(outputWriter);
+                }
+
+                // 创建实例（如果需要）
+                object instance = null;
+                if (!targetMethod.IsStatic)
+                {
+                    instance = Activator.CreateInstance(codeType);
+                }
+
+                // 准备方法参数
+                var methodParameters = targetMethod.GetParameters();
+                object[] actualParameters = null;
+
+                if (methodParameters.Length > 0)
+                {
+                    actualParameters = new object[methodParameters.Length];
+                    for (int i = 0; i < methodParameters.Length && i < parameters.Length; i++)
+                    {
+                        try
+                        {
+                            // 尝试转换参数类型
+                            actualParameters[i] = Convert.ChangeType(parameters[i], methodParameters[i].ParameterType);
+                        }
+                        catch
+                        {
+                            actualParameters[i] = parameters[i];
+                        }
+                    }
+                }
+
+                // 执行方法
+                var returnValue = targetMethod.Invoke(instance, actualParameters);
+
+                executionResult.Success = true;
+                executionResult.Message = "Code executed successfully";
+                executionResult.ReturnValue = returnValue;
+
+                LogInfo($"[CodeRunner] Method {methodName} executed successfully");
+
+                // 如果方法执行了Unity相关操作，确保它们被正确记录
+                if (returnValue != null)
+                {
+                    LogInfo($"[CodeRunner] Method returned: {returnValue}");
+                }
+            }
+            catch (TargetInvocationException tie)
+            {
+                var innerException = tie.InnerException ?? tie;
+                executionResult.Success = false;
+                executionResult.Message = innerException.Message;
+                executionResult.StackTrace = innerException.StackTrace;
+                LogError($"[CodeRunner] Method {methodName} failed: {innerException.Message}");
+                Debug.LogException(innerException);
+            }
+            catch (Exception e)
+            {
+                executionResult.Success = false;
+                executionResult.Message = e.Message;
+                executionResult.StackTrace = e.StackTrace;
+                LogError($"[CodeRunner] Method {methodName} failed: {e.Message}");
+                Debug.LogException(e);
+            }
+            finally
+            {
+                // 恢复控制台输出
+                if (returnOutput && originalOutput != null)
+                {
+                    Console.SetOut(originalOutput);
+                    executionResult.Output = outputWriter?.ToString() ?? "";
+                    outputWriter?.Dispose();
+                }
+
+                executionResult.Duration = (DateTime.Now - startTime).TotalMilliseconds;
+            }
+
+            results.Add(executionResult);
+            LogInfo($"[CodeRunner] Method {methodName}: {(executionResult.Success ? "SUCCESS" : "FAILED")} ({executionResult.Duration:F2}ms)");
 
             return results;
         }
 
-        /// <summary>
-        /// 检查异常是否是Assert.Pass抛出的成功异常
-        /// </summary>
-        private bool IsTestPassException(Exception exception)
-        {
-            if (exception == null) return false;
-
-            var exceptionTypeName = exception.GetType().Name;
-            var exceptionFullTypeName = exception.GetType().FullName;
-
-            // 检查常见的测试通过异常类型
-            var passExceptionTypes = new[]
-            {
-                "SuccessException",
-                "PassedException",
-                "IgnoreException",
-                "InconclusiveException"
-            };
-
-            var passFullTypeNames = new[]
-            {
-                "NUnit.Framework.SuccessException",
-                "NUnit.Framework.PassedException",
-                "NUnit.Framework.IgnoreException",
-                "NUnit.Framework.InconclusiveException"
-            };
-
-            // 检查类型名称
-            foreach (var passType in passExceptionTypes)
-            {
-                if (exceptionTypeName.Equals(passType, StringComparison.OrdinalIgnoreCase))
-                {
-                    LogInfo($"[TestRunner] 检测到测试通过异常类型: {exceptionTypeName}");
-                    return true;
-                }
-            }
-
-            // 检查完整类型名称
-            foreach (var passFullType in passFullTypeNames)
-            {
-                if (exceptionFullTypeName.Equals(passFullType, StringComparison.OrdinalIgnoreCase))
-                {
-                    LogInfo($"[TestRunner] 检测到测试通过异常完整类型: {exceptionFullTypeName}");
-                    return true;
-                }
-            }
-
-            // 检查异常消息中是否包含"pass"相关关键词（作为后备方案）
-            var message = exception.Message?.ToLowerInvariant() ?? "";
-            if (message.Contains("passed") || message.Contains("success"))
-            {
-                LogInfo($"[TestRunner] 根据异常消息判断为测试通过: {exception.Message}");
-                return true;
-            }
-
-            LogInfo($"[TestRunner] 异常类型不是测试通过异常: {exceptionFullTypeName}");
-            return false;
-        }
 
         /// <summary>
         /// 获取默认的using语句
@@ -1134,9 +1050,12 @@ namespace UnityMcp.Tools
                 "System",
                 "System.Collections",
                 "System.Collections.Generic",
+                "System.Linq",
+                "System.Text",
+                "System.IO",
                 "UnityEngine",
                 "UnityEditor",
-                "NUnit.Framework"
+                "System.Reflection"
             };
         }
 

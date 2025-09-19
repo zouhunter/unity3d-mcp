@@ -52,7 +52,7 @@ namespace UnityMcp.Tools
                 new MethodKey("script_name", "Python script name, default is script.py", true),
                 new MethodKey("python_path", "Path to Python interpreter, default is 'python'", true),
                 new MethodKey("working_directory", "Working directory for script execution", true),
-                new MethodKey("timeout", "Execution timeout (seconds), default 30 seconds", true),
+                new MethodKey("timeout", "Execution timeout (seconds), default 300 seconds", true),
                 new MethodKey("cleanup", "Whether to clean up temporary files after execution, default true", true),
                 new MethodKey("packages", "Python packages to install (comma-separated or JSON array)", true),
                 new MethodKey("requirements_file", "Path to requirements.txt file", true),
@@ -124,8 +124,8 @@ namespace UnityMcp.Tools
 
                 string scriptName = args["script_name"]?.ToString() ?? "script.py";
                 string pythonPath = args["python_path"]?.ToString() ?? "python";
-                string workingDirectory = args["working_directory"]?.ToString() ?? Application.dataPath;
-                int timeout = args["timeout"]?.ToObject<int>() ?? 30;
+                string workingDirectory = args["working_directory"]?.ToString() ?? System.Environment.CurrentDirectory;
+                int timeout = args["timeout"]?.ToObject<int>() ?? 300;
                 bool cleanup = args["cleanup"]?.ToObject<bool>() ?? true;
                 string virtualEnv = args["virtual_env"]?.ToString();
 
@@ -293,13 +293,18 @@ namespace UnityMcp.Tools
             bool fileCreated = false;
             try
             {
-                // 添加Base64编码解决方案来避免编码问题
+                // 添加Base64编码解决方案来避免编码问题，并强制刷新输出
                 string encodingSolutionCode = @"#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import sys
 import io
 import base64
 import json
+import os
+import builtins
+
+# 设置环境变量确保无缓冲输出
+os.environ['PYTHONUNBUFFERED'] = '1'
 
 # Unity MCP Python Runner 编码解决方案
 class UnicodeOutput:
@@ -315,11 +320,11 @@ class UnicodeOutput:
                     self.original_stream.write(f'[UNITY_MCP_B64:{encoded_text}]')
                 else:
                     self.original_stream.write(text)
-                self.original_stream.flush()
+                self.original_stream.flush()  # 立即刷新
             except:
                 try:
                     self.original_stream.write(text.encode('ascii', errors='replace').decode('ascii'))
-                    self.original_stream.flush()
+                    self.original_stream.flush()  # 立即刷新
                 except:
                     pass
     
@@ -338,6 +343,14 @@ try:
     sys.stderr = UnicodeOutput(sys.stderr)
 except:
     pass
+
+# 重写print函数确保立即刷新
+original_print = builtins.print
+def unity_print(*args, **kwargs):
+    kwargs.setdefault('flush', True)  # 默认强制刷新
+    return original_print(*args, **kwargs)
+
+builtins.print = unity_print
 
 ";
                 string finalCode = encodingSolutionCode + pythonCode;
@@ -413,7 +426,7 @@ except:
             var processStartInfo = new ProcessStartInfo
             {
                 FileName = pythonExecutable,
-                Arguments = $"\"{scriptPath}\"",
+                Arguments = $"-u \"{scriptPath}\"", // 添加-u参数禁用Python输出缓冲
                 WorkingDirectory = workingDirectory,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
@@ -423,9 +436,10 @@ except:
                 StandardErrorEncoding = Encoding.UTF8
             };
 
-            // 设置Python环境变量以确保UTF-8输出
+            // 设置Python环境变量以确保UTF-8输出和禁用缓冲
             processStartInfo.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
             processStartInfo.EnvironmentVariables["PYTHONUTF8"] = "1";
+            processStartInfo.EnvironmentVariables["PYTHONUNBUFFERED"] = "1"; // 禁用Python缓冲
             processStartInfo.EnvironmentVariables["LANG"] = "en_US.UTF-8";
             processStartInfo.EnvironmentVariables["LC_ALL"] = "en_US.UTF-8";
 
@@ -448,6 +462,19 @@ except:
                             // 尝试修复编码问题
                             string fixedData = FixEncodingIssues(e.Data);
                             outputBuilder.AppendLine(fixedData);
+                            
+                            // 实时输出到Unity控制台 - 需要在主线程中执行
+                            UnityEditor.EditorApplication.delayCall += () =>
+                            {
+                                try
+                                {
+                                    UnityEngine.Debug.Log($"[Python] {fixedData}");
+                                }
+                                catch (System.Exception ex)
+                                {
+                                    UnityEngine.Debug.LogWarning($"[PythonRunner] 实时输出失败: {ex.Message}");
+                                }
+                            };
                         }
                     };
 
@@ -458,6 +485,19 @@ except:
                             // 尝试修复编码问题
                             string fixedData = FixEncodingIssues(e.Data);
                             errorBuilder.AppendLine(fixedData);
+                            
+                            // 实时输出错误到Unity控制台 - 需要在主线程中执行
+                            UnityEditor.EditorApplication.delayCall += () =>
+                            {
+                                try
+                                {
+                                    UnityEngine.Debug.LogError($"[Python Error] {fixedData}");
+                                }
+                                catch (System.Exception ex)
+                                {
+                                    UnityEngine.Debug.LogWarning($"[PythonRunner] 实时错误输出失败: {ex.Message}");
+                                }
+                            };
                         }
                     };
 
@@ -479,31 +519,53 @@ except:
 
             if (processStarted && process != null)
             {
-                // 等待进程完成或超时
+                // 改进的等待和输出处理机制
                 float elapsedTime = 0f;
+                const float checkInterval = 0.05f; // 更频繁地检查（50ms）
+                
                 while (!process.HasExited && elapsedTime < timeout)
                 {
-                    yield return new WaitForSeconds(0.1f);
-                    elapsedTime += 0.1f;
+                    yield return new WaitForSeconds(checkInterval);
+                    elapsedTime += checkInterval;
+                    
+                    // 实时记录当前已获得的输出（用于调试）
+                    if (elapsedTime % 1.0f < checkInterval) // 每秒记录一次
+                    {
+                        var currentOutput = outputBuilder?.ToString() ?? "";
+                        var currentError = errorBuilder?.ToString() ?? "";
+                        if (!string.IsNullOrEmpty(currentOutput) || !string.IsNullOrEmpty(currentError))
+                        {
+                            LogInfo($"[PythonRunner] 进程运行中 ({elapsedTime:F1}s), 已获得输出: {currentOutput.Length} 字符");
+                        }
+                    }
                 }
 
                 if (!process.HasExited)
                 {
+                    // 在杀死进程前，先尝试获取已有的输出
+                    var partialOutput = outputBuilder?.ToString() ?? "";
+                    var partialError = errorBuilder?.ToString() ?? "";
+                    
                     LogWarning($"[PythonRunner] Python script execution timeout after {timeout} seconds");
+                    LogWarning($"[PythonRunner] 超时前已获得输出: {partialOutput.Length} 字符, 错误: {partialError.Length} 字符");
+                    
                     try
                     {
                         process.Kill();
+                        // 给进程一点时间来完成输出读取
                     }
                     catch { }
+                    yield return new WaitForSeconds(0.2f);
                     result.Success = false;
-                    result.Error = $"Script execution timeout after {timeout} seconds";
+                    result.Error = $"Script execution timeout after {timeout} seconds. Partial output captured: {partialOutput.Length} chars.";
                     result.ExitCode = -1;
+                    result.Output = partialOutput; // 保存超时前的部分输出
                 }
                 else
                 {
                     try
                     {
-                        process.WaitForExit();
+                        process.WaitForExit(1000); // 最多等待1秒让输出完全读取
                         result.Success = process.ExitCode == 0;
                         result.Output = outputBuilder?.ToString() ?? "";
                         result.Error = errorBuilder?.ToString() ?? "";
@@ -511,9 +573,9 @@ except:
 
                         LogInfo($"[PythonRunner] Python script completed with exit code: {process.ExitCode}");
                         if (!string.IsNullOrEmpty(result.Output))
-                            LogInfo($"[PythonRunner] Output:\n{result.Output}");
+                            LogInfo($"[PythonRunner] Output ({result.Output.Length} chars):\n{result.Output}");
                         if (!string.IsNullOrEmpty(result.Error))
-                            LogWarning($"[PythonRunner] Error:\n{result.Error}");
+                            LogWarning($"[PythonRunner] Error ({result.Error.Length} chars):\n{result.Error}");
                     }
                     catch (Exception ex)
                     {
@@ -554,7 +616,7 @@ except:
             var processStartInfo = new ProcessStartInfo
             {
                 FileName = pythonExecutable,
-                Arguments = $"-m py_compile \"{scriptPath}\"",
+                Arguments = $"-u -m py_compile \"{scriptPath}\"", // 添加-u参数
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -563,9 +625,10 @@ except:
                 StandardErrorEncoding = Encoding.UTF8
             };
 
-            // 设置Python环境变量以确保UTF-8输出
+            // 设置Python环境变量以确保UTF-8输出和禁用缓冲
             processStartInfo.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
             processStartInfo.EnvironmentVariables["PYTHONUTF8"] = "1";
+            processStartInfo.EnvironmentVariables["PYTHONUNBUFFERED"] = "1"; // 禁用Python缓冲
             processStartInfo.EnvironmentVariables["LANG"] = "en_US.UTF-8";
             processStartInfo.EnvironmentVariables["LC_ALL"] = "en_US.UTF-8";
 
@@ -592,6 +655,19 @@ except:
                             // 尝试修复编码问题
                             string fixedData = FixEncodingIssues(e.Data);
                             outputBuilder.AppendLine(fixedData);
+                            
+                            // 实时输出到Unity控制台 - 需要在主线程中执行
+                            UnityEditor.EditorApplication.delayCall += () =>
+                            {
+                                try
+                                {
+                                    UnityEngine.Debug.Log($"[Python] {fixedData}");
+                                }
+                                catch (System.Exception ex)
+                                {
+                                    UnityEngine.Debug.LogWarning($"[PythonRunner] 实时输出失败: {ex.Message}");
+                                }
+                            };
                         }
                     };
 
@@ -602,6 +678,19 @@ except:
                             // 尝试修复编码问题
                             string fixedData = FixEncodingIssues(e.Data);
                             errorBuilder.AppendLine(fixedData);
+                            
+                            // 实时输出错误到Unity控制台 - 需要在主线程中执行
+                            UnityEditor.EditorApplication.delayCall += () =>
+                            {
+                                try
+                                {
+                                    UnityEngine.Debug.LogError($"[Python Error] {fixedData}");
+                                }
+                                catch (System.Exception ex)
+                                {
+                                    UnityEngine.Debug.LogWarning($"[PythonRunner] 实时错误输出失败: {ex.Message}");
+                                }
+                            };
                         }
                     };
 
@@ -682,7 +771,7 @@ except:
             var processStartInfo = new ProcessStartInfo
             {
                 FileName = pythonExecutable,
-                Arguments = $"-m pip install {packageList}",
+                Arguments = $"-u -m pip install {packageList}", // 添加-u参数
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -691,9 +780,10 @@ except:
                 StandardErrorEncoding = Encoding.UTF8
             };
 
-            // 设置Python环境变量以确保UTF-8输出
+            // 设置Python环境变量以确保UTF-8输出和禁用缓冲
             processStartInfo.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
             processStartInfo.EnvironmentVariables["PYTHONUTF8"] = "1";
+            processStartInfo.EnvironmentVariables["PYTHONUNBUFFERED"] = "1"; // 禁用Python缓冲
             processStartInfo.EnvironmentVariables["LANG"] = "en_US.UTF-8";
             processStartInfo.EnvironmentVariables["LC_ALL"] = "en_US.UTF-8";
 
@@ -720,6 +810,19 @@ except:
                             // 尝试修复编码问题
                             string fixedData = FixEncodingIssues(e.Data);
                             outputBuilder.AppendLine(fixedData);
+                            
+                            // 实时输出到Unity控制台 - 需要在主线程中执行
+                            UnityEditor.EditorApplication.delayCall += () =>
+                            {
+                                try
+                                {
+                                    UnityEngine.Debug.Log($"[Python] {fixedData}");
+                                }
+                                catch (System.Exception ex)
+                                {
+                                    UnityEngine.Debug.LogWarning($"[PythonRunner] 实时输出失败: {ex.Message}");
+                                }
+                            };
                         }
                     };
 
@@ -730,6 +833,19 @@ except:
                             // 尝试修复编码问题
                             string fixedData = FixEncodingIssues(e.Data);
                             errorBuilder.AppendLine(fixedData);
+                            
+                            // 实时输出错误到Unity控制台 - 需要在主线程中执行
+                            UnityEditor.EditorApplication.delayCall += () =>
+                            {
+                                try
+                                {
+                                    UnityEngine.Debug.LogError($"[Python Error] {fixedData}");
+                                }
+                                catch (System.Exception ex)
+                                {
+                                    UnityEngine.Debug.LogWarning($"[PythonRunner] 实时错误输出失败: {ex.Message}");
+                                }
+                            };
                         }
                     };
 
@@ -840,7 +956,7 @@ except:
             var processStartInfo = new ProcessStartInfo
             {
                 FileName = pythonExecutable,
-                Arguments = $"-m pip install -r \"{requirementsFile}\"",
+                Arguments = $"-u -m pip install -r \"{requirementsFile}\"", // 添加-u参数
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -849,9 +965,10 @@ except:
                 StandardErrorEncoding = Encoding.UTF8
             };
 
-            // 设置Python环境变量以确保UTF-8输出
+            // 设置Python环境变量以确保UTF-8输出和禁用缓冲
             processStartInfo.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
             processStartInfo.EnvironmentVariables["PYTHONUTF8"] = "1";
+            processStartInfo.EnvironmentVariables["PYTHONUNBUFFERED"] = "1"; // 禁用Python缓冲
             processStartInfo.EnvironmentVariables["LANG"] = "en_US.UTF-8";
             processStartInfo.EnvironmentVariables["LC_ALL"] = "en_US.UTF-8";
 
@@ -878,6 +995,19 @@ except:
                             // 尝试修复编码问题
                             string fixedData = FixEncodingIssues(e.Data);
                             outputBuilder.AppendLine(fixedData);
+                            
+                            // 实时输出到Unity控制台 - 需要在主线程中执行
+                            UnityEditor.EditorApplication.delayCall += () =>
+                            {
+                                try
+                                {
+                                    UnityEngine.Debug.Log($"[Python] {fixedData}");
+                                }
+                                catch (System.Exception ex)
+                                {
+                                    UnityEngine.Debug.LogWarning($"[PythonRunner] 实时输出失败: {ex.Message}");
+                                }
+                            };
                         }
                     };
 
@@ -888,6 +1018,19 @@ except:
                             // 尝试修复编码问题
                             string fixedData = FixEncodingIssues(e.Data);
                             errorBuilder.AppendLine(fixedData);
+                            
+                            // 实时输出错误到Unity控制台 - 需要在主线程中执行
+                            UnityEditor.EditorApplication.delayCall += () =>
+                            {
+                                try
+                                {
+                                    UnityEngine.Debug.LogError($"[Python Error] {fixedData}");
+                                }
+                                catch (System.Exception ex)
+                                {
+                                    UnityEngine.Debug.LogWarning($"[PythonRunner] 实时错误输出失败: {ex.Message}");
+                                }
+                            };
                         }
                     };
 

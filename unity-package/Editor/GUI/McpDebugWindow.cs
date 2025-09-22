@@ -68,6 +68,13 @@ namespace UnityMcp.Tools
         private int selectedRecordIndex = -1;
         private Vector2 recordScrollPosition; // 记录列表滚动位置
 
+        // 编辑相关变量
+        private int editingRecordIndex = -1; // 当前正在编辑的记录索引
+        private string editingText = ""; // 编辑中的文本
+        private double lastClickTime = 0; // 上次点击时间，用于检测双击
+        private int lastClickedIndex = -1; // 上次点击的索引
+        private bool editingStarted = false; // 标记编辑是否刚开始
+
         // 分栏布局相关变量
         private float splitterPos = 0.3f; // 默认左侧占30%
         private bool isDraggingSplitter = false;
@@ -406,6 +413,9 @@ namespace UnityMcp.Tools
             const float padding = 6f;
             Rect paddedRect = new Rect(rect.x + padding, rect.y + padding, rect.width - padding * 2, rect.height - padding * 2);
 
+            // 处理鼠标事件（双击检测）
+            HandleRecordElementMouseEvents(rect, index);
+
             if (isActive || selectedRecordIndex == index)
             {
                 // 选中时显示背景颜色（在原始rect上绘制，不受padding影响）
@@ -454,7 +464,69 @@ namespace UnityMcp.Tools
             // 函数名（第一行）- 在box内部，为序号和图标留出空间
             Rect funcRect = new Rect(contentRect.x + numberWidth + iconWidth + 4f, contentRect.y,
                 contentRect.width - numberWidth - iconWidth - 4f, 16f);
-            GUI.Label(funcRect, record.name, EditorStyles.boldLabel);
+
+            // 检查是否正在编辑此记录
+            if (editingRecordIndex == index)
+            {
+                // 编辑模式：显示文本输入框
+                GUI.SetNextControlName($"RecordEdit_{index}");
+
+                // 先处理键盘事件，确保优先级
+                if (Event.current.type == EventType.KeyDown)
+                {
+                    if (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter)
+                    {
+                        // 回车确认编辑
+                        FinishEditing(index, editingText);
+                        Event.current.Use();
+                        return; // 直接返回，避免继续处理其他事件
+                    }
+                    else if (Event.current.keyCode == KeyCode.Escape)
+                    {
+                        // ESC取消编辑
+                        CancelEditing();
+                        Event.current.Use();
+                        return; // 直接返回，避免继续处理其他事件
+                    }
+                }
+
+                // 设置焦点（只在刚开始编辑时设置）
+                if (editingStarted)
+                {
+                    GUI.FocusControl($"RecordEdit_{index}");
+                    editingStarted = false;
+                }
+
+                // 使用BeginChangeCheck来检测文本变化
+                EditorGUI.BeginChangeCheck();
+                string newName = EditorGUI.TextField(funcRect, editingText);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    editingText = newName;
+                }
+
+                // 检测失去焦点
+                if (Event.current.type == EventType.Repaint)
+                {
+                    string focusedControl = GUI.GetNameOfFocusedControl();
+                    if (string.IsNullOrEmpty(focusedControl) || focusedControl != $"RecordEdit_{index}")
+                    {
+                        // 延迟一帧检查，避免刚设置焦点就检测到失去焦点
+                        EditorApplication.delayCall += () =>
+                        {
+                            if (editingRecordIndex == index && GUI.GetNameOfFocusedControl() != $"RecordEdit_{index}")
+                            {
+                                FinishEditing(index, editingText);
+                            }
+                        };
+                    }
+                }
+            }
+            else
+            {
+                // 正常模式：显示函数名
+                GUI.Label(funcRect, record.name, EditorStyles.boldLabel);
+            }
 
             // 时间和来源（第二行）- 在box内部
             Rect timeRect = new Rect(contentRect.x + numberWidth + iconWidth + 4f, contentRect.y + 18f,
@@ -1543,5 +1615,101 @@ namespace UnityMcp.Tools
 
             Repaint();
         }
+
+        /// <summary>
+        /// 处理记录元素的鼠标事件（双击检测）
+        /// </summary>
+        private void HandleRecordElementMouseEvents(Rect rect, int index)
+        {
+            Event e = Event.current;
+
+            // 只在函数名区域检测双击，避免与整个元素的选择冲突
+            const float numberWidth = 24f;
+            const float iconWidth = 20f;
+            const float padding = 6f;
+            const float boxMargin = 4f;
+
+            Rect funcNameRect = new Rect(
+                rect.x + padding + boxMargin + numberWidth + iconWidth + 4f,
+                rect.y + padding + boxMargin,
+                rect.width - padding * 2 - boxMargin * 2 - numberWidth - iconWidth - 4f,
+                16f
+            );
+
+            if (e.type == EventType.MouseDown && e.button == 0 && funcNameRect.Contains(e.mousePosition))
+            {
+                double currentTime = EditorApplication.timeSinceStartup;
+
+                // 检测双击
+                if (lastClickedIndex == index && (currentTime - lastClickTime) < 0.5) // 500ms内的双击
+                {
+                    // 开始编辑
+                    StartEditing(index);
+                    e.Use();
+                }
+                else
+                {
+                    // 单击，记录时间和索引
+                    lastClickTime = currentTime;
+                    lastClickedIndex = index;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 开始编辑记录名称
+        /// </summary>
+        private void StartEditing(int index)
+        {
+            var records = McpExecuteRecordObject.instance.records;
+            if (index >= 0 && index < records.Count)
+            {
+                editingRecordIndex = index;
+                editingText = records[index].name;
+                editingStarted = true;
+
+                Repaint();
+            }
+        }
+
+        /// <summary>
+        /// 完成编辑并保存
+        /// </summary>
+        private void FinishEditing(int index, string newName)
+        {
+            if (editingRecordIndex == index && !string.IsNullOrWhiteSpace(newName))
+            {
+                var records = McpExecuteRecordObject.instance.records;
+                if (index >= 0 && index < records.Count)
+                {
+                    // 更新记录名称
+                    records[index].name = newName.Trim();
+                    McpExecuteRecordObject.instance.saveRecords();
+
+                    // 显示成功提示（可选）
+                    Debug.Log($"[McpDebugWindow] 记录名称已更新: {newName.Trim()}");
+                }
+            }
+
+            // 退出编辑模式
+            editingRecordIndex = -1;
+            editingText = "";
+            editingStarted = false;
+            GUI.FocusControl(null); // 清除焦点
+            Repaint();
+        }
+
+        /// <summary>
+        /// 取消编辑
+        /// </summary>
+        private void CancelEditing()
+        {
+            editingRecordIndex = -1;
+            editingText = "";
+            editingStarted = false;
+            GUI.FocusControl(null); // 清除焦点
+            Repaint();
+        }
+
     }
 }

@@ -19,23 +19,36 @@ _unity_connection: UnityConnection = None
 
 @asynccontextmanager
 async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
-    """Handle server startup and shutdown."""
+    """Handle server startup and shutdown with improved error handling."""
     global _unity_connection
     logger.info("Unity MCP Server starting up")
+    
+    # 尝试连接Unity，但不要让启动失败
     try:
         _unity_connection = get_unity_connection()
-        logger.info("Connected to Unity on startup")
+        logger.info("Successfully connected to Unity on startup")
     except Exception as e:
         logger.warning(f"Could not connect to Unity on startup: {str(e)}")
+        logger.info("Server will start without Unity connection. Connection will be attempted when tools are used.")
         _unity_connection = None
+    
     try:
-        # Yield the connection object so it can be attached to the context
-        # The key 'bridge' matches how tools like read_console expect to access it (ctx.bridge)
+        # 始终提供连接对象，即使是None
+        # 工具函数将在需要时动态获取连接
         yield {"bridge": _unity_connection}
+    except Exception as e:
+        logger.error(f"Server lifespan error: {str(e)}")
+        raise
     finally:
+        # 清理连接资源
         if _unity_connection:
-            _unity_connection.disconnect()
-            _unity_connection = None
+            try:
+                _unity_connection.disconnect()
+                logger.info("Unity connection closed")
+            except Exception as e:
+                logger.warning(f"Error closing Unity connection: {str(e)}")
+            finally:
+                _unity_connection = None
         logger.info("Unity MCP Server shut down")
 
 # Initialize MCP server
@@ -50,21 +63,21 @@ register_all_tools(mcp)
 # Asset Creation Strategy
 
 @mcp.prompt()
-def asset_creation_strategy() -> str:
+def function_args_strategy() -> str:
     """Guide for discovering and using Unity MCP tools effectively."""
     return (
         "Available Unity MCP Server Tools:\\n\\n"
-        "- `manage_editor`: Controls editor state and queries info.\\n"
-        "- `execute_menu_item`: Executes Unity Editor menu items by path.\\n"
-        "- `read_console`: Reads or clears Unity console messages, with filtering options.\\n"
-        "- `manage_scene`: Manages scenes.\\n"
-        "- `manage_gameobject`: Manages GameObjects in the scene.\\n"
-        "- `manage_script`: Manages C# script files.\\n"
-        "- `manage_asset`: Manages prefabs and assets.\\n\\n"
-        "- `ugui_agent`: UGUI read and edit.\\n\\n"
+        "- `function_call`: execute func once, args from unity-mcp.mdc or other rules.\\n"
+        "- `functions_call`: execute funcs in batch, args from unity-mcp.mdc or other rules.\\n\\n"
+        "Connection Status:\\n"
+        "- Server handles Unity connection automatically\\n"
+        "- Connections are established on-demand and cached\\n"
+        "- Failed connections will be retried with exponential backoff\\n\\n"
         "Tips:\\n"
-        "- Create prefabs for reusable GameObjects.\\n"
-        "- Always include a camera and main light in your scenes.\\n"
+        "- Read rules first to choose appropriate func call\\n"
+        "- Make sure func args match the expected format from rules\\n"
+        "- Use functions_call for batch operations to improve performance\\n"
+        "- Check console logs if experiencing connection issues\\n"
     )
 
 # Run the server

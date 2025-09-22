@@ -48,7 +48,8 @@ namespace UnityMcp.Tools
             return new[]
             {
                 new MethodKey("action", "Operation type: execute, validate, install_package", false),
-                new MethodKey("python_code", "Python script code content", true),
+                new MethodKey("code", "Python script code content (mutually exclusive with script_path)", true),
+                new MethodKey("script_path", "Path to existing Python script file to execute (mutually exclusive with code)", true),
                 new MethodKey("script_name", "Python script name, default is script.py", true),
                 new MethodKey("python_path", "Path to Python interpreter, default is 'python'", true),
                 new MethodKey("working_directory", "Working directory for script execution", true),
@@ -56,7 +57,8 @@ namespace UnityMcp.Tools
                 new MethodKey("cleanup", "Whether to clean up temporary files after execution, default true", true),
                 new MethodKey("packages", "Python packages to install (comma-separated or JSON array)", true),
                 new MethodKey("requirements_file", "Path to requirements.txt file", true),
-                new MethodKey("virtual_env", "Path to virtual environment to use", true)
+                new MethodKey("virtual_env", "Path to virtual environment to use", true),
+                new MethodKey("refresh_project", "Whether to refresh Unity project after execution, default false", true)
             };
         }
 
@@ -91,7 +93,7 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleValidatePython(StateTreeContext ctx)
         {
-            LogInfo("[PythonRunner] Validating Python code");
+            LogInfo("[PythonRunner] Validating Python code or script");
             return ctx.AsyncReturn(ValidatePythonCoroutine(ctx.JsonData));
         }
 
@@ -112,14 +114,25 @@ namespace UnityMcp.Tools
         private IEnumerator ExecutePythonCoroutine(JObject args)
         {
             string tempFilePath = null;
+            bool isTemporaryFile = false;
 
             try
             {
-                string pythonCode = args["python_code"]?.ToString();
-                if (string.IsNullOrEmpty(pythonCode))
+                string pythonCode = args["code"]?.ToString();
+                string scriptPath = args["script_path"]?.ToString();
+
+                // 检查参数：必须提供 code 或 script_path 之一
+                if (string.IsNullOrEmpty(pythonCode) && string.IsNullOrEmpty(scriptPath))
                 {
-                    yield return Response.Error("python_code parameter is required");
+                    yield return Response.Error("Either 'code' or 'script_path' parameter is required");
                     yield break;
+                }
+
+                // 如果同时提供了两个参数，优先使用 script_path
+                if (!string.IsNullOrEmpty(pythonCode) && !string.IsNullOrEmpty(scriptPath))
+                {
+                    LogInfo("[PythonRunner] Both code and script_path provided, using script_path");
+                    pythonCode = null; // 清空code，优先使用script_path
                 }
 
                 string scriptName = args["script_name"]?.ToString() ?? "script.py";
@@ -127,19 +140,71 @@ namespace UnityMcp.Tools
                 string workingDirectory = args["working_directory"]?.ToString() ?? System.Environment.CurrentDirectory;
                 int timeout = args["timeout"]?.ToObject<int>() ?? 300;
                 bool cleanup = args["cleanup"]?.ToObject<bool>() ?? true;
+                bool refreshProject = args["refresh_project"]?.ToObject<bool>() ?? false;
                 string virtualEnv = args["virtual_env"]?.ToString();
 
-                LogInfo($"[PythonRunner] Executing Python script: {scriptName}");
+                if (!string.IsNullOrEmpty(scriptPath))
+                {
+                    // 模式1: 执行现有的脚本文件
+                    if (!File.Exists(scriptPath))
+                    {
+                        yield return Response.Error($"Script file not found: {scriptPath}");
+                        yield break;
+                    }
 
-                // 使用协程执行Python
-                yield return ExecutePythonCoroutineInternal(pythonCode, scriptName, pythonPath, workingDirectory, timeout, virtualEnv,
-                    (tFilePath) => { tempFilePath = tFilePath; });
-                yield return executionResult;
+                    LogInfo($"[PythonRunner] Executing existing Python script: {scriptPath}");
+
+                    // 直接执行现有脚本
+                    yield return ExecutePythonScript(scriptPath, pythonPath, workingDirectory, timeout, virtualEnv, (result) =>
+                    {
+                        if (result != null)
+                        {
+                            executionResult = Response.Success("Python script execution completed", new
+                            {
+                                operation = "execute",
+                                script_path = scriptPath,
+                                success = result.Success,
+                                output = result.Output,
+                                error = result.Error,
+                                exit_code = result.ExitCode,
+                                duration = result.Duration,
+                                project_refreshed = refreshProject
+                            });
+
+                            // 如果需要刷新项目且执行成功
+                            if (refreshProject && result.Success)
+                            {
+                                EditorApplication.delayCall += () =>
+                                {
+                                    LogInfo("[PythonRunner] Refreshing Unity project...");
+                                    AssetDatabase.Refresh();
+                                };
+                            }
+                        }
+                        else
+                        {
+                            executionResult = Response.Error("Python script execution failed - no result returned");
+                        }
+                    });
+
+                    yield return executionResult;
+                }
+                else
+                {
+                    // 模式2: 从code创建临时文件并执行
+                    LogInfo($"[PythonRunner] Executing Python code as script: {scriptName}");
+
+                    // 使用协程执行Python
+                    isTemporaryFile = true;
+                    yield return ExecutePythonCoroutineInternal(pythonCode, scriptName, pythonPath, workingDirectory, timeout, virtualEnv, refreshProject,
+                        (tFilePath) => { tempFilePath = tFilePath; });
+                    yield return executionResult;
+                }
             }
             finally
             {
-                // 清理临时文件
-                if (!string.IsNullOrEmpty(tempFilePath))
+                // 只有临时文件才需要清理
+                if (isTemporaryFile && !string.IsNullOrEmpty(tempFilePath))
                 {
                     EditorApplication.delayCall += () => CleanupTempFiles(tempFilePath);
                 }
@@ -152,56 +217,90 @@ namespace UnityMcp.Tools
         private IEnumerator ValidatePythonCoroutine(JObject args)
         {
             string tempFilePath = null;
+            bool isTemporaryFile = false;
 
             try
             {
-                string pythonCode = args["python_code"]?.ToString();
-                if (string.IsNullOrEmpty(pythonCode))
+                string pythonCode = args["code"]?.ToString();
+                string scriptPath = args["script_path"]?.ToString();
+
+                // 检查参数：必须提供 code 或 script_path 之一
+                if (string.IsNullOrEmpty(pythonCode) && string.IsNullOrEmpty(scriptPath))
                 {
-                    yield return Response.Error("python_code parameter is required");
+                    yield return Response.Error("Either 'code' or 'script_path' parameter is required");
                     yield break;
+                }
+
+                // 如果同时提供了两个参数，优先使用 script_path
+                if (!string.IsNullOrEmpty(pythonCode) && !string.IsNullOrEmpty(scriptPath))
+                {
+                    LogInfo("[PythonRunner] Both code and script_path provided, using script_path for validation");
+                    pythonCode = null; // 清空code，优先使用script_path
                 }
 
                 string scriptName = args["script_name"]?.ToString() ?? "script.py";
                 string pythonPath = args["python_path"]?.ToString() ?? "python";
                 string virtualEnv = args["virtual_env"]?.ToString();
 
-                LogInfo($"[PythonRunner] Validating Python script: {scriptName}");
+                string targetScriptPath;
 
-                // 创建临时文件
-                var tempDir = Path.Combine(Application.temporaryCachePath, "PythonRunner");
-                if (!Directory.Exists(tempDir))
+                if (!string.IsNullOrEmpty(scriptPath))
                 {
-                    Directory.CreateDirectory(tempDir);
+                    // 模式1: 验证现有的脚本文件
+                    if (!File.Exists(scriptPath))
+                    {
+                        yield return Response.Error($"Script file not found: {scriptPath}");
+                        yield break;
+                    }
+
+                    LogInfo($"[PythonRunner] Validating existing Python script: {scriptPath}");
+                    targetScriptPath = scriptPath;
+                }
+                else
+                {
+                    // 模式2: 从code创建临时文件并验证
+                    LogInfo($"[PythonRunner] Validating Python code as script: {scriptName}");
+
+                    // 创建临时文件
+                    var tempDir = Path.Combine(Application.temporaryCachePath, "PythonRunner");
+                    if (!Directory.Exists(tempDir))
+                    {
+                        Directory.CreateDirectory(tempDir);
+                    }
+
+                    var timestamp = DateTime.Now.Ticks;
+                    var randomId = UnityEngine.Random.Range(1000, 9999);
+                    var tempFileName = $"{Path.GetFileNameWithoutExtension(scriptName)}_{timestamp}_{randomId}.py";
+                    tempFilePath = Path.Combine(tempDir, tempFileName);
+                    targetScriptPath = tempFilePath;
+                    isTemporaryFile = true;
+
+                    File.WriteAllText(tempFilePath, pythonCode, Encoding.UTF8);
                 }
 
-                var timestamp = DateTime.Now.Ticks;
-                var randomId = UnityEngine.Random.Range(1000, 9999);
-                var tempFileName = $"{Path.GetFileNameWithoutExtension(scriptName)}_{timestamp}_{randomId}.py";
-                tempFilePath = Path.Combine(tempDir, tempFileName);
-
-                File.WriteAllText(tempFilePath, pythonCode, Encoding.UTF8);
-
                 // 验证Python语法
-                yield return ValidatePythonSyntax(tempFilePath, pythonPath, virtualEnv, (success, output, error) =>
+                yield return ValidatePythonSyntax(targetScriptPath, pythonPath, virtualEnv, (success, output, error) =>
                 {
                     if (success)
                     {
-                        validationResult = Response.Success("Python code syntax is valid", new
+                        validationResult = Response.Success("Python script syntax is valid", new
                         {
                             operation = "validate",
-                            script_name = scriptName,
+                            script_path = !string.IsNullOrEmpty(scriptPath) ? scriptPath : scriptName,
                             python_path = pythonPath,
-                            temp_file = tempFilePath
+                            is_temporary_file = isTemporaryFile,
+                            temp_file = isTemporaryFile ? tempFilePath : null
                         });
                     }
                     else
                     {
-                        validationResult = Response.Error("Python code syntax validation failed", new
+                        validationResult = Response.Error("Python script syntax validation failed", new
                         {
                             operation = "validate",
+                            script_path = !string.IsNullOrEmpty(scriptPath) ? scriptPath : scriptName,
                             error = error,
-                            output = output
+                            output = output,
+                            is_temporary_file = isTemporaryFile
                         });
                     }
                 });
@@ -210,8 +309,8 @@ namespace UnityMcp.Tools
             }
             finally
             {
-                // 清理临时文件
-                if (!string.IsNullOrEmpty(tempFilePath))
+                // 只有临时文件才需要清理
+                if (isTemporaryFile && !string.IsNullOrEmpty(tempFilePath))
                 {
                     EditorApplication.delayCall += () => CleanupTempFiles(tempFilePath);
                 }
@@ -273,7 +372,7 @@ namespace UnityMcp.Tools
         /// 执行Python代码的内部协程
         /// </summary>
         private IEnumerator ExecutePythonCoroutineInternal(string pythonCode, string scriptName, string pythonPath,
-            string workingDirectory, int timeout, string virtualEnv, System.Action<string> onTempFileCreated = null)
+            string workingDirectory, int timeout, string virtualEnv, bool refreshProject = false, System.Action<string> onTempFileCreated = null)
         {
             executionResult = null;
 
@@ -386,8 +485,19 @@ builtins.print = unity_print
                         error = result.Error,
                         exit_code = result.ExitCode,
                         duration = result.Duration,
-                        temp_file = tempFilePath
+                        temp_file = tempFilePath,
+                        project_refreshed = refreshProject
                     });
+
+                    // 如果需要刷新项目且执行成功
+                    if (refreshProject && result.Success)
+                    {
+                        EditorApplication.delayCall += () =>
+                        {
+                            LogInfo("[PythonRunner] Refreshing Unity project...");
+                            AssetDatabase.Refresh();
+                        };
+                    }
                 }
                 else
                 {
@@ -462,7 +572,7 @@ builtins.print = unity_print
                             // 尝试修复编码问题
                             string fixedData = FixEncodingIssues(e.Data);
                             outputBuilder.AppendLine(fixedData);
-                            
+
                             // 实时输出到Unity控制台 - 需要在主线程中执行
                             UnityEditor.EditorApplication.delayCall += () =>
                             {
@@ -485,7 +595,7 @@ builtins.print = unity_print
                             // 尝试修复编码问题
                             string fixedData = FixEncodingIssues(e.Data);
                             errorBuilder.AppendLine(fixedData);
-                            
+
                             // 实时输出错误到Unity控制台 - 需要在主线程中执行
                             UnityEditor.EditorApplication.delayCall += () =>
                             {
@@ -522,12 +632,12 @@ builtins.print = unity_print
                 // 改进的等待和输出处理机制
                 float elapsedTime = 0f;
                 const float checkInterval = 0.05f; // 更频繁地检查（50ms）
-                
+
                 while (!process.HasExited && elapsedTime < timeout)
                 {
                     yield return new WaitForSeconds(checkInterval);
                     elapsedTime += checkInterval;
-                    
+
                     // 实时记录当前已获得的输出（用于调试）
                     if (elapsedTime % 1.0f < checkInterval) // 每秒记录一次
                     {
@@ -545,10 +655,10 @@ builtins.print = unity_print
                     // 在杀死进程前，先尝试获取已有的输出
                     var partialOutput = outputBuilder?.ToString() ?? "";
                     var partialError = errorBuilder?.ToString() ?? "";
-                    
+
                     LogWarning($"[PythonRunner] Python script execution timeout after {timeout} seconds");
                     LogWarning($"[PythonRunner] 超时前已获得输出: {partialOutput.Length} 字符, 错误: {partialError.Length} 字符");
-                    
+
                     try
                     {
                         process.Kill();
@@ -655,7 +765,7 @@ builtins.print = unity_print
                             // 尝试修复编码问题
                             string fixedData = FixEncodingIssues(e.Data);
                             outputBuilder.AppendLine(fixedData);
-                            
+
                             // 实时输出到Unity控制台 - 需要在主线程中执行
                             UnityEditor.EditorApplication.delayCall += () =>
                             {
@@ -678,7 +788,7 @@ builtins.print = unity_print
                             // 尝试修复编码问题
                             string fixedData = FixEncodingIssues(e.Data);
                             errorBuilder.AppendLine(fixedData);
-                            
+
                             // 实时输出错误到Unity控制台 - 需要在主线程中执行
                             UnityEditor.EditorApplication.delayCall += () =>
                             {
@@ -810,7 +920,7 @@ builtins.print = unity_print
                             // 尝试修复编码问题
                             string fixedData = FixEncodingIssues(e.Data);
                             outputBuilder.AppendLine(fixedData);
-                            
+
                             // 实时输出到Unity控制台 - 需要在主线程中执行
                             UnityEditor.EditorApplication.delayCall += () =>
                             {
@@ -833,7 +943,7 @@ builtins.print = unity_print
                             // 尝试修复编码问题
                             string fixedData = FixEncodingIssues(e.Data);
                             errorBuilder.AppendLine(fixedData);
-                            
+
                             // 实时输出错误到Unity控制台 - 需要在主线程中执行
                             UnityEditor.EditorApplication.delayCall += () =>
                             {
@@ -995,7 +1105,7 @@ builtins.print = unity_print
                             // 尝试修复编码问题
                             string fixedData = FixEncodingIssues(e.Data);
                             outputBuilder.AppendLine(fixedData);
-                            
+
                             // 实时输出到Unity控制台 - 需要在主线程中执行
                             UnityEditor.EditorApplication.delayCall += () =>
                             {
@@ -1018,7 +1128,7 @@ builtins.print = unity_print
                             // 尝试修复编码问题
                             string fixedData = FixEncodingIssues(e.Data);
                             errorBuilder.AppendLine(fixedData);
-                            
+
                             // 实时输出错误到Unity控制台 - 需要在主线程中执行
                             UnityEditor.EditorApplication.delayCall += () =>
                             {

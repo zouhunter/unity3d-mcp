@@ -40,12 +40,6 @@ def register_functions_call_tools(mcp: FastMCP):
         # 获取Unity连接实例
         bridge = get_unity_connection()
         
-        results = []
-        errors = []
-        total_calls = 0
-        successful_calls = 0
-        failed_calls = 0
-        
         try:
             # 验证输入参数
             if not isinstance(funcs, list):
@@ -58,75 +52,66 @@ def register_functions_call_tools(mcp: FastMCP):
                     "failed_calls": 1
                 }
             
-            total_calls = len(funcs)
-            
-            # 按顺序执行每个函数调用
-            for i in range(total_calls):
-                try:
-                    func_call = funcs[i]
-                    
-                    # 验证函数调用对象格式
-                    if not isinstance(func_call, dict):
-                        error_msg = f"第{i+1}个函数调用必须是对象类型"
-                        errors.append(error_msg)
-                        results.append(None)
-                        failed_calls += 1
-                        continue
-                    
-                    # 提取func和args字段
-                    func = func_call.get("func")
-                    args_obj = func_call.get("args")
-                    
-                    # 验证func字段
-                    if not func or not isinstance(func, str):
-                        error_msg = f"第{i+1}个函数调用的func字段无效或为空"
-                        errors.append(error_msg)
-                        results.append(None)
-                        failed_calls += 1
-                        continue
-                    
-                    # 验证args字段（应该是字典对象）
-                    if not isinstance(args_obj, dict):
-                        error_msg = f"第{i+1}个函数调用的args字段必须是对象类型"
-                        errors.append(error_msg)
-                        results.append(None)
-                        failed_calls += 1
-                        continue
-                    
-                    # 准备发送给Unity的参数
-                    params = {
-                        "func": func,
-                        "args": json.dumps(args_obj)  # 将对象序列化为JSON字符串发送给Unity
+            # 基本的函数调用格式验证
+            for i, func_call in enumerate(funcs):
+                if not isinstance(func_call, dict):
+                    return {
+                        "success": False,
+                        "results": [],
+                        "errors": [f"第{i+1}个函数调用必须是对象类型"],
+                        "total_calls": len(funcs),
+                        "successful_calls": 0,
+                        "failed_calls": 1
                     }
-                    
-                    # 调用Unity函数
-                    result = bridge.send_command("function_call", params)
-                    results.append(result)
-                    errors.append(None)  # 成功调用时添加None到错误列表，保持索引对应
-                    successful_calls += 1
-                    
-                except Exception as e:
-                    error_msg = f"第{i+1}个函数调用失败: {str(e)}"
-                    errors.append(error_msg)
-                    results.append(None)
-                    failed_calls += 1
+                
+                if "func" not in func_call or not isinstance(func_call.get("func"), str):
+                    return {
+                        "success": False,
+                        "results": [],
+                        "errors": [f"第{i+1}个函数调用的func字段无效或为空"],
+                        "total_calls": len(funcs),
+                        "successful_calls": 0,
+                        "failed_calls": 1
+                    }
+                
+                if "args" not in func_call or not isinstance(func_call.get("args"), dict):
+                    return {
+                        "success": False,
+                        "results": [],
+                        "errors": [f"第{i+1}个函数调用的args字段必须是对象类型"],
+                        "total_calls": len(funcs),
+                        "successful_calls": 0,
+                        "failed_calls": 1
+                    }
+            
+            # 准备发送给Unity的参数，保持架构一致性
+            params = {
+                "args": funcs
+            }
+            
+            # 使用带重试机制的命令发送到Unity的functions_call处理器
+            result = bridge.send_command_with_retry("functions_call", params, max_retries=1)
+            
+            # Unity的functions_call处理器返回的结果已经是完整的格式，直接返回data部分
+            if isinstance(result, dict) and "data" in result:
+                return result["data"]
+            else:
+                # 如果返回格式不符合预期，包装成标准格式
+                return {
+                    "success": True,
+                    "results": [result],
+                    "errors": [None],
+                    "total_calls": len(funcs),
+                    "successful_calls": 1,
+                    "failed_calls": 0
+                }
             
         except Exception as e:
             return {
                 "success": False,
                 "results": [],
-                "errors": [f"批量调用过程中发生未预期错误: {str(e)}"],
-                "total_calls": total_calls,
-                "successful_calls": successful_calls,
-                "failed_calls": failed_calls + 1
-            }
-        
-        # 返回汇总结果
-        return {
-            "success": failed_calls == 0,
-            "results": results,
-            "errors": errors,
-            "total_calls": total_calls,
-            "successful_calls": successful_calls,
-            "failed_calls": failed_calls
-        } 
+                "errors": [f"批量调用转发失败: {str(e)}"],
+                "total_calls": len(funcs) if isinstance(funcs, list) else 0,
+                "successful_calls": 0,
+                "failed_calls": 1
+            } 

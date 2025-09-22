@@ -143,10 +143,11 @@ namespace UnityMcp.Tools
             }
             finally
             {
-                // 清理临时文件
-                if (!string.IsNullOrEmpty(tempFilePath) || !string.IsNullOrEmpty(tempAssemblyPath))
+                // 清理临时目录
+                if (!string.IsNullOrEmpty(tempFilePath))
                 {
-                    EditorApplication.delayCall += () => CleanupTempFiles(tempFilePath, tempAssemblyPath);
+                    var tempDir = Path.GetDirectoryName(tempFilePath);
+                    EditorApplication.delayCall += () => CleanupTempDirectory(tempDir);
                 }
             }
         }
@@ -228,10 +229,11 @@ namespace UnityMcp.Tools
             }
             finally
             {
-                // 清理临时文件
-                if (!string.IsNullOrEmpty(tempFilePath) || !string.IsNullOrEmpty(tempAssemblyPath))
+                // 清理临时目录
+                if (!string.IsNullOrEmpty(tempFilePath))
                 {
-                    EditorApplication.delayCall += () => CleanupTempFiles(tempFilePath, tempAssemblyPath);
+                    var tempDir = Path.GetDirectoryName(tempFilePath);
+                    EditorApplication.delayCall += () => CleanupTempDirectory(tempDir);
                 }
             }
         }
@@ -274,8 +276,22 @@ namespace UnityMcp.Tools
                     {
                         try
                         {
-                            // 执行代码
-                            var executionResults = ExecuteCompiledCode(assembly, namespaceName, className, methodName, parameters, returnOutput);
+                            // 检查是否是完整代码，如果是则需要动态查找执行方法
+                            bool isCompleteCode = fullCode.Contains("using ") || fullCode.Contains("namespace ") ||
+                                                 (fullCode.Contains("public class") || fullCode.Contains("public static class"));
+
+                            List<ExecutionResult> executionResults;
+                            if (isCompleteCode)
+                            {
+                                // 对于完整代码，尝试查找并执行所有可执行的静态方法
+                                executionResults = ExecuteCompleteCode(assembly, parameters, returnOutput);
+                            }
+                            else
+                            {
+                                // 对于代码片段，按原有方式执行
+                                executionResults = ExecuteCompiledCode(assembly, namespaceName, className, methodName, parameters, returnOutput);
+                            }
+
                             var result = executionResults.FirstOrDefault() ?? new ExecutionResult
                             {
                                 MethodName = methodName,
@@ -326,6 +342,17 @@ namespace UnityMcp.Tools
         /// </summary>
         private string GenerateFullCode(string code, string className, string methodName, string namespaceName, string[] includes)
         {
+            // 检查代码是否已经是完整的（包含using、namespace、class等）
+            bool isCompleteCode = code.Contains("using ") || code.Contains("namespace ") ||
+                                 (code.Contains("public class") || code.Contains("public static class"));
+
+            if (isCompleteCode)
+            {
+                // 如果是完整代码，直接返回，不添加任何包装
+                LogInfo("[CodeRunner] 检测到完整代码，直接使用");
+                return code;
+            }
+
             var sb = new StringBuilder();
 
             // 添加using语句
@@ -394,8 +421,10 @@ namespace UnityMcp.Tools
         /// </summary>
         private IEnumerator CompileCodeCoroutine(string code, System.Action<string, string> onTempFilesCreated, System.Action<bool, ReflectionAssembly, string[]> callback)
         {
-            // 创建临时目录和文件
-            var tempDir = Path.Combine(Application.temporaryCachePath, "TestRunner");
+            // 创建基于代码内容的临时目录
+            var baseDir = Path.Combine(Application.temporaryCachePath, "CodeRunner");
+            var codeHash = GetCodeHash(code);
+            var tempDir = Path.Combine(baseDir, codeHash);
             string tempFilePath = null;
             string tempAssemblyPath = null;
             AssemblyBuilder assemblyBuilder = null;
@@ -408,23 +437,44 @@ namespace UnityMcp.Tools
                     Directory.CreateDirectory(tempDir);
                 }
 
-                var timestamp = DateTime.Now.Ticks;
-                var randomId = UnityEngine.Random.Range(1000, 9999);
-                var tempFileName = $"TestClass_{timestamp}_{randomId}.cs";
+                var tempFileName = "TestClass.cs";
                 tempFilePath = Path.Combine(tempDir, tempFileName);
-                tempAssemblyPath = Path.ChangeExtension(tempFilePath, ".dll");
-
-                // 写入代码到临时文件
-                File.WriteAllText(tempFilePath, code);
-                LogInfo($"[TestRunner] 临时文件路径: {tempFilePath}");
-                LogInfo($"[TestRunner] 目标程序集路径: {tempAssemblyPath}");
+                tempAssemblyPath = Path.Combine(tempDir, "TestClass.dll");
 
                 // 通知上层函数临时文件路径
                 onTempFilesCreated?.Invoke(tempFilePath, tempAssemblyPath);
+
+                // 检查是否已经存在编译好的程序集
+                if (File.Exists(tempAssemblyPath))
+                {
+                    LogInfo($"[CodeRunner] 发现已编译的程序集，直接加载: {tempAssemblyPath}");
+                    try
+                    {
+                        var assemblyBytes = File.ReadAllBytes(tempAssemblyPath);
+                        if (assemblyBytes.Length > 0)
+                        {
+                            var loadedAssembly = ReflectionAssembly.Load(assemblyBytes);
+                            LogInfo($"[CodeRunner] 程序集重用成功: {assemblyBytes.Length} bytes");
+                            callback(true, loadedAssembly, null);
+                            yield break;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LogWarning($"[CodeRunner] 加载已存在程序集失败，将重新编译: {ex.Message}");
+                        // 删除损坏的程序集文件
+                        try { File.Delete(tempAssemblyPath); } catch { }
+                    }
+                }
+
+                // 写入代码到临时文件
+                File.WriteAllText(tempFilePath, code);
+                LogInfo($"[CodeRunner] 临时文件路径: {tempFilePath}");
+                LogInfo($"[CodeRunner] 目标程序集路径: {tempAssemblyPath}");
             }
             catch (Exception e)
             {
-                LogError($"[TestRunner] 初始化失败: {e.Message}");
+                LogError($"[CodeRunner] 初始化失败: {e.Message}");
                 callback(false, null, new[] { $"Initialization failed: {e.Message}" });
                 yield break;
             }
@@ -436,7 +486,7 @@ namespace UnityMcp.Tools
 
                 // 收集程序集引用
                 var references = new List<string>();
-                LogInfo("[TestRunner] 开始收集程序集引用...");
+                LogInfo("[CodeRunner] 开始收集程序集引用...");
 
                 foreach (var assembly in CompilationPipeline.GetAssemblies())
                 {
@@ -466,73 +516,251 @@ namespace UnityMcp.Tools
                 references.Add(typeof(UnityEditor.EditorApplication).Assembly.Location);
 
                 var uniqueReferences = references.Distinct().Where(r => !string.IsNullOrEmpty(r) && File.Exists(r)).ToArray();
-                LogInfo($"[TestRunner] 收集到 {uniqueReferences.Length} 个有效引用");
+                LogInfo($"[CodeRunner] 收集到 {uniqueReferences.Length} 个有效引用");
 
                 assemblyBuilder.referencesOptions = ReferencesOptions.UseEngineModules;
                 assemblyBuilder.additionalReferences = uniqueReferences;
+
+                // 记录详细的编译参数
+                LogInfo($"[CodeRunner] 编译参数:");
+                LogInfo($"  - 源文件: {tempFilePath}");
+                LogInfo($"  - 目标程序集: {tempAssemblyPath}");
+                LogInfo($"  - 引用选项: {assemblyBuilder.referencesOptions}");
+                LogInfo($"  - 额外引用数量: {uniqueReferences.Length}");
+                LogInfo($"  - 前20个引用: {string.Join(", ", uniqueReferences.Take(477).Select(Path.GetFileName))}");
             }
             catch (Exception e)
             {
-                LogError($"[TestRunner] 编译器设置失败: {e.Message}");
+                LogError($"[CodeRunner] 编译器设置失败: {e.Message}");
                 callback(false, null, new[] { $"Compiler setup failed: {e.Message}" });
                 yield break;
             }
 
             // 启动编译
-            LogInfo("[TestRunner] 尝试启动编译...");
+            LogInfo("[CodeRunner] 尝试启动编译...");
             bool started = false;
+
+            // 用于存储编译消息的变量
+            CompilerMessage[] compilationMessages = null;
+            bool compilationFinished = false;
+
+            // 添加编译事件监听
+            System.Action<object> buildStarted = (context) =>
+            {
+                EditorApplication.delayCall += () => LogInfo($"[CodeRunner] 编译开始");
+            };
+
+            System.Action<string, CompilerMessage[]> buildFinished = (assemblyPath, messages) =>
+            {
+                compilationMessages = messages;
+                compilationFinished = true;
+                EditorApplication.delayCall += () =>
+                {
+                    LogInfo($"[CodeRunner] 编译完成: {assemblyPath}");
+                    if (messages != null && messages.Length > 0)
+                    {
+                        LogInfo($"[CodeRunner] 收到 {messages.Length} 条编译消息");
+                        foreach (var msg in messages)
+                        {
+                            var logLevel = msg.type == CompilerMessageType.Error ? "ERROR" :
+                                         msg.type == CompilerMessageType.Warning ? "WARNING" : "INFO";
+                            LogInfo($"[CodeRunner] {logLevel}: {msg.message} (Line: {msg.line}, Column: {msg.column})");
+                        }
+                    }
+                    else
+                    {
+                        LogInfo("[CodeRunner] 没有收到编译消息");
+                    }
+                };
+            };
+
+            CompilationPipeline.compilationStarted += buildStarted;
+            CompilationPipeline.assemblyCompilationFinished += buildFinished;
 
             try
             {
+                // 在启动编译前，先验证源文件内容
+                LogInfo($"[CodeRunner] 验证源文件: {tempFilePath}");
+                if (File.Exists(tempFilePath))
+                {
+                    var sourceContent = File.ReadAllText(tempFilePath);
+                    LogInfo($"[CodeRunner] 源文件大小: {sourceContent.Length} 字符");
+                    LogInfo($"[CodeRunner] 源文件前200字符: {sourceContent.Substring(0, Math.Min(200, sourceContent.Length))}");
+                }
+
                 started = assemblyBuilder.Build();
+                LogInfo($"[CodeRunner] 编译启动结果: {started}");
+
+                // 记录AssemblyBuilder的初始状态
+                LogInfo($"[CodeRunner] 初始编译状态: {assemblyBuilder.status}");
             }
             catch (Exception e)
             {
-                LogError($"[TestRunner] 编译启动异常: {e.Message}");
-                callback(false, null, new[] { $"Failed to start compilation: {e.Message}" });
+                LogError($"[CodeRunner] 编译启动异常: {e.Message}");
+                LogError($"[CodeRunner] 异常堆栈: {e.StackTrace}");
+                callback(false, null, new[] { $"Failed to start compilation: {e.Message}", $"Stack trace: {e.StackTrace}" });
                 yield break;
+            }
+            finally
+            {
+                // 移除事件监听
+                CompilationPipeline.compilationStarted -= buildStarted;
+                CompilationPipeline.assemblyCompilationFinished -= buildFinished;
             }
 
             if (!started)
             {
-                LogError("[TestRunner] 无法启动编译");
+                LogError("[CodeRunner] 无法启动编译");
                 callback(false, null, new[] { "Failed to start compilation" });
                 yield break;
             }
 
-            LogInfo("[TestRunner] 编译已启动，等待完成...");
+            LogInfo("[CodeRunner] 编译已启动，等待完成...");
 
             // 使用协程等待编译完成
             float timeout = 30f;
             float elapsedTime = 0f;
+            var lastStatus = assemblyBuilder.status;
 
             while (assemblyBuilder.status == AssemblyBuilderStatus.IsCompiling && elapsedTime < timeout)
             {
                 yield return new WaitForSeconds(0.1f);
                 elapsedTime += 0.1f;
 
+                // 监控状态变化
+                if (assemblyBuilder.status != lastStatus)
+                {
+                    LogInfo($"[CodeRunner] 编译状态变化: {lastStatus} -> {assemblyBuilder.status}");
+                    lastStatus = assemblyBuilder.status;
+                }
+
                 if (Mathf.FloorToInt(elapsedTime) != Mathf.FloorToInt(elapsedTime - 0.1f))
                 {
-                    LogInfo($"[TestRunner] 编译中... 状态: {assemblyBuilder.status}, 已等待: {elapsedTime:F1}s");
+                    LogInfo($"[CodeRunner] 编译中... 状态: {assemblyBuilder.status}, 已等待: {elapsedTime:F1}s");
                 }
             }
 
-            LogInfo($"[TestRunner] 编译完成, 状态: {assemblyBuilder.status}");
+            // 额外等待编译消息（有时消息会稍晚到达）
+            float messageWaitTime = 0f;
+            const float maxMessageWaitTime = 2f;
+            while (!compilationFinished && messageWaitTime < maxMessageWaitTime)
+            {
+                yield return new WaitForSeconds(0.1f);
+                messageWaitTime += 0.1f;
+                LogInfo($"[CodeRunner] 等待编译消息... {messageWaitTime:F1}s");
+            }
+
+            LogInfo($"[CodeRunner] 编译完成, 最终状态: {assemblyBuilder.status}, 消息已接收: {compilationFinished}");
 
             // 处理编译结果
             if (assemblyBuilder.status == AssemblyBuilderStatus.Finished)
             {
+                LogInfo($"[CodeRunner] 编译状态为Finished，开始验证结果...");
+
+                // 立即检查文件是否存在
+                var assemblyPath = assemblyBuilder.assemblyPath;
+                LogInfo($"[CodeRunner] 预期程序集路径: {assemblyPath}");
+                LogInfo($"[CodeRunner] 文件是否存在: {File.Exists(assemblyPath)}");
+
+                if (File.Exists(assemblyPath))
+                {
+                    var fileInfo = new FileInfo(assemblyPath);
+                    LogInfo($"[CodeRunner] 文件大小: {fileInfo.Length} bytes, 修改时间: {fileInfo.LastWriteTime}");
+                }
+
                 yield return HandleCompilationSuccess(assemblyBuilder, callback);
             }
             else if (elapsedTime >= timeout)
             {
-                LogError("[TestRunner] 编译超时");
+                LogError("[CodeRunner] 编译超时");
                 callback(false, null, new[] { "Compilation timeout" });
             }
             else
             {
-                LogError($"[TestRunner] 编译失败, 状态: {assemblyBuilder.status}");
-                callback(false, null, new[] { $"Compilation failed with status: {assemblyBuilder.status}" });
+                LogError($"[CodeRunner] 编译失败, 状态: {assemblyBuilder.status}");
+
+                // 收集详细的错误信息
+                var errorMessages = new List<string>();
+                errorMessages.Add($"Compilation failed with status: {assemblyBuilder.status}");
+
+                // 首先检查是否有编译消息
+                if (compilationMessages != null && compilationMessages.Length > 0)
+                {
+                    LogInfo($"[CodeRunner] 处理 {compilationMessages.Length} 条编译消息");
+                    var errorMsgs = new List<string>();
+                    var warningMsgs = new List<string>();
+
+                    foreach (var msg in compilationMessages)
+                    {
+                        var msgText = $"Line {msg.line}, Column {msg.column}: {msg.message}";
+                        if (msg.type == CompilerMessageType.Error)
+                        {
+                            errorMsgs.Add(msgText);
+                            LogError($"[CodeRunner] 编译错误: {msgText}");
+                        }
+                        else if (msg.type == CompilerMessageType.Warning)
+                        {
+                            warningMsgs.Add(msgText);
+                            LogWarning($"[CodeRunner] 编译警告: {msgText}");
+                        }
+                    }
+
+                    if (errorMsgs.Count > 0)
+                    {
+                        errorMessages.Add($"Compilation errors ({errorMsgs.Count}):");
+                        errorMessages.AddRange(errorMsgs);
+                    }
+
+                    if (warningMsgs.Count > 0)
+                    {
+                        errorMessages.Add($"Compilation warnings ({warningMsgs.Count}):");
+                        errorMessages.AddRange(warningMsgs);
+                    }
+                }
+                else
+                {
+                    LogWarning("[CodeRunner] 没有收到编译消息，尝试其他方法获取错误信息");
+
+                    // 尝试获取编译错误信息（保留原有逻辑作为后备）
+                    try
+                    {
+                        var tempDirPath = Path.GetDirectoryName(tempFilePath);
+                        var logFiles = new string[]
+                        {
+                            Path.Combine(tempDirPath, "CompilerOutput.log"),
+                            Path.ChangeExtension(tempAssemblyPath, ".log"),
+                            tempAssemblyPath + ".log"
+                        };
+
+                        foreach (var logFile in logFiles)
+                        {
+                            if (File.Exists(logFile))
+                            {
+                                var logContent = File.ReadAllText(logFile);
+                                if (!string.IsNullOrEmpty(logContent))
+                                {
+                                    errorMessages.Add($"Log from {Path.GetFileName(logFile)}: {logContent}");
+                                    LogError($"[CodeRunner] 编译日志: {logContent}");
+                                }
+                            }
+                        }
+
+                        // 检查临时目录中的所有文件
+                        if (Directory.Exists(tempDirPath))
+                        {
+                            var allFiles = Directory.GetFiles(tempDirPath);
+                            LogInfo($"[CodeRunner] 临时目录文件: {string.Join(", ", allFiles.Select(Path.GetFileName))}");
+                            errorMessages.Add($"Files in temp directory: {string.Join(", ", allFiles.Select(Path.GetFileName))}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LogError($"[CodeRunner] 获取编译错误信息失败: {ex.Message}");
+                        errorMessages.Add($"Failed to get compilation error details: {ex.Message}");
+                    }
+                }
+
+                callback(false, null, errorMessages.ToArray());
             }
 
             // 清理由上层函数负责
@@ -544,14 +772,34 @@ namespace UnityMcp.Tools
         private IEnumerator HandleCompilationSuccess(AssemblyBuilder assemblyBuilder, System.Action<bool, ReflectionAssembly, string[]> callback)
         {
             var assemblyPath = assemblyBuilder.assemblyPath;
+            var tempDir = Path.GetDirectoryName(assemblyPath);
             float waitTime = 0f;
             const float maxWaitTime = 2f;
+
+            LogInfo($"[CodeRunner] 等待程序集文件生成: {assemblyPath}");
 
             // 等待文件存在
             while (!File.Exists(assemblyPath) && waitTime < maxWaitTime)
             {
                 yield return new WaitForSeconds(0.1f);
                 waitTime += 0.1f;
+
+                // 每0.5秒检查一次临时目录状态
+                if (waitTime % 0.5f < 0.1f)
+                {
+                    try
+                    {
+                        if (Directory.Exists(tempDir))
+                        {
+                            var files = Directory.GetFiles(tempDir);
+                            LogInfo($"[CodeRunner] 临时目录文件 ({waitTime:F1}s): {string.Join(", ", files.Select(Path.GetFileName))}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LogError($"[CodeRunner] 检查临时目录失败: {ex.Message}");
+                    }
+                }
             }
 
             if (File.Exists(assemblyPath))
@@ -562,27 +810,77 @@ namespace UnityMcp.Tools
                 try
                 {
                     var assemblyBytes = File.ReadAllBytes(assemblyPath);
+                    LogInfo($"[CodeRunner] 程序集文件大小: {assemblyBytes.Length} bytes");
+
                     if (assemblyBytes.Length > 0)
                     {
                         var loadedAssembly = ReflectionAssembly.Load(assemblyBytes);
-                        LogInfo($"[TestRunner] 程序集加载成功: {assemblyBytes.Length} bytes");
+                        LogInfo($"[CodeRunner] 程序集加载成功: {assemblyBytes.Length} bytes");
                         callback(true, loadedAssembly, null);
                     }
                     else
                     {
+                        LogError("[CodeRunner] 程序集文件为空");
                         callback(false, null, new[] { "Assembly file is empty" });
                     }
                 }
                 catch (Exception ex)
                 {
-                    LogError($"[TestRunner] 无法加载程序集: {ex.Message}");
+                    LogError($"[CodeRunner] 无法加载程序集: {ex.Message}");
                     callback(false, null, new[] { $"Failed to load assembly: {ex.Message}" });
                 }
             }
             else
             {
-                LogError($"[TestRunner] 程序集文件不存在: {assemblyPath}");
-                callback(false, null, new[] { "Assembly file not found after compilation" });
+                LogError($"[CodeRunner] 程序集文件不存在: {assemblyPath}");
+
+                // 收集详细的调试信息
+                var errorMessages = new List<string>();
+                errorMessages.Add("Assembly file not found after compilation");
+                errorMessages.Add($"Expected path: {assemblyPath}");
+
+                try
+                {
+                    if (Directory.Exists(tempDir))
+                    {
+                        var allFiles = Directory.GetFiles(tempDir);
+                        LogError($"[CodeRunner] 临时目录内容: {string.Join(", ", allFiles.Select(Path.GetFileName))}");
+                        errorMessages.Add($"Files in temp directory: {string.Join(", ", allFiles.Select(Path.GetFileName))}");
+
+                        // 检查是否有其他dll文件
+                        var dllFiles = allFiles.Where(f => f.EndsWith(".dll")).ToArray();
+                        if (dllFiles.Length > 0)
+                        {
+                            LogInfo($"[CodeRunner] 找到其他DLL文件: {string.Join(", ", dllFiles.Select(Path.GetFileName))}");
+                            errorMessages.Add($"Other DLL files found: {string.Join(", ", dllFiles.Select(Path.GetFileName))}");
+                        }
+
+                        // 检查是否有日志文件
+                        var logFiles = allFiles.Where(f => f.EndsWith(".log") || f.Contains("log")).ToArray();
+                        foreach (var logFile in logFiles)
+                        {
+                            try
+                            {
+                                var logContent = File.ReadAllText(logFile);
+                                LogError($"[CodeRunner] 日志文件 {Path.GetFileName(logFile)}: {logContent}");
+                                errorMessages.Add($"Log file {Path.GetFileName(logFile)}: {logContent}");
+                            }
+                            catch { }
+                        }
+                    }
+                    else
+                    {
+                        LogError($"[CodeRunner] 临时目录不存在: {tempDir}");
+                        errorMessages.Add($"Temp directory does not exist: {tempDir}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogError($"[CodeRunner] 收集调试信息失败: {ex.Message}");
+                    errorMessages.Add($"Failed to collect debug info: {ex.Message}");
+                }
+
+                callback(false, null, errorMessages.ToArray());
             }
         }
 
@@ -593,28 +891,50 @@ namespace UnityMcp.Tools
         {
             try
             {
-                // 创建临时目录和文件
-                var tempDir = Path.Combine(Application.temporaryCachePath, "TestRunner");
+                // 创建基于代码内容的临时目录
+                var baseDir = Path.Combine(Application.temporaryCachePath, "CodeRunner");
+                var codeHash = GetCodeHash(code);
+                var tempDir = Path.Combine(baseDir, codeHash);
+
                 if (!Directory.Exists(tempDir))
                 {
                     Directory.CreateDirectory(tempDir);
                 }
 
-                // 使用时间戳和随机数创建更唯一的文件名
-                var timestamp = DateTime.Now.Ticks;
-                var randomId = UnityEngine.Random.Range(1000, 9999);
-                var tempFileName = $"TestClass_{timestamp}_{randomId}.cs";
+                var tempFileName = "TestClass.cs";
                 var tempFilePath = Path.Combine(tempDir, tempFileName);
-                var tempAssemblyPath = Path.ChangeExtension(tempFilePath, ".dll");
+                var tempAssemblyPath = Path.Combine(tempDir, "TestClass.dll");
 
                 try
                 {
+                    // 检查是否已经存在编译好的程序集
+                    if (File.Exists(tempAssemblyPath))
+                    {
+                        LogInfo($"[CodeRunner] 发现已编译的程序集，直接加载: {tempAssemblyPath}");
+                        try
+                        {
+                            var assemblyBytes = File.ReadAllBytes(tempAssemblyPath);
+                            if (assemblyBytes.Length > 0)
+                            {
+                                var loadedAssembly = ReflectionAssembly.Load(assemblyBytes);
+                                LogInfo($"[CodeRunner] 程序集重用成功: {assemblyBytes.Length} bytes");
+                                return (true, loadedAssembly, null);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            LogWarning($"[CodeRunner] 加载已存在程序集失败，将重新编译: {ex.Message}");
+                            // 删除损坏的程序集文件
+                            try { File.Delete(tempAssemblyPath); } catch { }
+                        }
+                    }
+
                     // 写入代码到临时文件
                     File.WriteAllText(tempFilePath, code);
 
-                    LogInfo($"[TestRunner] 临时文件路径: {tempFilePath}");
-                    LogInfo($"[TestRunner] 目标程序集路径: {tempAssemblyPath}");
-                    LogInfo($"[TestRunner] 代码长度: {code.Length} 字符");
+                    LogInfo($"[CodeRunner] 临时文件路径: {tempFilePath}");
+                    LogInfo($"[CodeRunner] 目标程序集路径: {tempAssemblyPath}");
+                    LogInfo($"[CodeRunner] 代码长度: {code.Length} 字符");
 
                     // 使用Unity编译流水线编译
                     var assemblyBuilder = new AssemblyBuilder(tempAssemblyPath, new[] { tempFilePath });
@@ -622,12 +942,12 @@ namespace UnityMcp.Tools
                     // 添加必要的引用
                     var references = new List<string>();
 
-                    LogInfo("[TestRunner] 开始收集程序集引用...");
+                    LogInfo("[CodeRunner] 开始收集程序集引用...");
 
                     // 获取所有程序集引用，包括Assembly-CSharp和所有package程序集
                     foreach (var assembly in CompilationPipeline.GetAssemblies())
                     {
-                        LogInfo($"[TestRunner] 处理程序集: {assembly.name}");
+                        LogInfo($"[CodeRunner] 处理程序集: {assembly.name}");
 
                         // 添加程序集的所有引用
                         references.AddRange(assembly.compiledAssemblyReferences);
@@ -636,7 +956,7 @@ namespace UnityMcp.Tools
                         if (!string.IsNullOrEmpty(assembly.outputPath) && File.Exists(assembly.outputPath))
                         {
                             references.Add(assembly.outputPath);
-                            LogInfo($"[TestRunner] 添加编译后程序集: {assembly.outputPath}");
+                            LogInfo($"[CodeRunner] 添加编译后程序集: {assembly.outputPath}");
                         }
                     }
 
@@ -648,13 +968,13 @@ namespace UnityMcp.Tools
                             if (!string.IsNullOrEmpty(loadedAssembly.Location) && File.Exists(loadedAssembly.Location))
                             {
                                 references.Add(loadedAssembly.Location);
-                                LogInfo($"[TestRunner] 添加运行时程序集: {loadedAssembly.GetName().Name}");
+                                LogInfo($"[CodeRunner] 添加运行时程序集: {loadedAssembly.GetName().Name}");
                             }
                         }
                         catch (Exception ex)
                         {
                             // 忽略无法访问的程序集
-                            LogInfo($"[TestRunner] 无法访问程序集 {loadedAssembly.GetName().Name}: {ex.Message}");
+                            LogInfo($"[CodeRunner] 无法访问程序集 {loadedAssembly.GetName().Name}: {ex.Message}");
                         }
                     }
 
@@ -664,11 +984,11 @@ namespace UnityMcp.Tools
                     references.Add(typeof(UnityEngine.Debug).Assembly.Location); // UnityEngine
                     references.Add(typeof(UnityEditor.EditorApplication).Assembly.Location); // UnityEditor
 
-                    LogInfo($"[TestRunner] 总共收集到 {references.Count} 个程序集引用");
+                    LogInfo($"[CodeRunner] 总共收集到 {references.Count} 个程序集引用");
 
                     // 去除重复引用
                     var uniqueReferences = references.Distinct().Where(r => !string.IsNullOrEmpty(r) && File.Exists(r)).ToArray();
-                    LogInfo($"[TestRunner] 去除重复后有 {uniqueReferences.Length} 个有效引用");
+                    LogInfo($"[CodeRunner] 去除重复后有 {uniqueReferences.Length} 个有效引用");
 
                     assemblyBuilder.referencesOptions = ReferencesOptions.UseEngineModules;
                     assemblyBuilder.additionalReferences = uniqueReferences;
@@ -682,17 +1002,17 @@ namespace UnityMcp.Tools
                     {
                         try
                         {
-                            LogInfo($"[TestRunner] 尝试启动编译 ({retryCount + 1}/{maxRetries})...");
+                            LogInfo($"[CodeRunner] 尝试启动编译 ({retryCount + 1}/{maxRetries})...");
                             started = assemblyBuilder.Build();
 
                             if (started)
                             {
-                                LogInfo($"[TestRunner] 编译启动成功");
+                                LogInfo($"[CodeRunner] 编译启动成功");
                             }
                             else
                             {
                                 retryCount++;
-                                LogError($"[TestRunner] 编译启动失败, 重试 {retryCount}/{maxRetries}");
+                                LogError($"[CodeRunner] 编译启动失败, 重试 {retryCount}/{maxRetries}");
 
                                 if (retryCount < maxRetries)
                                 {
@@ -700,7 +1020,7 @@ namespace UnityMcp.Tools
 
                                     // 创建新的AssemblyBuilder
                                     var newAssemblyPath = Path.ChangeExtension(tempFilePath, $"_retry{retryCount}.dll");
-                                    LogInfo($"[TestRunner] 创建新的AssemblyBuilder: {newAssemblyPath}");
+                                    LogInfo($"[CodeRunner] 创建新的AssemblyBuilder: {newAssemblyPath}");
                                     assemblyBuilder = new AssemblyBuilder(newAssemblyPath, new[] { tempFilePath });
                                     assemblyBuilder.referencesOptions = ReferencesOptions.UseEngineModules;
                                     assemblyBuilder.additionalReferences = uniqueReferences; // 使用正确的引用
@@ -712,7 +1032,7 @@ namespace UnityMcp.Tools
                             retryCount++;
                             if (retryCount < maxRetries)
                             {
-                                LogInfo($"[TestRunner] Compilation exception, retry {retryCount}/{maxRetries}: {ex.Message}");
+                                LogInfo($"[CodeRunner] Compilation exception, retry {retryCount}/{maxRetries}: {ex.Message}");
                                 System.Threading.Thread.Sleep(200 * retryCount);
 
                                 // 创建新的AssemblyBuilder
@@ -734,7 +1054,7 @@ namespace UnityMcp.Tools
                     }
 
                     // 等待编译完成
-                    LogInfo($"[TestRunner] 开始等待编译完成, 初始状态: {assemblyBuilder.status}");
+                    LogInfo($"[CodeRunner] 开始等待编译完成, 初始状态: {assemblyBuilder.status}");
                     var timeout = DateTime.Now.AddSeconds(30); // 30秒超时
                     int waitCount = 0;
 
@@ -742,7 +1062,7 @@ namespace UnityMcp.Tools
                     {
                         if (DateTime.Now > timeout)
                         {
-                            LogError($"[TestRunner] 编译超时, 最终状态: {assemblyBuilder.status}");
+                            LogError($"[CodeRunner] 编译超时, 最终状态: {assemblyBuilder.status}");
                             return (false, null, new[] { "Compilation timeout" });
                         }
                         System.Threading.Thread.Sleep(50);
@@ -751,11 +1071,11 @@ namespace UnityMcp.Tools
                         // 每秒输出一次状态
                         if (waitCount % 20 == 0)
                         {
-                            LogInfo($"[TestRunner] 编译中... 当前状态: {assemblyBuilder.status}, 已等待 {waitCount * 50}ms");
+                            LogInfo($"[CodeRunner] 编译中... 当前状态: {assemblyBuilder.status}, 已等待 {waitCount * 50}ms");
                         }
                     }
 
-                    LogInfo($"[TestRunner] 编译完成, 最终状态: {assemblyBuilder.status}");
+                    LogInfo($"[CodeRunner] 编译完成, 最终状态: {assemblyBuilder.status}");
 
                     if (assemblyBuilder.status == AssemblyBuilderStatus.Finished)
                     {
@@ -783,7 +1103,7 @@ namespace UnityMcp.Tools
                                 if (assemblyBytes.Length > 0)
                                 {
                                     var loadedAssembly = ReflectionAssembly.Load(assemblyBytes);
-                                    LogInfo($"[TestRunner] Assembly loaded successfully: {assemblyPath} ({assemblyBytes.Length} bytes)");
+                                    LogInfo($"[CodeRunner] Assembly loaded successfully: {assemblyPath} ({assemblyBytes.Length} bytes)");
                                     return (true, loadedAssembly, null);
                                 }
                                 else
@@ -825,25 +1145,25 @@ namespace UnityMcp.Tools
                     else
                     {
                         var errors = new List<string> { $"Compilation failed with status: {assemblyBuilder.status}" };
-                        LogError($"[TestRunner] 编译失败, 状态: {assemblyBuilder.status}");
+                        LogError($"[CodeRunner] 编译失败, 状态: {assemblyBuilder.status}");
 
                         // 检查程序集文件是否存在（有时状态不准确）
                         if (File.Exists(assemblyBuilder.assemblyPath))
                         {
-                            LogInfo($"[TestRunner] 程序集文件存在，尝试加载: {assemblyBuilder.assemblyPath}");
+                            LogInfo($"[CodeRunner] 程序集文件存在，尝试加载: {assemblyBuilder.assemblyPath}");
                             try
                             {
                                 var assemblyBytes = File.ReadAllBytes(assemblyBuilder.assemblyPath);
                                 if (assemblyBytes.Length > 0)
                                 {
                                     var loadedAssembly = ReflectionAssembly.Load(assemblyBytes);
-                                    LogInfo($"[TestRunner] 程序集加载成功，尽管状态显示失败");
+                                    LogInfo($"[CodeRunner] 程序集加载成功，尽管状态显示失败");
                                     return (true, loadedAssembly, null);
                                 }
                             }
                             catch (Exception loadEx)
                             {
-                                LogError($"[TestRunner] 无法加载程序集: {loadEx.Message}");
+                                LogError($"[CodeRunner] 无法加载程序集: {loadEx.Message}");
                             }
                         }
 
@@ -864,14 +1184,14 @@ namespace UnityMcp.Tools
                                 {
                                     var logContent = File.ReadAllText(logPath);
                                     errors.Add($"Compilation log ({Path.GetFileName(logPath)}): {logContent}");
-                                    LogError($"[TestRunner] 编译日志: {logContent}");
+                                    LogError($"[CodeRunner] 编译日志: {logContent}");
                                     break;
                                 }
                             }
                         }
                         catch (Exception logEx)
                         {
-                            LogError($"[TestRunner] 无法读取编译日志: {logEx.Message}");
+                            LogError($"[CodeRunner] 无法读取编译日志: {logEx.Message}");
                         }
 
                         // 检查临时目录中的所有文件
@@ -881,13 +1201,13 @@ namespace UnityMcp.Tools
                             if (Directory.Exists(tempDir))
                             {
                                 var allFiles = Directory.GetFiles(tempDir);
-                                LogInfo($"[TestRunner] 临时目录中的所有文件: {string.Join(", ", allFiles.Select(Path.GetFileName))}");
+                                LogInfo($"[CodeRunner] 临时目录中的所有文件: {string.Join(", ", allFiles.Select(Path.GetFileName))}");
                                 errors.Add($"Temp directory files: {string.Join(", ", allFiles.Select(Path.GetFileName))}");
                             }
                         }
                         catch (Exception dirEx)
                         {
-                            LogError($"[TestRunner] 无法检查临时目录: {dirEx.Message}");
+                            LogError($"[CodeRunner] 无法检查临时目录: {dirEx.Message}");
                         }
 
                         return (false, null, errors.ToArray());
@@ -900,9 +1220,158 @@ namespace UnityMcp.Tools
             }
             catch (Exception e)
             {
-                LogError($"[TestRunner] Exception occurred during compilation: {e.Message}");
+                LogError($"[CodeRunner] Exception occurred during compilation: {e.Message}");
                 return (false, null, new[] { $"Compilation exception: {e.Message}" });
             }
+        }
+
+        /// <summary>
+        /// 执行完整代码（自动查找可执行方法）
+        /// </summary>
+        private List<ExecutionResult> ExecuteCompleteCode(ReflectionAssembly assembly, object[] parameters, bool returnOutput)
+        {
+            var results = new List<ExecutionResult>();
+
+            try
+            {
+                // 获取程序集中的所有类型
+                var types = assembly.GetTypes();
+                LogInfo($"[CodeRunner] 在完整代码中找到 {types.Length} 个类型");
+
+                foreach (var type in types)
+                {
+                    // 查找所有公共静态方法
+                    var methods = type.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
+
+                    foreach (var method in methods)
+                    {
+                        // 跳过特殊方法和属性访问器
+                        if (method.IsSpecialName || method.Name.StartsWith("get_") || method.Name.StartsWith("set_"))
+                            continue;
+
+                        LogInfo($"[CodeRunner] 尝试执行方法: {type.FullName}.{method.Name}");
+
+                        var executionResult = new ExecutionResult
+                        {
+                            MethodName = $"{type.Name}.{method.Name}"
+                        };
+
+                        var startTime = DateTime.Now;
+
+                        // 准备控制台输出捕获
+                        StringWriter outputWriter = null;
+                        TextWriter originalOutput = null;
+
+                        try
+                        {
+                            if (returnOutput)
+                            {
+                                outputWriter = new StringWriter();
+                                originalOutput = Console.Out;
+                                Console.SetOut(outputWriter);
+                            }
+
+                            // 准备方法参数
+                            var methodParameters = method.GetParameters();
+                            object[] actualParameters = null;
+
+                            if (methodParameters.Length > 0)
+                            {
+                                actualParameters = new object[methodParameters.Length];
+                                for (int i = 0; i < methodParameters.Length && i < parameters.Length; i++)
+                                {
+                                    try
+                                    {
+                                        actualParameters[i] = Convert.ChangeType(parameters[i], methodParameters[i].ParameterType);
+                                    }
+                                    catch
+                                    {
+                                        actualParameters[i] = parameters[i];
+                                    }
+                                }
+                            }
+
+                            // 执行方法
+                            var returnValue = method.Invoke(null, actualParameters);
+
+                            executionResult.Success = true;
+                            executionResult.Message = "Method executed successfully";
+                            executionResult.ReturnValue = returnValue;
+
+                            LogInfo($"[CodeRunner] 方法 {method.Name} 执行成功");
+
+                            if (returnValue != null)
+                            {
+                                LogInfo($"[CodeRunner] 方法返回值: {returnValue}");
+                            }
+                        }
+                        catch (TargetInvocationException tie)
+                        {
+                            var innerException = tie.InnerException ?? tie;
+                            executionResult.Success = false;
+                            executionResult.Message = innerException.Message;
+                            executionResult.StackTrace = innerException.StackTrace;
+                            LogError($"[CodeRunner] 方法 {method.Name} 执行失败: {innerException.Message}");
+                        }
+                        catch (Exception e)
+                        {
+                            executionResult.Success = false;
+                            executionResult.Message = e.Message;
+                            executionResult.StackTrace = e.StackTrace;
+                            LogError($"[CodeRunner] 方法 {method.Name} 执行异常: {e.Message}");
+                        }
+                        finally
+                        {
+                            // 恢复控制台输出
+                            if (returnOutput && originalOutput != null)
+                            {
+                                Console.SetOut(originalOutput);
+                                executionResult.Output = outputWriter?.ToString() ?? "";
+                                outputWriter?.Dispose();
+                            }
+
+                            executionResult.Duration = (DateTime.Now - startTime).TotalMilliseconds;
+                        }
+
+                        results.Add(executionResult);
+                        LogInfo($"[CodeRunner] 方法 {method.Name}: {(executionResult.Success ? "SUCCESS" : "FAILED")} ({executionResult.Duration:F2}ms)");
+
+                        // 如果方法执行成功，通常只执行第一个找到的方法
+                        if (executionResult.Success)
+                        {
+                            return results;
+                        }
+                    }
+                }
+
+                // 如果没有找到任何可执行的方法
+                if (results.Count == 0)
+                {
+                    results.Add(new ExecutionResult
+                    {
+                        MethodName = "Unknown",
+                        Success = false,
+                        Message = "No executable public static methods found in the assembly",
+                        Output = "",
+                        Duration = 0
+                    });
+                }
+            }
+            catch (Exception e)
+            {
+                LogError($"[CodeRunner] 执行完整代码时发生异常: {e.Message}");
+                results.Add(new ExecutionResult
+                {
+                    MethodName = "Unknown",
+                    Success = false,
+                    Message = $"Failed to execute complete code: {e.Message}",
+                    Output = "",
+                    Duration = 0,
+                    StackTrace = e.StackTrace
+                });
+            }
+
+            return results;
         }
 
         /// <summary>
@@ -1060,32 +1529,110 @@ namespace UnityMcp.Tools
         }
 
         /// <summary>
-        /// 清理临时文件
+        /// 根据代码内容生成哈希值作为临时目录名
         /// </summary>
-        private void CleanupTempFiles(string tempFilePath, string tempAssemblyPath)
+        private string GetCodeHash(string code)
         {
-            var filesToClean = new List<string> { tempFilePath };
+            using (var sha256 = System.Security.Cryptography.SHA256.Create())
+            {
+                var bytes = Encoding.UTF8.GetBytes(code);
+                var hash = sha256.ComputeHash(bytes);
+                // 取前8个字节转换为16进制字符串
+                var hashString = BitConverter.ToString(hash, 0, 8).Replace("-", "").ToLower();
+                LogInfo($"[CodeRunner] 代码哈希值: {hashString}");
+                return hashString;
+            }
+        }
 
-            // 添加可能的程序集相关文件
-            var assemblyDir = Path.GetDirectoryName(tempAssemblyPath);
-            var assemblyNameWithoutExt = Path.GetFileNameWithoutExtension(tempAssemblyPath);
+        /// <summary>
+        /// 清理临时目录
+        /// </summary>
+        private void CleanupTempDirectory(string tempDir)
+        {
+            if (string.IsNullOrEmpty(tempDir) || !Directory.Exists(tempDir))
+                return;
+            // 判断临时目录下是否存在dll文件，如果没有则不进行清理
+            try
+            {
+                if (!Directory.Exists(tempDir))
+                    return;
 
-            if (!string.IsNullOrEmpty(assemblyDir))
+                var dllFiles = Directory.GetFiles(tempDir, "*.dll", SearchOption.AllDirectories);
+                if (dllFiles == null || dllFiles.Length == 0)
+                {
+                    LogInfo($"[CodeRunner] 临时目录中未找到dll文件，无需清理: {tempDir}");
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                LogWarning($"[CodeRunner] 检查临时目录dll文件时发生异常: {tempDir}, 错误: {ex.Message}");
+                return;
+            }
+
+            int retryCount = 0;
+            const int maxRetries = 3;
+
+            while (retryCount < maxRetries)
             {
                 try
                 {
-                    var potentialFiles = Directory.GetFiles(assemblyDir, $"{assemblyNameWithoutExt}*");
-                    filesToClean.AddRange(potentialFiles);
+                    Directory.Delete(tempDir, true);
+                    LogInfo($"[CodeRunner] 临时目录清理成功: {tempDir}");
+                    return; // 成功删除，退出
                 }
-                catch
+                catch (IOException ex)
                 {
-                    // 忽略获取文件列表的错误
+                    retryCount++;
+                    if (retryCount < maxRetries)
+                    {
+                        LogInfo($"[CodeRunner] 清理临时目录失败，重试 {retryCount}/{maxRetries}: {tempDir}");
+                        System.Threading.Thread.Sleep(100 * retryCount);
+                    }
+                    else
+                    {
+                        LogWarning($"[CodeRunner] 无法清理临时目录: {tempDir}, 错误: {ex.Message}");
+                        // 尝试逐个删除文件
+                        CleanupDirectoryFiles(tempDir);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogWarning($"[CodeRunner] 清理临时目录时发生意外错误: {tempDir}, 错误: {ex.Message}");
+                    break; // 非IO错误，不重试
                 }
             }
+        }
 
-            foreach (var file in filesToClean)
+        /// <summary>
+        /// 尝试逐个删除目录中的文件
+        /// </summary>
+        private void CleanupDirectoryFiles(string tempDir)
+        {
+            try
             {
-                CleanupSingleFile(file);
+                var files = Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories);
+                foreach (var file in files)
+                {
+                    CleanupSingleFile(file);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogWarning($"[CodeRunner] 无法枚举临时目录文件: {tempDir}, 错误: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 清理临时文件（保留原方法以兼容）
+        /// </summary>
+        private void CleanupTempFiles(string tempFilePath, string tempAssemblyPath)
+        {
+            // 获取临时目录并清理整个目录
+            if (!string.IsNullOrEmpty(tempFilePath))
+            {
+                var tempDir = Path.GetDirectoryName(tempFilePath);
+                CleanupTempDirectory(tempDir);
             }
         }
 
@@ -1111,17 +1658,17 @@ namespace UnityMcp.Tools
                     retryCount++;
                     if (retryCount < maxRetries)
                     {
-                        LogInfo($"[TestRunner] Failed to clean file, retry {retryCount}/{maxRetries}: {filePath}");
+                        LogInfo($"[CodeRunner] Failed to clean file, retry {retryCount}/{maxRetries}: {filePath}");
                         System.Threading.Thread.Sleep(100 * retryCount);
                     }
                     else
                     {
-                        LogWarning($"[TestRunner] Unable to clean temporary file: {filePath}, error: {ex.Message}");
+                        LogWarning($"[CodeRunner] Unable to clean temporary file: {filePath}, error: {ex.Message}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    LogWarning($"[TestRunner] Unexpected error occurred while cleaning file: {filePath}, error: {ex.Message}");
+                    LogWarning($"[CodeRunner] Unexpected error occurred while cleaning file: {filePath}, error: {ex.Message}");
                     break; // 非IO错误，不重试
                 }
             }

@@ -1,17 +1,6 @@
 ---
-title: Unity MCP 工具规则
-description: 当用户需要控制Unity时，请使用此规则集。提供完整的Unity MCP工具API文档和使用指南。
-keywords: [unity, mcp, tools, gameobject, api]
-globs: [
-  "**/Assets/MCP/Tools/**",
-  "**/*.unity",
-  "**/*.prefab",
-  "**/*.cs",
-  "**/*.asset"
-]
-alwaysApply: true
-version: "2.1.0"
-lastUpdated: "2024-12-21"
+description: 当用户需要利用MCP操作Unity引擎时，请使用此规则集
+alwaysApply: false
 ---
 # Unity MCP 工具规则
 
@@ -49,7 +38,7 @@ lastUpdated: "2024-12-21"
 **💻 开发工具**
 - [edit_script](#edit_script---c脚本管理) - C#脚本管理
 - [edit_shader](#edit_shader---shader管理) - Shader管理
-- [test_runner](#test_runner---c测试运行工具) - C#测试运行
+- [code_runner](#code_runner---c代码运行工具) - C#代码运行
 - [python_runner](#python_runner---python代码执行工具) - Python代码执行
 - [console_read](#console_read---unity-控制台读取) - 控制台读取
 - [console_write](#console_write---unity-控制台写入) - 控制台写入
@@ -2801,59 +2790,101 @@ functions_call(
 
 ---
 
-### test_runner - C#测试运行工具
-**功能**: 编译和执行C#测试代码，支持NUnit测试框架，提供代码验证和测试执行功能。
+### code_runner - C#代码运行工具
+**功能**: 在Unity编辑器中编译和执行任意C#代码，支持完整的Unity API访问，提供代码验证和动态执行功能。
 
 主要参数（放入 `args`）
 - `action` (string, 可选): 操作类型，支持 `execute`、`validate`，默认为 `execute`
-- `test_code` (string, 必需): C#测试代码内容
-- `class_name` (string, 可选): 测试类名，默认为 `TestClass`
-- `namespace` (string, 可选): 命名空间，默认为 `TestNamespace`
-- `includes` (list, 可选): 引用的using语句列表，默认包含基础命名空间
-- `timeout` (string, 可选): 执行超时时间（秒），默认为 30 秒
+- `code` (string, 必需): C#代码内容，可以是代码片段或完整的类/方法定义
+- `class_name` (string, 可选): 类名，默认为 `CodeClass`
+- `method_name` (string, 可选): 要执行的方法名，默认为 `Run`
+- `namespace` (string, 可选): 命名空间，默认为 `CodeNamespace`
+- `includes` (list, 可选): 引用的using语句列表，默认包含Unity和.NET基础命名空间
+- `parameters` (list, 可选): 方法参数，JSON数组格式，默认为空数组
+- `timeout` (int, 可选): 执行超时时间（秒），默认为 30 秒
 - `cleanup` (bool, 可选): 是否清理临时文件，默认为 true
+- `return_output` (bool, 可选): 是否捕获并返回控制台输出，默认为 true
 
 支持的操作 (action)
 
 **代码执行** (`execute`)
-- 编译并执行C#测试代码
-- 返回测试结果和执行统计
-- 支持NUnit测试框架
+- 编译并执行C#代码
+- 支持完整的Unity API访问
+- 支持静态和实例方法调用
 - 自动处理程序集引用和编译
+- 独立临时目录编译，避免文件冲突
 
 **代码验证** (`validate`)
-- 验证C#测试代码语法
-- 检查编译错误
+- 验证C#代码语法和编译
+- 检查编译错误和警告
 - 不执行代码，仅验证语法正确性
+- 返回生成的完整代码
 
-**NUnit测试支持**
-- [Test] 标记的测试方法
-- [SetUp] 和 [TearDown] 方法支持
-- [TestFixture] 类标记
-- Assert 断言支持
+**代码格式支持**
+- **代码片段**: 直接写代码逻辑，自动包装在方法中
+- **完整方法**: 包含public static/void等完整方法定义
+- **多个方法**: 支持在一个类中定义多个方法
+- **Unity API**: 完全支持UnityEngine、UnityEditor等API
 
-示例：执行简单测试
+示例：执行代码片段（创建GameObject）
 ```python
 function_call(
-  func="test_runner",
+  func="code_runner",
   args={
     "action": "execute",
-    "test_code": """
-[Test]
-public void TestAddition()
+    "code": """
+// 创建一个新的GameObject
+GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+cube.name = "MyCube";
+cube.transform.position = new Vector3(0, 1, 0);
+
+Debug.Log("创建了一个立方体: " + cube.name);
+return cube.name;
+"""
+  }
+)
+```
+
+示例：执行完整方法定义
+```python
+function_call(
+  func="code_runner",
+  args={
+    "action": "execute", 
+    "code": """
+public static void CreateMeshAsset()
 {
-    int result = 2 + 3;
-    Assert.AreEqual(5, result);
+    Mesh mesh = new Mesh();
+    mesh.name = "CustomMesh";
+    
+    // 定义顶点
+    Vector3[] vertices = new Vector3[4];
+    vertices[0] = new Vector3(0, 0, 0);
+    vertices[1] = new Vector3(1, 0, 0);
+    vertices[2] = new Vector3(1, 1, 0);
+    vertices[3] = new Vector3(0, 1, 0);
+    mesh.vertices = vertices;
+    
+    // 定义三角形
+    int[] triangles = new int[6];
+    triangles[0] = 0; triangles[1] = 2; triangles[2] = 1;
+    triangles[3] = 0; triangles[4] = 3; triangles[5] = 2;
+    mesh.triangles = triangles;
+    
+    mesh.RecalculateNormals();
+    
+    AssetDatabase.CreateAsset(mesh, "Assets/CustomMesh.asset");
+    AssetDatabase.SaveAssets();
+    
+    Debug.Log("网格资源创建完成");
 }
 
-[Test] 
-public void TestString()
+public static string GetProjectInfo()
 {
-    string text = "Hello";
-    Assert.IsTrue(text.StartsWith("H"));
-}""",
-    "class_name": "MathTest",
-    "namespace": "MyTests"
+    return $"项目路径: {Application.dataPath}";
+}
+""",
+    "method_name": "CreateMeshAsset"
   }
 )
 ```
@@ -2861,40 +2892,36 @@ public void TestString()
 示例：验证代码语法
 ```python
 function_call(
-  func="test_runner",
+  func="code_runner",
   args={
     "action": "validate",
-    "test_code": """
-[Test]
-public void TestMethod()
+    "code": """
+Transform[] objects = FindObjectsOfType<Transform>();
+foreach(Transform obj in objects)
 {
-    Debug.Log("Test");
-    Assert.Pass("Test completed");
-}""",
-    "class_name": "ValidationTest"
+    Debug.Log($"对象: {obj.name}, 位置: {obj.position}");
+}
+return objects.Length;
+""",
+    "class_name": "ObjectScanner"
   }
 )
 ```
 
-示例：使用自定义引用
+示例：带参数的方法调用
 ```python
 function_call(
-  func="test_runner", 
+  func="code_runner",
   args={
     "action": "execute",
-    "test_code": """
-[Test]
-public void TestVector()
+    "code": """
+public static string ProcessText(string input, int count)
 {
-    Vector3 pos = new Vector3(1, 2, 3);
-    Assert.AreEqual(1, pos.x);
-}""",
-    "includes": [
-      "System",
-      "UnityEngine", 
-      "NUnit.Framework"
-    ],
-    "timeout": 45
+    return $"处理文本: {input}, 重复{count}次: {string.Join(", ", Enumerable.Repeat(input, count))}";
+}
+""",
+    "method_name": "ProcessText", 
+    "parameters": ["Hello", 3]
   }
 )
 ```
@@ -2903,30 +2930,18 @@ public void TestVector()
 ```json
 {
   "success": true,
-  "message": "Test execution completed, 2 tests executed",
+  "message": "Code execution completed successfully",
   "data": {
     "operation": "execute",
-    "class_name": "MathTest",
-    "namespace_name": "MyTests",
-    "test_count": 2,
-    "passed_count": 2,
-    "failed_count": 0,
-    "results": [
-      {
-        "test_name": "TestAddition",
-        "success": true,
-        "message": "Test passed",
-        "stack_trace": null,
-        "duration": 1.23
-      },
-      {
-        "test_name": "TestString", 
-        "success": true,
-        "message": "Test passed",
-        "stack_trace": null,
-        "duration": 0.85
-      }
-    ]
+    "class_name": "CodeClass",
+    "method_name": "Run", 
+    "namespace_name": "CodeNamespace",
+    "success": true,
+    "message": "Code executed successfully",
+    "output": "创建了一个立方体: MyCube\n",
+    "return_value": "MyCube",
+    "duration": 145.67,
+    "stack_trace": null
   }
 }
 ```
@@ -2935,12 +2950,13 @@ public void TestVector()
 ```json
 {
   "success": true,
-  "message": "Test code syntax is valid",
+  "message": "Code syntax is valid",
   "data": {
     "operation": "validate",
-    "class_name": "ValidationTest",
-    "namespace_name": "TestNamespace",
-    "generated_code": "namespace TestNamespace\n{\n..."
+    "class_name": "ObjectScanner",
+    "method_name": "Run",
+    "namespace_name": "CodeNamespace", 
+    "generated_code": "using System;\nusing UnityEngine;\n...\nnamespace CodeNamespace\n{\n    public class ObjectScanner\n    {\n        public static object Run()\n        {\n            try\n            {\n                Transform[] objects = FindObjectsOfType<Transform>();\n                ...\n            }\n        }\n    }\n}"
   }
 }
 ```
@@ -2952,48 +2968,60 @@ public void TestVector()
   "error": "Code compilation failed",
   "data": {
     "operation": "execute",
-    "errors": "CS1002: Syntax error, '(' expected\nline 5, column 10"
+    "errors": "CS1002: Syntax error, '(' expected\nline 8, column 15\nCS0103: The name 'UnknownMethod' does not exist in the current context\nline 12, column 5"
   }
 }
 ```
 
 **技术特性**
-- 动态代码编译和执行
-- 完整的Unity和.NET程序集引用
-- NUnit测试框架集成
-- 临时文件自动管理
-- 编译错误详细报告
-- 测试执行统计和时间测量
+- 动态代码编译和执行，支持协程编译避免阻塞
+- 完整的Unity和.NET程序集引用（477+个引用）
+- 独立临时目录结构，每次编译创建唯一目录避免冲突
+- 详细的编译过程日志和错误报告
+- 支持静态和实例方法调用
+- 自动代码包装，支持代码片段和完整方法定义
+- 控制台输出捕获和返回值处理
 
 **安全特性**
-- 临时文件隔离执行
-- 编译超时保护
-- 自动文件清理
-- 异常处理和错误捕获
+- 临时文件隔离执行，按目录清理
+- 编译超时保护（30秒默认）
+- 自动文件清理，带重试机制
+- 异常处理和详细错误捕获
+- 编译事件监听和状态监控
+
+**调试特性** 
+- 详细的编译参数日志（源文件、目标路径、引用列表）
+- 源文件内容验证和大小检查
+- 编译状态实时监控和变化记录
+- 临时目录文件列表和日志文件检查
+- 程序集文件存在性和大小验证
 
 **使用场景**
-- 单元测试验证
-- 代码片段测试
-- 算法验证
-- Unity API测试
-- 快速原型验证
+- Unity编辑器工具开发和测试
+- 动态创建GameObjects和组件
+- 网格、材质、纹理等资源生成
+- 场景对象批量处理和修改
+- Unity API功能验证和原型开发
+- 编辑器扩展脚本快速测试
 
 ---
 
 ### python_runner - Python代码执行工具
-**功能**: 安全地执行Python脚本，支持代码验证、包安装和UTF-8中文编码，提供完整的Python开发环境支持。
+**功能**: 安全地执行Python脚本，支持代码验证、包安装和UTF-8中文编码，提供完整的Python开发环境支持；如果动态创建*.py文件，放到于Python目录下。
 
 主要参数（放入 `args`）
 - `action` (string, 可选): 操作类型，支持 `execute`、`validate`、`install_package`，默认为 `execute`
-- `python_code` (string, 必需): Python脚本代码内容
+- `code` (string, 必需): Python脚本代码内容
+- `script_path` (string, 可选): 现有Python脚本文件路径（与code互斥，优先使用script_path）
 - `script_name` (string, 可选): Python脚本名称，默认为 `script.py`
 - `python_path` (string, 可选): Python解释器路径，默认为 `python`
 - `working_directory` (string, 可选): 工作目录路径，默认为Unity项目Assets目录
-- `timeout` (int, 可选): 执行超时时间（秒），默认为 30 秒
+- `timeout` (int, 可选): 执行超时时间（秒），默认为 300 秒
 - `cleanup` (bool, 可选): 是否清理临时文件，默认为 true
 - `packages` (string/list, 可选): 要安装的Python包，支持字符串或数组
 - `requirements_file` (string, 可选): requirements.txt文件路径
 - `virtual_env` (string, 可选): 虚拟环境路径
+- `refresh_project` (bool, 可选): 执行完成后是否刷新Unity项目，默认为 false
 
 支持的操作 (action)
 
@@ -3022,7 +3050,7 @@ function_call(
   func="python_runner",
   args={
     "action": "execute",
-    "python_code": """
+    "code": """
 import math
 import datetime
 
@@ -3046,13 +3074,26 @@ print('脚本执行完成！')
 )
 ```
 
+示例：执行现有Python脚本文件
+```python
+function_call(
+  func="python_runner",
+  args={
+    "action": "execute",
+    "script_path": "Assets/Scripts/Python/mesh_generator.py",
+    "timeout": 60,
+    "refresh_project": True
+  }
+)
+```
+
 示例：验证Python语法
 ```python
 function_call(
   func="python_runner",
   args={
     "action": "validate",
-    "python_code": """
+    "code": """
 def calculate_area(radius):
     import math
     return math.pi * radius ** 2
@@ -3100,7 +3141,7 @@ function_call(
   func="python_runner",
   args={
     "action": "execute",
-    "python_code": """
+    "code": """
 import sys
 print(f'Python版本: {sys.version}')
 print(f'Python路径: {sys.executable}')
@@ -3118,6 +3159,41 @@ except ImportError:
 )
 ```
 
+示例：创建Unity资产并自动刷新项目
+```python
+function_call(
+  func="python_runner",
+  args={
+    "action": "execute",
+    "code": """
+import os
+import json
+
+# 创建纹理文件或其他Unity资产
+assets_path = 'Assets/Generated'
+if not os.path.exists(assets_path):
+    os.makedirs(assets_path)
+
+# 生成一些配置文件
+config_data = {
+    'version': '1.0',
+    'generated_at': '2024-01-01',
+    'items': ['item1', 'item2', 'item3']
+}
+
+config_path = os.path.join(assets_path, 'config.json')
+with open(config_path, 'w', encoding='utf-8') as f:
+    json.dump(config_data, f, indent=2, ensure_ascii=False)
+
+print(f'配置文件已生成: {config_path}')
+""",
+    "script_name": "generate_assets.py",
+    "refresh_project": True,
+    "timeout": 30
+  }
+)
+```
+
 返回值格式（执行成功）
 ```json
 {
@@ -3131,7 +3207,8 @@ except ImportError:
     "error": "",
     "exit_code": 0,
     "duration": 125.75,
-    "temp_file": "C:/Temp/Unity/PythonRunner/basic_test_12345.py"
+    "temp_file": "C:/Temp/Unity/PythonRunner/basic_test_12345.py",
+    "project_refreshed": false
   }
 }
 ```
@@ -3184,6 +3261,7 @@ except ImportError:
 - **超时控制**: 可配置的执行超时保护
 - **错误处理**: 详细的异常信息和堆栈跟踪
 - **包管理**: pip包安装和requirements.txt支持
+- **项目集成**: 执行完成后可自动刷新Unity项目，确保新生成的资产被识别
 
 **安全特性**
 - 进程沙盒隔离

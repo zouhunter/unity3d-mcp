@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -252,6 +253,81 @@ namespace UnityMcp
             Log($"[UnityMcp] 监听循环已结束");
         }
 
+        /// <summary>
+        /// 从流中读取指定字节数的数据
+        /// </summary>
+        private static async Task<byte[]> ReadExactAsync(NetworkStream stream, int count)
+        {
+            byte[] buffer = new byte[count];
+            int totalBytesRead = 0;
+
+            while (totalBytesRead < count)
+            {
+                int bytesRead = await stream.ReadAsync(buffer, totalBytesRead, count - totalBytesRead);
+                if (bytesRead == 0)
+                {
+                    throw new Exception($"Connection closed. Expected {count} bytes, received {totalBytesRead}");
+                }
+                totalBytesRead += bytesRead;
+            }
+
+            return buffer;
+        }
+
+        /// <summary>
+        /// 发送带长度前缀的数据
+        /// </summary>
+        private static async Task SendWithLengthAsync(NetworkStream stream, byte[] data)
+        {
+            uint dataLength = (uint)data.Length;
+
+            // 手动构建大端序字节数组
+            byte[] lengthBytes = new byte[4];
+            lengthBytes[0] = (byte)((dataLength >> 24) & 0xFF);
+            lengthBytes[1] = (byte)((dataLength >> 16) & 0xFF);
+            lengthBytes[2] = (byte)((dataLength >> 8) & 0xFF);
+            lengthBytes[3] = (byte)(dataLength & 0xFF);
+
+            Log($"[UnityMcp] 发送消息: length={data.Length}, length_prefix={BitConverter.ToString(lengthBytes)}");
+
+            await stream.WriteAsync(lengthBytes, 0, 4);
+            await stream.WriteAsync(data, 0, data.Length);
+        }
+
+        /// <summary>
+        /// 接收带长度前缀的数据
+        /// </summary>
+        private static async Task<byte[]> ReceiveWithLengthAsync(NetworkStream stream)
+        {
+            // 读取4字节长度前缀
+            byte[] lengthBytes = await ReadExactAsync(stream, 4);
+
+            // 手动从大端序字节数组转换为长度值
+            uint dataLength = ((uint)lengthBytes[0] << 24) |
+                             ((uint)lengthBytes[1] << 16) |
+                             ((uint)lengthBytes[2] << 8) |
+                             ((uint)lengthBytes[3]);
+
+            Log($"[UnityMcp] 接收长度前缀字节: {BitConverter.ToString(lengthBytes)} -> {dataLength} bytes");
+
+            // 安全检查，防止内存问题
+            const uint maxMessageSize = 100 * 1024 * 1024; // 100MB限制
+            if (dataLength > maxMessageSize)
+            {
+                LogError($"[UnityMcp] 长度前缀字节详细: [{lengthBytes[0]}, {lengthBytes[1]}, {lengthBytes[2]}, {lengthBytes[3]}]");
+                throw new Exception($"消息过大: {dataLength} bytes (最大: {maxMessageSize})");
+            }
+
+            if (dataLength == 0)
+            {
+                LogWarning($"[UnityMcp] 接收到长度为0的消息");
+                return new byte[0];
+            }
+
+            // 读取指定长度的数据
+            return await ReadExactAsync(stream, (int)dataLength);
+        }
+
         private static async Task HandleClientAsync(TcpClient client)
         {
             string clientEndpoint = client.Client.RemoteEndPoint?.ToString() ?? "Unknown";
@@ -276,23 +352,14 @@ namespace UnityMcp
             using (client)
             using (NetworkStream stream = client.GetStream())
             {
-                byte[] buffer = new byte[8192];
                 while (isRunning)
                 {
                     try
                     {
-                        int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
-                        if (bytesRead == 0)
-                        {
-                            Log($"[UnityMcp] 客户端已断开连接: {clientEndpoint}");
-                            break; // Client disconnected
-                        }
+                        // 使用长度前缀协议接收数据
+                        byte[] commandBytes = await ReceiveWithLengthAsync(stream);
 
-                        string commandText = System.Text.Encoding.UTF8.GetString(
-                            buffer,
-                            0,
-                            bytesRead
-                        );
+                        string commandText = System.Text.Encoding.UTF8.GetString(commandBytes);
                         Log($"[UnityMcp] 接收到命令 from {clientEndpoint}: {commandText}");
 
                         // 更新客户端活动状态
@@ -317,7 +384,7 @@ namespace UnityMcp
                                 /*lang=json,strict*/
                                 "{\"status\":\"success\",\"result\":{\"message\":\"pong\"}}"
                             );
-                            await stream.WriteAsync(pingResponseBytes, 0, pingResponseBytes.Length);
+                            await SendWithLengthAsync(stream, pingResponseBytes);
                             Log($"[UnityMcp] ping响应已发送 to {clientEndpoint}");
                             continue;
                         }
@@ -330,7 +397,7 @@ namespace UnityMcp
 
                         string response = await tcs.Task;
                         byte[] responseBytes = System.Text.Encoding.UTF8.GetBytes(response);
-                        await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
+                        await SendWithLengthAsync(stream, responseBytes);
                         Log($"[UnityMcp] 响应已发送 to {clientEndpoint}, ID: {commandId}, Response: {response}");
                     }
                     catch (Exception ex)
@@ -559,6 +626,7 @@ namespace UnityMcp
 
                 // Use JObject for args as the new handlers likely expect this
                 JObject paramsObject = command.cmd ?? new JObject();
+
                 Log($"[UnityMcp] 命令参数: {paramsObject}");
 
                 Log($"[UnityMcp] 获取McpTool实例: {command.type}");
@@ -570,13 +638,57 @@ namespace UnityMcp
                 }
 
                 Log($"[UnityMcp] 找到工具: {tool.GetType().Name}，开始异步处理命令");
+                var startTime = System.DateTime.Now;
                 tool.HandleCommand(paramsObject, (result) =>
                 {
+                    var endTime = System.DateTime.Now;
+                    var duration = (endTime - startTime).TotalMilliseconds;
+
                     // Standard success response format
                     var response = new { status = "success", result };
                     Log($"[UnityMcp] 命令执行成功: Type={command.type}");
                     var re = JsonConvert.SerializeObject(response);
                     Log($"[UnityMcp] 工具执行完成，结果: {re}");
+
+                    // 记录执行结果到McpExecuteRecordObject
+                    try
+                    {
+                        var recordObject = McpExecuteRecordObject.instance;
+
+                        // 根据命令类型决定记录方式
+                        string cmdName;
+
+                        if (command.type == "function_call")
+                        {
+                            // function_call: 记录具体的func和args
+                            cmdName = "function_call." + paramsObject["func"]?.ToString() ?? "Unknown";
+                        }
+                        else if (command.type == "functions_call")
+                        {
+                            // functions_call: 记录command类型和funcs数组
+                            cmdName = "functions_call.*";
+                        }
+                        else
+                        {
+                            // 其他命令类型: 使用默认方式
+                            cmdName = command.type;
+                        }
+
+                        recordObject.addRecord(
+                            cmdName,
+                            paramsObject.ToString(),
+                            re,
+                            "", // 成功时error为空
+                            duration,
+                            "MCP Client"
+                        );
+                        recordObject.saveRecords();
+                    }
+                    catch (System.Exception recordEx)
+                    {
+                        LogError($"[UnityMcp] 记录执行结果时发生错误: {recordEx.Message}");
+                    }
+
                     tcs.SetResult(re);
                 });
 
@@ -600,7 +712,54 @@ namespace UnityMcp
                         : "No args", // Summarize args for context
                 };
                 Log($"[UnityMcp] 错误响应已生成: Type={command?.type ?? "Unknown"}");
-                tcs.SetResult(JsonConvert.SerializeObject(response));
+                var errorResponse = JsonConvert.SerializeObject(response);
+
+                // 记录错误执行结果到McpExecuteRecordObject
+                try
+                {
+                    var recordObject = McpExecuteRecordObject.instance;
+
+                    // 根据命令类型决定记录方式
+                    string funcName;
+                    string argsString;
+
+                    if (command?.type == "function_call")
+                    {
+                        // function_call: 记录具体的func和args
+                        var cmd = command?.cmd;
+                        funcName = cmd?["func"]?.ToString() ?? "Unknown";
+                        argsString = cmd?["args"]?.ToString() ?? "{}";
+                    }
+                    else if (command?.type == "functions_call")
+                    {
+                        // functions_call: 记录command类型和funcs数组
+                        funcName = "functions_call";
+                        var cmd = command?.cmd;
+                        argsString = cmd?["funcs"]?.ToString() ?? "[]";
+                    }
+                    else
+                    {
+                        // 其他命令类型: 使用默认方式
+                        funcName = command?.type ?? "Unknown";
+                        argsString = command?.cmd != null ? JsonConvert.SerializeObject(command.cmd) : "{}";
+                    }
+
+                    recordObject.addRecord(
+                        funcName,
+                        argsString,
+                        "",
+                        ex.Message,
+                        0,
+                        "MCP Client"
+                    );
+                    recordObject.saveRecords();
+                }
+                catch (System.Exception recordEx)
+                {
+                    LogError($"[UnityMcp] 记录错误执行结果时发生错误: {recordEx.Message}");
+                }
+
+                tcs.SetResult(errorResponse);
                 return;
             }
         }

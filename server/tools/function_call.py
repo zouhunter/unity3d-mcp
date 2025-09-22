@@ -56,11 +56,11 @@ def register_function_call_tools(mcp: FastMCP):
             # 准备发送给Unity的参数
             params = {
                 "func": func,
-                "args": json.dumps(args)  # 将对象序列化为JSON字符串发送给Unity
+                "args": args  # 直接发送JSON字符串
             }
             
-            # 通过bridge发送命令
-            result = bridge.send_command("function_call", params)
+            # 使用带重试机制的命令发送
+            result = bridge.send_command_with_retry("function_call", params, max_retries=2)
             
             # 确保返回结果包含success标志
             if isinstance(result, dict):
@@ -72,7 +72,7 @@ def register_function_call_tools(mcp: FastMCP):
                     "error": None
                 }
                 
-        except json.JSONEncodeError as e:
+        except json.JSONDecodeError as e:
             return {
                 "success": False,
                 "error": f"参数序列化失败: {str(e)}",

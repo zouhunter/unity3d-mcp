@@ -1,10 +1,12 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
 using UnityMcp.Models;
 
@@ -61,6 +63,16 @@ namespace UnityMcp.Tools
 
         private object currentResult = null; // 存储当前执行结果
 
+        // 执行记录相关变量
+        private ReorderableList recordList;
+        private int selectedRecordIndex = -1;
+        private Vector2 recordScrollPosition; // 记录列表滚动位置
+
+        // 分栏布局相关变量
+        private float splitterPos = 0.3f; // 默认左侧占30%
+        private bool isDraggingSplitter = false;
+        private const float SplitterWidth = 4f;
+
         // 布局参数
         private const float MinInputHeight = 100f;
         private const float MaxInputHeight = 300f;
@@ -70,6 +82,8 @@ namespace UnityMcp.Tools
         // 样式
         private GUIStyle headerStyle;
         private GUIStyle codeStyle;
+        private GUIStyle inputStyle;  // 专门用于输入框的样式
+        private GUIStyle resultStyle;
 
         private void InitializeStyles()
         {
@@ -86,26 +100,129 @@ namespace UnityMcp.Tools
             {
                 codeStyle = new GUIStyle(EditorStyles.textArea)
                 {
-                    wordWrap = false,
+                    wordWrap = true,  // 启用自动换行
                     fontSize = 12,
-                    fontStyle = FontStyle.Normal
+                    fontStyle = FontStyle.Normal,
+                    stretchWidth = false,  // 不自动拉伸，使用固定宽度
+                    stretchHeight = true   // 拉伸以适应容器高度
                 };
+            }
+
+            if (inputStyle == null)
+            {
+                inputStyle = new GUIStyle(EditorStyles.textArea)
+                {
+                    wordWrap = true,        // 强制启用自动换行
+                    fontSize = 12,
+                    fontStyle = FontStyle.Normal,
+                    normal = { textColor = EditorGUIUtility.isProSkin ? new Color(0.9f, 0.9f, 0.9f) : Color.black },
+                    stretchWidth = false,   // 不自动拉伸宽度
+                    stretchHeight = true,   // 允许高度拉伸
+                    fixedWidth = 0,         // 不使用固定宽度
+                    fixedHeight = 0,        // 不使用固定高度
+                    margin = new RectOffset(2, 2, 2, 2),
+                    padding = new RectOffset(4, 4, 4, 4)
+                };
+            }
+
+            if (resultStyle == null)
+            {
+                resultStyle = new GUIStyle(EditorStyles.textArea)
+                {
+                    wordWrap = true,        // 启用自动换行
+                    fontSize = 12,          // 与输入框保持一致的字体大小
+                    fontStyle = FontStyle.Normal,
+                    normal = { textColor = EditorGUIUtility.isProSkin ? new Color(0.9f, 0.9f, 0.9f) : Color.black },
+                    richText = true,        // 支持富文本，方便显示格式化内容
+                    stretchWidth = false,   // 与输入框保持一致，不自动拉伸宽度
+                    stretchHeight = true,   // 拉伸以适应容器高度
+                    margin = new RectOffset(2, 2, 2, 2),    // 与输入框保持一致的边距
+                    padding = new RectOffset(4, 4, 4, 4)    // 与输入框保持一致的内边距
+                };
+            }
+
+            InitializeRecordList();
+        }
+
+        private void InitializeRecordList()
+        {
+            if (recordList == null)
+            {
+                var records = McpExecuteRecordObject.instance.records;
+                recordList = new ReorderableList(records, typeof(McpExecuteRecordObject.McpExecuteRecord), false, true, false, true);
+
+                recordList.drawHeaderCallback = (Rect rect) =>
+                {
+                    var records = McpExecuteRecordObject.instance.records;
+                    int successCount = records.Where(r => r.success).Count();
+                    int errorCount = records.Count - successCount;
+                    EditorGUI.LabelField(rect, $"执行记录 ({records.Count}个 | ●{successCount} ×{errorCount})");
+                };
+
+                recordList.drawElementCallback = (Rect rect, int index, bool isActive, bool isFocused) =>
+                {
+                    var records = McpExecuteRecordObject.instance.records;
+                    if (index >= 0 && index < records.Count)
+                    {
+                        var record = records[records.Count - 1 - index]; // 倒序显示
+                        DrawRecordElement(rect, record, records.Count - 1 - index, isActive, isFocused);
+                    }
+                };
+
+                recordList.onSelectCallback = (ReorderableList list) =>
+                {
+                    var records = McpExecuteRecordObject.instance.records;
+                    if (list.index >= 0 && list.index < records.Count)
+                    {
+                        int actualIndex = records.Count - 1 - list.index; // 转换为实际索引
+                        SelectRecord(actualIndex);
+                    }
+                };
+
+                recordList.onRemoveCallback = (ReorderableList list) =>
+                {
+                    var records = McpExecuteRecordObject.instance.records;
+                    if (list.index >= 0 && list.index < records.Count)
+                    {
+                        int actualIndex = records.Count - 1 - list.index;
+                        if (EditorUtility.DisplayDialog("确认删除", $"确定要删除这条执行记录吗？\n函数: {records[actualIndex].name}", "删除", "取消"))
+                        {
+                            records.RemoveAt(actualIndex);
+                            McpExecuteRecordObject.instance.saveRecords();
+                            if (selectedRecordIndex == actualIndex)
+                            {
+                                selectedRecordIndex = -1;
+                            }
+                        }
+                    }
+                };
+
+                recordList.elementHeight = 40f; // 设置元素高度
             }
         }
 
         /// <summary>
-        /// 根据文本内容动态计算输入框高度
+        /// 根据文本内容动态计算输入框高度（考虑自动换行和固定宽度）
         /// </summary>
         private float CalculateInputHeight()
         {
             if (string.IsNullOrEmpty(inputJson))
                 return MinInputHeight;
 
-            // 计算行数
-            int lineCount = inputJson.Split('\n').Length;
+            // 基础行数计算
+            int basicLineCount = inputJson.Split('\n').Length;
 
-            // 根据行数计算高度，加上一些padding
-            float calculatedHeight = lineCount * LineHeight + 20f; // 20f为padding
+            // 根据固定宽度估算换行，考虑字体大小和宽度限制
+            // 估算每行可显示的字符数（基于12px字体和可用宽度）
+            const int avgCharsPerLine = 60; // 保守估计，适应较窄的面板
+            int totalChars = inputJson.Length;
+            int estimatedWrappedLines = Mathf.CeilToInt((float)totalChars / avgCharsPerLine);
+
+            // 取较大值作为实际行数估算，但给换行更多权重
+            int estimatedLineCount = Mathf.Max(basicLineCount, (int)(estimatedWrappedLines * 0.8f));
+
+            // 根据行数计算高度，加上适当的padding
+            float calculatedHeight = estimatedLineCount * LineHeight + 40f; // 适当的padding
 
             // 限制在最小和最大高度之间
             return Mathf.Clamp(calculatedHeight, MinInputHeight, MaxInputHeight);
@@ -115,9 +232,96 @@ namespace UnityMcp.Tools
         {
             InitializeStyles();
 
-            // 标题区域（不滚动）
+            // 标题区域
             GUILayout.Label("Unity MCP Debug Client", headerStyle);
-            GUILayout.Space(10);
+            GUILayout.Space(5);
+
+            // 分栏布局
+            DrawSplitView();
+
+            // 处理分栏拖拽
+            HandleSplitterEvents();
+        }
+
+        private void DrawSplitView()
+        {
+            Rect windowRect = new Rect(0, 30, position.width, position.height - 30);
+            float leftWidth = windowRect.width * splitterPos;
+            float rightWidth = windowRect.width * (1 - splitterPos) - SplitterWidth;
+
+            // 左侧区域 - 执行记录
+            Rect leftRect = new Rect(windowRect.x, windowRect.y, leftWidth, windowRect.height);
+            DrawLeftPanel(leftRect);
+
+            // 分隔条
+            Rect splitterRect = new Rect(leftRect.xMax, windowRect.y, SplitterWidth, windowRect.height);
+            DrawSplitter(splitterRect);
+
+            // 右侧区域 - 原有功能
+            Rect rightRect = new Rect(splitterRect.xMax, windowRect.y, rightWidth, windowRect.height);
+            DrawRightPanel(rightRect);
+        }
+
+        private void DrawLeftPanel(Rect rect)
+        {
+            GUILayout.BeginArea(rect);
+
+            // 记录列表操作按钮
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("刷新", GUILayout.Width(50)))
+            {
+                recordList = null; // 重新初始化列表
+                InitializeRecordList();
+                Repaint();
+            }
+
+            if (GUILayout.Button("清空记录", GUILayout.Width(80)))
+            {
+                if (EditorUtility.DisplayDialog("确认清空", "确定要清空所有执行记录吗？", "确定", "取消"))
+                {
+                    McpExecuteRecordObject.instance.clearRecords();
+                    McpExecuteRecordObject.instance.saveRecords();
+                    selectedRecordIndex = -1;
+                    recordList = null;
+                    InitializeRecordList();
+                }
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(5);
+
+            // ReorderableList 包装在 ScrollView 中
+            if (recordList != null)
+            {
+                // 更新列表数据
+                var records = McpExecuteRecordObject.instance.records;
+                recordList.list = records;
+
+                // 计算列表的实际高度
+                float listContentHeight = recordList.GetHeight();
+                float availableHeight = rect.height - 40; // 减去按钮区域高度
+
+                // 创建滚动区域，为垂直滚动条预留适当空间
+                Rect scrollViewRect = new Rect(0, 35, rect.width, availableHeight);
+                Rect scrollContentRect = new Rect(0, 0, rect.width - 16, listContentHeight); // 为垂直滚动条预留16px空间
+
+                recordScrollPosition = GUI.BeginScrollView(scrollViewRect, recordScrollPosition, scrollContentRect, false, true);
+
+                // 绘制列表
+                recordList.DoList(new Rect(0, 0, scrollContentRect.width, listContentHeight));
+
+                GUI.EndScrollView();
+            }
+
+            GUILayout.EndArea();
+        }
+
+        private void DrawRightPanel(Rect rect)
+        {
+            GUILayout.BeginArea(rect);
+
+            // 使用垂直布局组来控制整体宽度
+            GUILayout.BeginVertical(GUILayout.MaxWidth(rect.width));
 
             // 说明文字
             EditorGUILayout.HelpBox(
@@ -127,46 +331,173 @@ namespace UnityMcp.Tools
 
             GUILayout.Space(5);
 
-            // JSON输入框区域（带滚动）
-            DrawInputArea();
+            // JSON输入框区域
+            DrawInputArea(rect.width);
 
             GUILayout.Space(10);
 
-            // 操作按钮区域（不滚动）
+            // 操作按钮区域
             DrawControlButtons();
 
             GUILayout.Space(10);
 
-            // 结果显示区域（带滚动）
+            // 结果显示区域
             if (showResult)
             {
-                DrawResultArea();
+                DrawResultArea(rect.width);
             }
+
+            GUILayout.EndVertical();
+            GUILayout.EndArea();
+        }
+
+        private void DrawSplitter(Rect rect)
+        {
+            Color originalColor = GUI.color;
+            GUI.color = EditorGUIUtility.isProSkin ? new Color(0.3f, 0.3f, 0.3f) : new Color(0.6f, 0.6f, 0.6f);
+            GUI.DrawTexture(rect, EditorGUIUtility.whiteTexture);
+            GUI.color = originalColor;
+
+            EditorGUIUtility.AddCursorRect(rect, MouseCursor.ResizeHorizontal);
+        }
+
+        private void HandleSplitterEvents()
+        {
+            Event e = Event.current;
+            Rect windowRect = new Rect(0, 30, position.width, position.height - 30);
+            float splitterX = windowRect.width * splitterPos;
+            Rect splitterRect = new Rect(splitterX, 30, SplitterWidth, windowRect.height);
+
+            switch (e.type)
+            {
+                case EventType.MouseDown:
+                    if (splitterRect.Contains(e.mousePosition))
+                    {
+                        isDraggingSplitter = true;
+                        e.Use();
+                    }
+                    break;
+
+                case EventType.MouseDrag:
+                    if (isDraggingSplitter)
+                    {
+                        float newSplitterPos = e.mousePosition.x / position.width;
+                        splitterPos = Mathf.Clamp(newSplitterPos, 0.2f, 0.8f); // 限制在20%-80%之间
+                        Repaint();
+                        e.Use();
+                    }
+                    break;
+
+                case EventType.MouseUp:
+                    if (isDraggingSplitter)
+                    {
+                        isDraggingSplitter = false;
+                        e.Use();
+                    }
+                    break;
+            }
+        }
+
+        private void DrawRecordElement(Rect rect, McpExecuteRecordObject.McpExecuteRecord record, int index, bool isActive, bool isFocused)
+        {
+            Color originalColor = GUI.color;
+
+            // 添加padding - 每个元素都有padding
+            const float padding = 6f;
+            Rect paddedRect = new Rect(rect.x + padding, rect.y + padding, rect.width - padding * 2, rect.height - padding * 2);
+
+            if (isActive || selectedRecordIndex == index)
+            {
+                // 选中时显示背景颜色（在原始rect上绘制，不受padding影响）
+                GUI.color = new Color(0.3f, 0.7f, 1f, 0.3f); // 蓝色高亮
+                GUI.DrawTexture(rect, EditorGUIUtility.whiteTexture);
+            }
+            else
+            {
+                // 未选中时绘制box边框
+                Color boxColor = EditorGUIUtility.isProSkin ? new Color(0.4f, 0.4f, 0.4f) : new Color(0.7f, 0.7f, 0.7f);
+                GUI.color = boxColor;
+                GUI.Box(paddedRect, "", EditorStyles.helpBox);
+            }
+
+            GUI.color = originalColor;
+
+            // 绘制内容（在box内部）
+            const float numberWidth = 24f; // 序号宽度
+            const float iconWidth = 20f;
+            const float boxMargin = 4f; // box内部边距
+
+            // 计算box内部的绘制区域
+            Rect contentRect = new Rect(paddedRect.x + boxMargin, paddedRect.y + boxMargin,
+                paddedRect.width - boxMargin * 2, paddedRect.height - boxMargin * 2);
+
+            // 序号显示（左上角，在box内部）
+            var records = McpExecuteRecordObject.instance.records;
+            int displayIndex = index + 1; // 正序显示序号，从1开始
+            Rect numberRect = new Rect(contentRect.x, contentRect.y, numberWidth, 14f);
+            Color numberColor = EditorGUIUtility.isProSkin ? new Color(0.6f, 0.6f, 0.6f) : new Color(0.5f, 0.5f, 0.5f);
+            Color originalContentColor = GUI.contentColor;
+            GUI.contentColor = numberColor;
+            GUI.Label(numberRect, $"#{displayIndex}", EditorStyles.miniLabel);
+            GUI.contentColor = originalContentColor;
+
+            // 状态图标（在box内部）
+            string statusIcon = record.success ? "●" : "×";
+            Rect iconRect = new Rect(contentRect.x + numberWidth + 2f, contentRect.y, iconWidth, 16f);
+
+            // 为状态图标设置颜色
+            Color iconColor = record.success ? Color.green : Color.red;
+            GUI.contentColor = iconColor;
+            GUI.Label(iconRect, statusIcon, EditorStyles.boldLabel);
+            GUI.contentColor = originalContentColor;
+
+            // 函数名（第一行）- 在box内部，为序号和图标留出空间
+            Rect funcRect = new Rect(contentRect.x + numberWidth + iconWidth + 4f, contentRect.y,
+                contentRect.width - numberWidth - iconWidth - 4f, 16f);
+            GUI.Label(funcRect, record.name, EditorStyles.boldLabel);
+
+            // 时间和来源（第二行）- 在box内部
+            Rect timeRect = new Rect(contentRect.x + numberWidth + iconWidth + 4f, contentRect.y + 18f,
+                contentRect.width - numberWidth - iconWidth - 4f, 14f);
+            string timeInfo = $"{record.timestamp} | [{record.source}]";
+            if (record.duration > 0)
+            {
+                timeInfo += $" | {record.duration:F1}ms";
+            }
+
+            // 为时间信息设置较淡的颜色
+            Color timeColor = EditorGUIUtility.isProSkin ? new Color(0.8f, 0.8f, 0.8f) : new Color(0.4f, 0.4f, 0.4f);
+            GUI.contentColor = timeColor;
+            GUI.Label(timeRect, timeInfo, EditorStyles.miniLabel);
+            GUI.contentColor = originalContentColor;
         }
 
         /// <summary>
         /// 绘制输入区域（带滚动和动态高度）
         /// </summary>
-        private void DrawInputArea()
+        private void DrawInputArea(float availableWidth)
         {
             GUILayout.Label("MCP调用 (JSON格式):");
 
             float inputHeight = CalculateInputHeight();
+            float textAreaWidth = availableWidth; // 减去边距和滚动条宽度
 
-            // 创建输入框的滚动区域，使用窗口宽度
-            GUILayout.BeginVertical(EditorStyles.helpBox, GUILayout.ExpandWidth(true));
+            // 创建输入框的滚动区域，限制宽度避免水平滚动
+            GUILayout.BeginVertical(EditorStyles.helpBox);
             inputScrollPosition = EditorGUILayout.BeginScrollView(
                 inputScrollPosition,
+                false, true,  // 禁用水平滚动条，启用垂直滚动条
                 GUILayout.Height(inputHeight),
                 GUILayout.ExpandWidth(true)
             );
 
-            // 输入框，使用窗口宽度
+            // 输入框，使用专门的输入样式确保自动换行
             inputJson = EditorGUILayout.TextArea(
                 inputJson,
-                codeStyle,
+                inputStyle,
                 GUILayout.ExpandHeight(true),
-                GUILayout.ExpandWidth(true)
+                GUILayout.Width(textAreaWidth),
+                GUILayout.MaxWidth(textAreaWidth)  // 确保不会超过指定宽度
             );
 
             EditorGUILayout.EndScrollView();
@@ -251,24 +582,27 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 绘制结果显示区域（带滚动）
         /// </summary>
-        private void DrawResultArea()
+        private void DrawResultArea(float availableWidth)
         {
             EditorGUILayout.LabelField("执行结果", EditorStyles.boldLabel);
 
-            // 创建结果显示的滚动区域，使用窗口宽度
-            GUILayout.BeginVertical(EditorStyles.helpBox, GUILayout.ExpandWidth(true));
+            float textAreaWidth = availableWidth - 40; // 减去边距和滚动条宽度
+
+            // 创建结果显示的滚动区域，限制宽度避免水平滚动
+            GUILayout.BeginVertical(EditorStyles.helpBox);
             resultScrollPosition = EditorGUILayout.BeginScrollView(
                 resultScrollPosition,
+                false, true,  // 禁用水平滚动条，启用垂直滚动条
                 GUILayout.Height(ResultAreaHeight),
-                GUILayout.ExpandWidth(true)
+                GUILayout.MaxWidth(availableWidth)
             );
 
-            // 结果文本区域，使用窗口宽度
+            // 结果文本区域，限制宽度以防止水平溢出
             EditorGUILayout.TextArea(
                 resultText,
-                codeStyle,
+                resultStyle,
                 GUILayout.ExpandHeight(true),
-                GUILayout.ExpandWidth(true)
+                GUILayout.Width(textAreaWidth)
             );
 
             EditorGUILayout.EndScrollView();
@@ -276,15 +610,14 @@ namespace UnityMcp.Tools
 
             // 结果操作按钮
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("复制结果", GUILayout.Width(80)))
-            {
-                EditorGUIUtility.systemCopyBuffer = resultText;
-                EditorUtility.DisplayDialog("已复制", "结果已复制到剪贴板", "确定");
-            }
 
-            if (GUILayout.Button("清空结果", GUILayout.Width(80)))
+            // 记录结果按钮 - 只有当有执行结果且不是从历史记录加载时才显示
+            if (currentResult != null && !string.IsNullOrEmpty(inputJson))
             {
-                ClearResults();
+                if (GUILayout.Button("记录结果", GUILayout.Width(80)))
+                {
+                    RecordCurrentResult();
+                }
             }
 
             // 检查是否为批量结果，如果是则显示额外操作
@@ -386,141 +719,6 @@ namespace UnityMcp.Tools
             }
         }
 
-        /// <summary>
-        /// 执行批量函数调用的内部通用方法（顺序执行）
-        /// </summary>
-        private object ExecuteBatchCallsInternal(JArray funcsArray, DateTime startTime, System.Action<object, TimeSpan> onComplete)
-        {
-            // 设置批量执行状态
-            totalExecutionCount = funcsArray.Count;
-            currentExecutionIndex = 0;
-
-            // 启动协程进行顺序执行
-            CoroutineRunner.StartCoroutine(SequentialExecuteCoroutine(funcsArray, startTime, onComplete), null);
-
-            // 返回null表示异步执行
-            return null;
-        }
-
-        /// <summary>
-        /// 顺序执行批量任务的协程
-        /// </summary>
-        private IEnumerator SequentialExecuteCoroutine(JArray funcsArray, DateTime startTime, System.Action<object, TimeSpan> onComplete)
-        {
-            var results = new List<object>();
-            var errors = new List<string>();
-            int successfulCalls = 0;
-            int failedCalls = 0;
-
-            for (int i = 0; i < funcsArray.Count; i++)
-            {
-                currentExecutionIndex = i + 1;
-
-                // 刷新UI显示当前进度
-                Repaint();
-
-                var funcCall = funcsArray[i] as JObject;
-                if (funcCall == null)
-                {
-                    errors.Add($"第{i + 1}个函数调用格式错误: 不是有效的JSON对象");
-                    failedCalls++;
-                    results.Add(null);
-                    continue;
-                }
-
-                // 执行单个函数调用
-                var functionCall = new FunctionCall();
-                object callResult = null;
-                bool callCompleted = false;
-                Exception executionError = null;
-
-                try
-                {
-                    functionCall.HandleCommand(funcCall, (result) =>
-                    {
-                        callResult = result;
-                        callCompleted = true;
-                    });
-                }
-                catch (Exception e)
-                {
-                    executionError = e;
-                    callCompleted = true;
-                }
-
-                // 等待调用完成
-                int waitFrames = 0;
-                while (!callCompleted)
-                {
-                    yield return null; // 等待下一帧
-                    waitFrames++;
-
-                    // 每10帧刷新一次UI（大约每100ms）
-                    if (waitFrames % 10 == 0)
-                    {
-                        Repaint();
-                    }
-                }
-
-                // 处理结果
-                if (executionError != null)
-                {
-                    string error = $"第{i + 1}个函数调用失败: {executionError.Message}";
-                    errors.Add(error);
-                    results.Add(null);
-                    failedCalls++;
-
-                    Debug.LogException(new Exception($"批量执行第{i + 1}个任务时发生错误", executionError));
-                }
-                else
-                {
-                    results.Add(callResult);
-
-                    if (callResult != null && !IsErrorResponse(callResult))
-                    {
-                        successfulCalls++;
-                    }
-                    else
-                    {
-                        failedCalls++;
-                        if (callResult != null)
-                        {
-                            errors.Add($"第{i + 1}个调用: {ExtractErrorMessage(callResult)}");
-                        }
-                        else
-                        {
-                            errors.Add($"第{i + 1}个调用: 执行失败，返回null");
-                        }
-                    }
-                }
-
-                // 短暂延迟，让UI有机会更新
-                yield return null;
-            }
-
-            // 生成最终结果
-            var finalResult = new
-            {
-                success = failedCalls == 0,
-                results = results,
-                errors = errors,
-                total_calls = funcsArray.Count,
-                successful_calls = successfulCalls,
-                failed_calls = failedCalls
-            };
-
-            DateTime endTime = DateTime.Now;
-            TimeSpan duration = endTime - startTime;
-
-            // 重置执行状态
-            currentExecutionIndex = 0;
-            totalExecutionCount = 0;
-
-            onComplete?.Invoke(finalResult, duration);
-        }
-
-
-
         private object ExecuteJsonCall(DateTime startTime)
         {
             return ExecuteJsonCallInternal(inputJson, startTime, (result, duration) =>
@@ -537,15 +735,27 @@ namespace UnityMcp.Tools
             JObject inputObj = JObject.Parse(jsonString);
 
             // 检查是否为批量调用
-            if (inputObj.ContainsKey("funcs"))
+            if (!inputObj.ContainsKey("func") && inputObj.ContainsKey("args") && inputObj["args"] is JArray)
             {
-                // 批量调用 - 循环调用FunctionCall
-                var funcsArray = inputObj["funcs"] as JArray;
-                if (funcsArray == null)
+                // 批量函数调用
+                var functionsCall = new FunctionsCall();
+                object callResult = null;
+                bool callbackExecuted = false;
+                functionsCall.HandleCommand(inputObj, (result) =>
                 {
-                    throw new ArgumentException("'funcs' 字段必须是一个数组");
-                }
-                return ExecuteBatchCallsInternal(funcsArray, startTime, onSingleComplete);
+                    callResult = result;
+                    callbackExecuted = true;
+
+                    // 如果是异步回调，更新UI
+                    if (isExecuting)
+                    {
+                        DateTime endTime = DateTime.Now;
+                        TimeSpan duration = endTime - startTime;
+                        onSingleComplete?.Invoke(result, duration);
+                    }
+                });
+                // 如果回调立即执行，返回结果；否则返回null表示异步执行
+                return callbackExecuted ? callResult : null;
             }
             else if (inputObj.ContainsKey("func"))
             {
@@ -1137,6 +1347,201 @@ namespace UnityMcp.Tools
             {
                 return result.ToString();
             }
+        }
+
+        /// <summary>
+        /// 手动记录当前执行结果
+        /// </summary>
+        private void RecordCurrentResult()
+        {
+            if (currentResult == null || string.IsNullOrEmpty(inputJson))
+            {
+                EditorUtility.DisplayDialog("无法记录", "没有可记录的执行结果", "确定");
+                return;
+            }
+
+            try
+            {
+                // 解析输入的JSON来获取函数名和参数
+                JObject inputObj = JObject.Parse(inputJson);
+
+                // 检查是否为批量调用
+                if (inputObj.ContainsKey("funcs"))
+                {
+                    // 批量调用记录
+                    RecordBatchResult(inputObj, currentResult);
+                }
+                else if (inputObj.ContainsKey("func"))
+                {
+                    // 单个函数调用记录
+                    RecordSingleResult(inputObj, currentResult);
+                }
+                else
+                {
+                    EditorUtility.DisplayDialog("记录失败", "无法解析输入的JSON格式", "确定");
+                    return;
+                }
+
+                EditorUtility.DisplayDialog("记录成功", "执行结果已保存到记录中", "确定");
+
+                // 刷新记录列表
+                recordList = null;
+                InitializeRecordList();
+            }
+            catch (Exception e)
+            {
+                EditorUtility.DisplayDialog("记录失败", $"记录执行结果时发生错误: {e.Message}", "确定");
+                Debug.LogError($"[McpDebugWindow] 手动记录结果时发生错误: {e}");
+            }
+        }
+
+        /// <summary>
+        /// 记录单个函数调用结果
+        /// </summary>
+        private void RecordSingleResult(JObject inputObj, object result)
+        {
+            var funcName = inputObj["func"]?.ToString() ?? "Unknown";
+            var argsJson = inputObj["args"]?.ToString() ?? "{}";
+            var recordObject = McpExecuteRecordObject.instance;
+
+            bool isSuccess = result != null && !IsErrorResponse(result);
+            string errorMsg = "";
+            string resultJson = "";
+
+            if (isSuccess)
+            {
+                resultJson = JsonConvert.SerializeObject(result);
+            }
+            else
+            {
+                errorMsg = result != null ? ExtractErrorMessage(result) : "执行失败，返回null";
+                resultJson = result != null ? JsonConvert.SerializeObject(result) : "";
+            }
+
+            recordObject.addRecord(
+                funcName,
+                argsJson,
+                resultJson,
+                errorMsg,
+                0, // 手动记录时没有执行时间
+                "Debug Window (手动记录)"
+            );
+            recordObject.saveRecords();
+        }
+
+        /// <summary>
+        /// 记录批量函数调用结果
+        /// </summary>
+        private void RecordBatchResult(JObject inputObj, object result)
+        {
+            try
+            {
+                var resultJson = JsonConvert.SerializeObject(result);
+                var resultObj = JObject.Parse(resultJson);
+
+                var results = resultObj["results"] as JArray;
+                var errors = resultObj["errors"] as JArray;
+                var funcsArray = inputObj["funcs"] as JArray;
+
+                if (funcsArray != null && results != null)
+                {
+                    var recordObject = McpExecuteRecordObject.instance;
+
+                    for (int i = 0; i < funcsArray.Count && i < results.Count; i++)
+                    {
+                        var funcCall = funcsArray[i] as JObject;
+                        if (funcCall == null) continue;
+
+                        var funcName = funcCall["func"]?.ToString() ?? "Unknown";
+                        var argsJson = funcCall["args"]?.ToString() ?? "{}";
+                        var singleResult = results[i];
+
+                        bool isSuccess = singleResult != null && !singleResult.Type.Equals(JTokenType.Null);
+                        string errorMsg = "";
+                        string singleResultJson = "";
+
+                        if (isSuccess)
+                        {
+                            singleResultJson = JsonConvert.SerializeObject(singleResult);
+                        }
+                        else
+                        {
+                            if (errors != null && i < errors.Count && errors[i] != null)
+                            {
+                                errorMsg = errors[i].ToString();
+                            }
+                            else
+                            {
+                                errorMsg = "批量调用中此项失败";
+                            }
+                        }
+
+                        recordObject.addRecord(
+                            funcName,
+                            argsJson,
+                            singleResultJson,
+                            errorMsg,
+                            0, // 手动记录时没有执行时间
+                            $"Debug Window (手动记录 {i + 1}/{funcsArray.Count})"
+                        );
+                    }
+
+                    recordObject.saveRecords();
+                }
+            }
+            catch (Exception e)
+            {
+                throw new Exception($"记录批量结果时发生错误: {e.Message}", e);
+            }
+        }
+
+
+        /// <summary>
+        /// 选择记录并刷新到界面
+        /// </summary>
+        private void SelectRecord(int index)
+        {
+            var records = McpExecuteRecordObject.instance.records;
+            if (index < 0 || index >= records.Count) return;
+
+            selectedRecordIndex = index;
+            var record = records[index];
+
+            inputJson = record.cmd;
+
+            // 将执行结果刷新到结果区域
+            if (!string.IsNullOrEmpty(record.result) || !string.IsNullOrEmpty(record.error))
+            {
+                showResult = true;
+                var resultBuilder = new StringBuilder();
+                resultBuilder.AppendLine($"📋 从执行记录加载 (索引: {index})");
+                resultBuilder.AppendLine($"函数: {record.name}");
+                resultBuilder.AppendLine($"时间: {record.timestamp}");
+                resultBuilder.AppendLine($"来源: {record.source}");
+                resultBuilder.AppendLine($"状态: {(record.success ? "成功" : "失败")}");
+                if (record.duration > 0)
+                {
+                    resultBuilder.AppendLine($"执行时间: {record.duration:F2}ms");
+                }
+                resultBuilder.AppendLine();
+
+                if (!string.IsNullOrEmpty(record.result))
+                {
+                    resultBuilder.AppendLine("执行结果:");
+                    resultBuilder.AppendLine(record.result);
+                }
+
+                if (!string.IsNullOrEmpty(record.error))
+                {
+                    resultBuilder.AppendLine("错误信息:");
+                    resultBuilder.AppendLine(record.error);
+                }
+
+                resultText = resultBuilder.ToString();
+                currentResult = null; // 清空当前结果，因为这是历史记录
+            }
+
+            Repaint();
         }
     }
 }

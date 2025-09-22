@@ -11,7 +11,7 @@ namespace UnityMcp.Tools
 {
     /// <summary>
     /// 专门的音频管理工具，提供音频的导入、修改、复制、删除等操作
-    /// 对应方法名: manage_audio
+    /// 对应方法名: edit_audio
     /// </summary>
     [ToolName("edit_audio", "资源管理")]
     public class EditAudio : StateMethodBase
@@ -23,7 +23,7 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("action", "操作类型：import, modify, duplicate, delete, get_info, search, set_import_settings", false),
+                new MethodKey("action", "操作类型：import, modify, duplicate, delete, get_info, search, set_import_settings, convert_format, extract_metadata", false),
                 new MethodKey("path", "音频资源路径，Unity标准格式：Assets/Audio/AudioName.wav", false),
                 new MethodKey("source_file", "源文件路径（导入时使用）", true),
                 new MethodKey("destination", "目标路径（复制/移动时使用）", true),
@@ -31,6 +31,8 @@ namespace UnityMcp.Tools
                 new MethodKey("recursive", "是否递归搜索子文件夹", true),
                 new MethodKey("force", "是否强制执行操作（覆盖现有文件等）", true),
                 new MethodKey("import_settings", "导入设置", true),
+                new MethodKey("target_format", "目标格式（转换时使用）", true),
+                // 音频导入设置参数
                 new MethodKey("force_to_mono", "是否强制转换为单声道", true),
                 new MethodKey("load_type", "加载类型：DecompressOnLoad, CompressedInMemory, Streaming", true),
                 new MethodKey("compression_format", "压缩格式：PCM, Vorbis, MP3, ADPCM", true),
@@ -58,21 +60,24 @@ namespace UnityMcp.Tools
             return StateTreeBuilder
                 .Create()
                 .Key("action")
-                    .Leaf("import", ImportAudio)
-                    .Leaf("modify", ModifyAudio)
-                    .Leaf("duplicate", DuplicateAudio)
-                    .Leaf("delete", DeleteAudio)
-                    .Leaf("get_info", GetAudioInfo)
-                    .Leaf("search", SearchAudios)
-                    .Leaf("set_import_settings", SetAudioImportSettings)
-                    .Leaf("convert_format", ConvertAudioFormat)
-                    .Leaf("extract_metadata", ExtractAudioMetadata)
+                    .Leaf("import", HandleImportAction)
+                    .Leaf("modify", HandleModifyAction)
+                    .Leaf("duplicate", HandleDuplicateAction)
+                    .Leaf("delete", HandleDeleteAction)
+                    .Leaf("get_info", HandleGetInfoAction)
+                    .Leaf("search", HandleSearchAction)
+                    .Leaf("set_import_settings", HandleSetImportSettingsAction)
+                    .Leaf("convert_format", HandleConvertFormatAction)
+                    .Leaf("extract_metadata", HandleExtractMetadataAction)
                 .Build();
         }
 
         // --- 状态树操作方法 ---
 
-        private object ImportAudio(StateTreeContext args)
+        /// <summary>
+        /// 处理导入操作
+        /// </summary>
+        private object HandleImportAction(JObject args)
         {
             string sourceFile = args["source_file"]?.ToString();
             string path = args["path"]?.ToString();
@@ -82,6 +87,12 @@ namespace UnityMcp.Tools
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for import.");
 
+            JObject importSettings = args["import_settings"] as JObject;
+            return ImportAudio(sourceFile, path, importSettings);
+        }
+
+        private object ImportAudio(string sourceFile, string path, JObject importSettings)
+        {
             string fullPath = SanitizeAssetPath(path);
             string directory = Path.GetDirectoryName(fullPath);
 
@@ -106,7 +117,6 @@ namespace UnityMcp.Tools
                 File.Copy(sourceFile, targetFilePath);
 
                 // 导入设置
-                JObject importSettings = args["import_settings"] as JObject;
                 if (importSettings != null && importSettings.HasValues)
                 {
                     AssetDatabase.ImportAsset(fullPath);
@@ -122,7 +132,7 @@ namespace UnityMcp.Tools
                     AssetDatabase.ImportAsset(fullPath);
                 }
 
-                LogInfo($"[ManageAudio] Imported audio from '{sourceFile}' to '{fullPath}'");
+                LogInfo($"[EditAudio] Imported audio from '{sourceFile}' to '{fullPath}'");
                 return Response.Success($"Audio imported successfully to '{fullPath}'.", GetAudioData(fullPath));
             }
             catch (Exception e)
@@ -131,7 +141,10 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object ModifyAudio(JObject args)
+        /// <summary>
+        /// 处理修改操作
+        /// </summary>
+        private object HandleModifyAction(JObject args)
         {
             string path = args["path"]?.ToString();
             JObject importSettings = args["import_settings"] as JObject;
@@ -141,6 +154,11 @@ namespace UnityMcp.Tools
             if (importSettings == null || !importSettings.HasValues)
                 return Response.Error("'import_settings' are required for modify.");
 
+            return ModifyAudio(path, importSettings);
+        }
+
+        private object ModifyAudio(string path, JObject importSettings)
+        {
             string fullPath = SanitizeAssetPath(path);
             if (!AssetExists(fullPath))
                 return Response.Error($"Audio not found at path: {fullPath}");
@@ -156,7 +174,7 @@ namespace UnityMcp.Tools
                 if (modified)
                 {
                     importer.SaveAndReimport();
-                    LogInfo($"[ManageAudio] Modified audio import settings at '{fullPath}'");
+                    LogInfo($"[EditAudio] Modified audio import settings at '{fullPath}'");
                     return Response.Success($"Audio '{fullPath}' modified successfully.", GetAudioData(fullPath));
                 }
                 else
@@ -170,7 +188,10 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object DuplicateAudio(JObject args)
+        /// <summary>
+        /// 处理复制操作
+        /// </summary>
+        private object HandleDuplicateAction(JObject args)
         {
             string path = args["path"]?.ToString();
             string destinationPath = args["destination"]?.ToString();
@@ -178,6 +199,11 @@ namespace UnityMcp.Tools
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for duplicate.");
 
+            return DuplicateAudio(path, destinationPath);
+        }
+
+        private object DuplicateAudio(string path, string destinationPath)
+        {
             string sourcePath = SanitizeAssetPath(path);
             if (!AssetExists(sourcePath))
                 return Response.Error($"Source audio not found at path: {sourcePath}");
@@ -200,7 +226,7 @@ namespace UnityMcp.Tools
                 bool success = AssetDatabase.CopyAsset(sourcePath, destPath);
                 if (success)
                 {
-                    LogInfo($"[ManageAudio] Duplicated audio from '{sourcePath}' to '{destPath}'");
+                    LogInfo($"[EditAudio] Duplicated audio from '{sourcePath}' to '{destPath}'");
                     return Response.Success($"Audio '{sourcePath}' duplicated to '{destPath}'.", GetAudioData(destPath));
                 }
                 else
@@ -214,13 +240,21 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object DeleteAudio(JObject args)
+        /// <summary>
+        /// 处理删除操作
+        /// </summary>
+        private object HandleDeleteAction(JObject args)
         {
             string path = args["path"]?.ToString();
 
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for delete.");
 
+            return DeleteAudio(path);
+        }
+
+        private object DeleteAudio(string path)
+        {
             string fullPath = SanitizeAssetPath(path);
             if (!AssetExists(fullPath))
                 return Response.Error($"Audio not found at path: {fullPath}");
@@ -230,7 +264,7 @@ namespace UnityMcp.Tools
                 bool success = AssetDatabase.DeleteAsset(fullPath);
                 if (success)
                 {
-                    LogInfo($"[ManageAudio] Deleted audio at '{fullPath}'");
+                    LogInfo($"[EditAudio] Deleted audio at '{fullPath}'");
                     return Response.Success($"Audio '{fullPath}' deleted successfully.");
                 }
                 else
@@ -244,13 +278,21 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object GetAudioInfo(JObject args)
+        /// <summary>
+        /// 处理获取信息操作
+        /// </summary>
+        private object HandleGetInfoAction(JObject args)
         {
             string path = args["path"]?.ToString();
 
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for get_info.");
 
+            return GetAudioInfo(path);
+        }
+
+        private object GetAudioInfo(string path)
+        {
             string fullPath = SanitizeAssetPath(path);
             if (!AssetExists(fullPath))
                 return Response.Error($"Audio not found at path: {fullPath}");
@@ -265,11 +307,35 @@ namespace UnityMcp.Tools
             }
         }
 
+        /// <summary>
+        /// 处理搜索操作
+        /// </summary>
+        private object HandleSearchAction(JObject args)
+        {
+            string searchPattern = args["search_pattern"]?.ToString();
+            string pathScope = args["path"]?.ToString();
+
+            // 搜索操作至少需要search_pattern或path之一
+            if (string.IsNullOrEmpty(searchPattern) && string.IsNullOrEmpty(pathScope))
+            {
+                return Response.Error("Either 'search_pattern' or 'path' parameter is required for search.");
+            }
+
+            return SearchAudios(args);
+        }
+
         private object SearchAudios(JObject args)
         {
             string searchPattern = args["search_pattern"]?.ToString();
             string pathScope = args["path"]?.ToString();
-            bool recursive = args["recursive"]?.ToObject<bool>() ?? true;
+            bool recursive = true;
+            if (args["recursive"] != null)
+            {
+                if (bool.TryParse(args["recursive"].ToString(), out bool recursiveValue))
+                {
+                    recursive = recursiveValue;
+                }
+            }
 
             List<string> searchFilters = new List<string>();
             if (!string.IsNullOrEmpty(searchPattern))
@@ -282,7 +348,7 @@ namespace UnityMcp.Tools
                 folderScope = new string[] { SanitizeAssetPath(pathScope) };
                 if (!AssetDatabase.IsValidFolder(folderScope[0]))
                 {
-                    LogWarning($"Search path '{folderScope[0]}' is not a valid folder. Searching entire project.");
+                    LogInfo($"Search path '{folderScope[0]}' is not a valid folder. Searching entire project.");
                     folderScope = null;
                 }
             }
@@ -301,7 +367,7 @@ namespace UnityMcp.Tools
                     results.Add(GetAudioData(assetPath));
                 }
 
-                LogInfo($"[ManageAudio] Found {results.Count} audio(s)");
+                LogInfo($"[EditAudio] Found {results.Count} audio(s)");
                 return Response.Success($"Found {results.Count} audio(s).", results);
             }
             catch (Exception e)
@@ -310,7 +376,10 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object SetAudioImportSettings(JObject args)
+        /// <summary>
+        /// 处理设置导入设置操作
+        /// </summary>
+        private object HandleSetImportSettingsAction(JObject args)
         {
             string path = args["path"]?.ToString();
             JObject importSettings = args["import_settings"] as JObject;
@@ -320,6 +389,11 @@ namespace UnityMcp.Tools
             if (importSettings == null || !importSettings.HasValues)
                 return Response.Error("'import_settings' are required for set_import_settings.");
 
+            return SetAudioImportSettings(path, importSettings);
+        }
+
+        private object SetAudioImportSettings(string path, JObject importSettings)
+        {
             string fullPath = SanitizeAssetPath(path);
             if (!AssetExists(fullPath))
                 return Response.Error($"Audio not found at path: {fullPath}");
@@ -335,7 +409,7 @@ namespace UnityMcp.Tools
                 if (modified)
                 {
                     importer.SaveAndReimport();
-                    LogInfo($"[ManageAudio] Set import settings on audio '{fullPath}'");
+                    LogInfo($"[EditAudio] Set import settings on audio '{fullPath}'");
                     return Response.Success($"Import settings set on audio '{fullPath}'.", GetAudioData(fullPath));
                 }
                 else
@@ -349,7 +423,10 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object ConvertAudioFormat(JObject args)
+        /// <summary>
+        /// 处理转换格式操作
+        /// </summary>
+        private object HandleConvertFormatAction(JObject args)
         {
             string path = args["path"]?.ToString();
             string targetFormat = args["target_format"]?.ToString();
@@ -359,6 +436,18 @@ namespace UnityMcp.Tools
             if (string.IsNullOrEmpty(targetFormat))
                 return Response.Error("'target_format' is required for convert_format.");
 
+            // 验证目标格式是否支持
+            string[] supportedFormats = { "pcm", "vorbis", "mp3", "adpcm" };
+            if (!supportedFormats.Contains(targetFormat.ToLowerInvariant()))
+            {
+                return Response.Error($"Unsupported target format: {targetFormat}. Supported formats: {string.Join(", ", supportedFormats)}");
+            }
+
+            return ConvertAudioFormat(path, targetFormat);
+        }
+
+        private object ConvertAudioFormat(string path, string targetFormat)
+        {
             string fullPath = SanitizeAssetPath(path);
             if (!AssetExists(fullPath))
                 return Response.Error($"Audio not found at path: {fullPath}");
@@ -397,7 +486,7 @@ namespace UnityMcp.Tools
                 importer.defaultSampleSettings = settings;
                 importer.SaveAndReimport();
 
-                LogInfo($"[ManageAudio] Converted audio '{fullPath}' to format '{targetFormat}'");
+                LogInfo($"[EditAudio] Converted audio '{fullPath}' to format '{targetFormat}'");
                 return Response.Success($"Audio '{fullPath}' converted to format '{targetFormat}'.", GetAudioData(fullPath));
             }
             catch (Exception e)
@@ -406,23 +495,31 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object ExtractAudioMetadata(JObject args)
+        /// <summary>
+        /// 处理提取元数据操作
+        /// </summary>
+        private object HandleExtractMetadataAction(JObject args)
         {
             string path = args["path"]?.ToString();
 
             if (string.IsNullOrEmpty(path))
                 return Response.Error("'path' is required for extract_metadata.");
 
+            return ExtractAudioMetadata(path);
+        }
+
+        private object ExtractAudioMetadata(string path)
+        {
             string fullPath = SanitizeAssetPath(path);
             if (!AssetExists(fullPath))
                 return Response.Error($"Audio not found at path: {fullPath}");
 
+            AudioClip audioClip = AssetDatabase.LoadAssetAtPath<AudioClip>(fullPath);
+            if (audioClip == null)
+                return Response.Error($"Failed to load audio clip at path: {fullPath}");
+
             try
             {
-                AudioClip audioClip = AssetDatabase.LoadAssetAtPath<AudioClip>(fullPath);
-                if (audioClip == null)
-                    return Response.Error($"Failed to load audio clip at path: {fullPath}");
-
                 var metadata = new
                 {
                     name = audioClip.name,
@@ -431,15 +528,15 @@ namespace UnityMcp.Tools
                     channels = audioClip.channels,
                     samples = audioClip.samples,
                     load_type = audioClip.loadType.ToString(),
-                    // preload_audio_data = audioClip.preloadAudioData, // 在某些Unity版本中可能不可用
-                    // load_in_background = audioClip.loadInBackground, // 在某些Unity版本中可能不可用
-                    // ambisonic_rendering = audioClip.ambisonic, // 在某些Unity版本中可能不可用
+                    // preload_audio_data = targetAudioClip.preloadAudioData, // 在某些Unity版本中可能不可用
+                    // load_in_background = targetAudioClip.loadInBackground, // 在某些Unity版本中可能不可用
+                    // ambisonic_rendering = targetAudioClip.ambisonic, // 在某些Unity版本中可能不可用
                     // 注意：spatialize 和 spatializePostEffects 属性在某些Unity版本中可能不可用
-                    // spatialize = audioClip.spatialize,
-                    // spatialize_post_effects = audioClip.spatializePostEffects
+                    // spatialize = targetAudioClip.spatialize,
+                    // spatialize_post_effects = targetAudioClip.spatializePostEffects
                 };
 
-                LogInfo($"[ManageAudio] Extracted metadata from audio '{fullPath}'");
+                LogInfo($"[EditAudio] Extracted metadata from audio '{fullPath}'");
                 return Response.Success($"Audio metadata extracted from '{fullPath}'.", metadata);
             }
             catch (Exception e)
@@ -526,7 +623,7 @@ namespace UnityMcp.Tools
                                 bool forceToMono = settingValue.ToObject<bool>();
                                 // 注意：forceToMono 属性在某些Unity版本中可能不可用
                                 // 这里使用注释掉的方式，避免编译错误
-                                LogWarning($"[ApplyAudioImportSettings] forceToMono setting not supported in current Unity version");
+                                LogInfo($"[ApplyAudioImportSettings] forceToMono setting not supported in current Unity version");
                             }
                             break;
                         case "load_type":
@@ -641,7 +738,7 @@ namespace UnityMcp.Tools
                             {
                                 bool preloadAudioData = settingValue.ToObject<bool>();
                                 // 注意：preloadAudioData 属性在某些Unity版本中可能不可用
-                                LogWarning($"[ApplyAudioImportSettings] preloadAudioData setting not supported in current Unity version");
+                                LogInfo($"[ApplyAudioImportSettings] preloadAudioData setting not supported in current Unity version");
                             }
                             break;
                         case "load_in_background":
@@ -649,7 +746,7 @@ namespace UnityMcp.Tools
                             {
                                 bool loadInBackground = settingValue.ToObject<bool>();
                                 // 注意：loadInBackground 属性在某些Unity版本中可能不可用
-                                LogWarning($"[ApplyAudioImportSettings] loadInBackground setting not supported in current Unity version");
+                                LogInfo($"[ApplyAudioImportSettings] loadInBackground setting not supported in current Unity version");
                             }
                             break;
                         case "ambisonic_rendering":
@@ -662,7 +759,7 @@ namespace UnityMcp.Tools
                                 //     sampleSettings.ambisonicRendering = ambisonicRendering;
                                 //     modified = true;
                                 // }
-                                LogWarning($"[ApplyAudioImportSettings] ambisonicRendering setting not supported in current Unity version");
+                                LogInfo($"[ApplyAudioImportSettings] ambisonicRendering setting not supported in current Unity version");
                             }
                             break;
                         case "dsp_buffer_size":
@@ -686,7 +783,7 @@ namespace UnityMcp.Tools
                                 //         break;
                                 // }
 
-                                LogWarning($"[ApplyAudioImportSettings] DSPBufferSize enum and dspBufferSize setting not supported in current Unity version");
+                                LogInfo($"[ApplyAudioImportSettings] DSPBufferSize enum and dspBufferSize setting not supported in current Unity version");
                             }
                             break;
                         case "virtualize_when_silent":
@@ -699,7 +796,7 @@ namespace UnityMcp.Tools
                                 //     sampleSettings.virtualizeWhenSilent = virtualizeWhenSilent;
                                 //     modified = true;
                                 // }
-                                LogWarning($"[ApplyAudioImportSettings] virtualizeWhenSilent setting not supported in current Unity version");
+                                LogInfo($"[ApplyAudioImportSettings] virtualizeWhenSilent setting not supported in current Unity version");
                             }
                             break;
                         case "spatialize":
@@ -707,7 +804,7 @@ namespace UnityMcp.Tools
                             {
                                 bool spatialize = settingValue.ToObject<bool>();
                                 // 注意：spatialize 属性在某些Unity版本中可能不可用
-                                LogWarning($"[ApplyAudioImportSettings] spatialize setting not supported in current Unity version");
+                                LogInfo($"[ApplyAudioImportSettings] spatialize setting not supported in current Unity version");
                             }
                             break;
                         case "spatialize_post_effects":
@@ -715,14 +812,14 @@ namespace UnityMcp.Tools
                             {
                                 bool spatializePostEffects = settingValue.ToObject<bool>();
                                 // 注意：spatializePostEffects 属性在某些Unity版本中可能不可用
-                                LogWarning($"[ApplyAudioImportSettings] spatializePostEffects setting not supported in current Unity version");
+                                LogInfo($"[ApplyAudioImportSettings] spatializePostEffects setting not supported in current Unity version");
                             }
                             break;
                     }
                 }
                 catch (Exception ex)
                 {
-                    LogWarning($"[ApplyAudioImportSettings] Error setting '{settingName}': {ex.Message}");
+                    LogInfo($"[ApplyAudioImportSettings] Error setting '{settingName}': {ex.Message}");
                 }
             }
 

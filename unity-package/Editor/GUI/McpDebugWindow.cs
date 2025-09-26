@@ -107,6 +107,7 @@ namespace UnityMcp.Tools
                 headerStyle = new GUIStyle(EditorStyles.boldLabel)
                 {
                     fontSize = 14,
+                    alignment = TextAnchor.MiddleCenter,
                     normal = { textColor = EditorGUIUtility.isProSkin ? Color.white : Color.black }
                 };
             }
@@ -173,6 +174,30 @@ namespace UnityMcp.Tools
                     int successCount = records.Where(r => r.success).Count();
                     int errorCount = records.Count - successCount;
 
+                    // 左侧：启用分组切换
+                    Rect toggleRect = new Rect(rect.x, rect.y, 80, rect.height);
+                    EditorGUI.BeginChangeCheck();
+                    bool newUseGrouping = EditorGUI.Toggle(toggleRect, "启用分组", McpExecuteRecordObject.instance.useGrouping);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        McpExecuteRecordObject.instance.useGrouping = newUseGrouping;
+                        if (newUseGrouping)
+                        {
+                            McpExecuteRecordObject.instance.InitializeDefaultGroup();
+                        }
+                        McpExecuteRecordObject.instance.saveRecords();
+
+                        // 重新初始化记录列表
+                        recordList = null;
+                        EditorApplication.delayCall += () =>
+                        {
+                            InitializeRecordList();
+                            Repaint();
+                        };
+                    }
+
+                    // 右侧：标题文本
+                    Rect labelRect = new Rect(rect.x + 85, rect.y, rect.width - 85, rect.height);
                     string headerText;
                     if (McpExecuteRecordObject.instance.useGrouping)
                     {
@@ -184,7 +209,7 @@ namespace UnityMcp.Tools
                         headerText = $"执行记录 ({records.Count}个 | ●{successCount} ×{errorCount})";
                     }
 
-                    EditorGUI.LabelField(rect, headerText);
+                    EditorGUI.LabelField(labelRect, headerText);
                 };
 
                 recordList.drawElementCallback = (Rect rect, int index, bool isActive, bool isFocused) =>
@@ -256,24 +281,48 @@ namespace UnityMcp.Tools
             return Mathf.Clamp(calculatedHeight, MinInputHeight, MaxInputHeight);
         }
 
+        /// <summary>
+        /// 计算标题区域的实际高度
+        /// </summary>
+        private float CalculateHeaderHeight()
+        {
+            // 标题文字高度（基于headerStyle的fontSize）
+            float titleHeight = headerStyle?.fontSize ?? 14;
+            titleHeight += 16; // 标题的上下边距，增加更多空间
+
+            // 间距
+            float spacing = 10; // 增加间距
+
+            // 总高度，确保有足够空间显示标题
+            return titleHeight + spacing + 10; // 增加额外边距
+        }
+
         private void OnGUI()
         {
             InitializeStyles();
 
-            // 标题区域
-            GUILayout.Label("Unity MCP Debug Client", headerStyle);
-            GUILayout.Space(5);
+            // 计算标题区域的实际高度
+            float headerHeight = CalculateHeaderHeight();
 
             // 分栏布局
-            DrawSplitView();
+            DrawSplitView(headerHeight);
 
             // 处理分栏拖拽
-            HandleSplitterEvents();
+            HandleSplitterEvents(headerHeight);
         }
 
-        private void DrawSplitView()
+        private void DrawSplitView(float headerHeight)
         {
-            Rect windowRect = new Rect(0, 30, position.width, position.height - 30);
+            // 先绘制标题在顶部居中
+            Rect titleRect = new Rect(0, 0, position.width, headerHeight);
+            GUI.BeginGroup(titleRect);
+            GUILayout.BeginArea(new Rect(0, 0, titleRect.width, titleRect.height));
+            GUILayout.Space(8); // 顶部间距
+            GUILayout.Label("Unity MCP Debug Client", headerStyle);
+            GUILayout.EndArea();
+            GUI.EndGroup();
+
+            Rect windowRect = new Rect(0, headerHeight, position.width, position.height - headerHeight);
             float leftWidth = windowRect.width * splitterPos;
             float rightWidth = windowRect.width * (1 - splitterPos) - SplitterWidth;
 
@@ -293,20 +342,11 @@ namespace UnityMcp.Tools
         private void DrawLeftPanel(Rect rect)
         {
             // 使用更精确的垂直布局
-            float currentY = 5; // 起始位置
-            float padding = 5;
-
-            // 分组模式切换区域
-            Rect toggleRect = new Rect(padding, currentY, rect.width - padding * 2, 25);
-            GUI.BeginGroup(toggleRect);
-            GUILayout.BeginArea(new Rect(0, 0, toggleRect.width, toggleRect.height));
-            DrawGroupModeToggle();
-            GUILayout.EndArea();
-            GUI.EndGroup();
-            currentY += 30;
+            float currentY = 5; // 恢复原来的起始位置
+            float padding = 5;  // 恢复原来的内边距
 
             // 记录列表操作按钮区域
-            Rect buttonRect = new Rect(padding, currentY, rect.width - padding * 2, 25);
+            Rect buttonRect = new Rect(padding, currentY, rect.width - padding * 2, 28);
             GUI.BeginGroup(buttonRect);
             GUILayout.BeginArea(new Rect(0, 0, buttonRect.width, buttonRect.height));
 
@@ -444,12 +484,12 @@ namespace UnityMcp.Tools
             EditorGUIUtility.AddCursorRect(rect, MouseCursor.ResizeHorizontal);
         }
 
-        private void HandleSplitterEvents()
+        private void HandleSplitterEvents(float headerHeight)
         {
             Event e = Event.current;
-            Rect windowRect = new Rect(0, 30, position.width, position.height - 30);
+            Rect windowRect = new Rect(0, headerHeight, position.width, position.height - headerHeight);
             float splitterX = windowRect.width * splitterPos;
-            Rect splitterRect = new Rect(splitterX, 30, SplitterWidth, windowRect.height);
+            Rect splitterRect = new Rect(splitterX, headerHeight, SplitterWidth, windowRect.height);
 
             switch (e.type)
             {
@@ -1793,39 +1833,6 @@ namespace UnityMcp.Tools
 
         #region 分组管理UI
 
-        /// <summary>
-        /// 绘制分组模式切换
-        /// </summary>
-        private void DrawGroupModeToggle()
-        {
-            GUILayout.BeginHorizontal();
-
-            EditorGUI.BeginChangeCheck();
-            bool newUseGrouping = EditorGUILayout.Toggle("启用分组", McpExecuteRecordObject.instance.useGrouping, GUILayout.Width(80));
-            if (EditorGUI.EndChangeCheck())
-            {
-                McpExecuteRecordObject.instance.useGrouping = newUseGrouping;
-                if (newUseGrouping)
-                {
-                    McpExecuteRecordObject.instance.InitializeDefaultGroup();
-                }
-                McpExecuteRecordObject.instance.saveRecords();
-
-                // 重新初始化记录列表
-                recordList = null;
-                InitializeRecordList();
-            }
-
-            if (McpExecuteRecordObject.instance.useGrouping)
-            {
-                var recordObject = McpExecuteRecordObject.instance;
-                var currentGroup = recordObject.GetCurrentGroup();
-                string status = currentGroup != null ? $"当前: {currentGroup.name}" : "未选中分组";
-                GUILayout.Label(status, EditorStyles.miniLabel);
-            }
-
-            GUILayout.EndHorizontal();
-        }
 
         /// <summary>
         /// 绘制分组选择界面

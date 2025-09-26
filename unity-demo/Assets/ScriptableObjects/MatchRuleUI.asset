@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5e1012b4cffbb64cb70209e789e9b08, type: 3}
   m_Name: MatchRuleUI
   m_EditorClassIdentifier: 
-  link_url: https://www.figma.com/design/NOthutkClw7kcJbVLfKHC3/Mcp-Mate?node-id=2-515&t=04bO7BidRC3spUUd-4
+  link_url: https://www.figma.com/design/NOthutkClw7kcJbVLfKHC3/Mcp-Mate?node-id=2-508&t=rwEvr9kHTSweRQ4p-4
   optimize_rule_path: 
   img_save_to: Assets/Pics/MatchRule
   prototype_pic: 
@@ -20,29 +20,34 @@ MonoBehaviour:
   descriptions: "- \u9700\u8981\u63A7\u4EF6\u4EA4\u4E92\u7EC4\u4EF6\uFF01\n- \u9700\u8981\u8F83\u9AD8\u7684\u8FD8\u539F\u5EA6\uFF01\n-
     \u5E03\u5C40\u9700\u8981\u8BA1\u7B97\u5E76\u9AD8\u5EA6\u8FD8\u539F\uFF01"
   modify_records:
-  - "[2025-09-26 10:52:30] \u57FA\u4E8EMCP\u5DE5\u5177\u96C6\u6210\u529F\u6784\u5EFA\u4E86MatchRuleUI\u754C\u9762\uFF0C\u5305\u542B\u6807\u9898\u6587\u672C\u3001\u6807\u7B7E\u6309\u94AE\u548C\u63CF\u8FF0\u6587\u672C\uFF0C\u5B8C\u5168\u6309\u7167Figma\u8BBE\u8BA1\u7A3F\u8FD8\u539F\u4E86\u5E03\u5C40\u548C\u6837\u5F0F"
-  - "[2025-09-26 10:58:01] \u57FA\u4E8EMCP\u5DE5\u5177\u96C6\u6210\u529F\u6784\u5EFA\u4E86MatchRuleUI\u754C\u9762\uFF0C\u5305\u542B\u6807\u9898\u6587\u672C\u3001\u6807\u7B7E\u6309\u94AE\u548C\u63CF\u8FF0\u6587\u672C\uFF0C\u5B8C\u5168\u6309\u7167Figma\u8BBE\u8BA1\u7A3F\u8FD8\u539F\u4E86\u5E03\u5C40\u548C\u6837\u5F0F"
+  - "[2025-09-26 12:18:33] \u57FA\u4E8EFigma\u8BBE\u8BA1\u5B8C\u6210\u65F6\u95F4\u680FUGUI\u754C\u9762\u6784\u5EFA\uFF0C\u5305\u542B\u5DE6\u4FA7\u65F6\u95F4\u663E\u793A\u3001\u4E2D\u95F4Dynamic
+    Island\u548C\u53F3\u4FA7\u72B6\u6001\u56FE\u6807\uFF08\u4FE1\u53F7\u3001WiFi\u3001\u7535\u6C60\uFF09\u3002\u6240\u6709\u7EC4\u4EF6\u6309\u7167\u8BBE\u8BA1\u89C4\u8303\u8FDB\u884C\u4E86\u7CBE\u786E\u5B9A\u4F4D\u548C\u5E03\u5C40\u8BBE\u7F6E\u3002"
   node_names:
-  - id: 2:515
-    name: MatchRulePanel
-    originName: Frame 131
-  - id: 2:517
-    name: TitleText
-    originName: Jackson Chen
-  - id: 2:518
-    name: TagsPanel
-    originName: Frame 57
-  - id: 2:519
-    name: FantasyTag
-    originName: "\u6807\u7B7E"
-  - id: 2:521
-    name: RomanceTag
-    originName: "\u6807\u7B7E"
-  - id: 2:523
-    name: AdventureTag
-    originName: "\u6807\u7B7E"
-  - id: 2:525
-    name: DescriptionText
-    originName: Here is an introduction to a list. There is a lot of content in the
-      introduction, maybe three lines
+  - id: 2:508
+    name: TimeBar
+    originName: "\u65F6\u95F4\u680F"
+  - id: I2:508;683:1553
+    name: LeftSide
+    originName: Left Side
+  - id: I2:508;683:1554;839:7100
+    name: TimeText
+    originName: "\u270F\uFE0F Time"
+  - id: I2:508;683:1555
+    name: DynamicIsland
+    originName: Dynamic Island
+  - id: I2:508;683:1556
+    name: DynamicIslandShape
+    originName: StatusBar-dynamicIsland
+  - id: I2:508;683:1557
+    name: RightSide
+    originName: Right Side
+  - id: I2:508;683:1559
+    name: SignalIcon
+    originName: Icon / Mobile Signal
+  - id: I2:508;683:1560
+    name: WifiIcon
+    originName: Wifi
+  - id: I2:508;683:1564
+    name: BatteryIcon
+    originName: _StatusBar-battery
   node_sprites: []

@@ -81,6 +81,12 @@ namespace UnityMcp.Tools
 
             LogInfo($"[HierarchyCreate] Creating GameObject from menu: '{menuPath}'");
 
+            if (!menuPath.StartsWith("GameObject"))
+            {
+                menuPath = "GameObject/" + menuPath;
+                LogInfo($"[HierarchyCreate] Menu path adjusted: '{menuPath}'");
+            }
+
             // 记录创建前的选中对象
             GameObject previousSelection = Selection.activeGameObject;
             int previousSelectionID = previousSelection != null ? previousSelection.GetInstanceID() : 0;

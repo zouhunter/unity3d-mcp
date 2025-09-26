@@ -348,7 +348,7 @@ namespace UnityMcp.Tools
         /// </summary>
         private bool ApplyAnchoredPosition(RectTransform rectTransform, StateTreeContext args)
         {
-            if (args.TryGetValue("anchored_pos", out object positionObj))
+            if (args.TryGetValue("anchored_pos", out object positionObj) || args.TryGetValue("anchored_position", out positionObj))
             {
                 Vector2? position = ParseVector2(positionObj);
                 if (position.HasValue && rectTransform.anchoredPosition != position.Value)

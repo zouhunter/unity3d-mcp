@@ -27,7 +27,7 @@ namespace UnityMcp.Tools
                 new MethodKey("path", "动画片段资源路径，Unity标准格式：Assets/Animations/ClipName.anim", false),
                 new MethodKey("source_path", "源动画片段路径（复制时使用）", true),
                 new MethodKey("destination", "目标路径（复制/移动时使用）", true),
-                new MethodKey("search_pattern", "搜索模式，如*.anim", true),
+                new MethodKey("query", "搜索模式，如*.anim", true),
                 new MethodKey("recursive", "是否递归搜索子文件夹", true),
                 new MethodKey("force", "是否强制执行操作（覆盖现有文件等）", true),
                 new MethodKey("length", "动画长度（秒）", true),
@@ -280,7 +280,7 @@ namespace UnityMcp.Tools
 
         private object SearchAnimClips(JObject args)
         {
-            string searchPattern = args["search_pattern"]?.ToString();
+            string searchPattern = args["query"]?.ToString();
             string pathScope = args["path"]?.ToString();
             bool recursive = args["recursive"]?.ToObject<bool>() ?? true;
 

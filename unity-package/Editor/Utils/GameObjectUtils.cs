@@ -304,7 +304,8 @@ namespace UnityMcp.Tools
                 currentLevel = nextLevel;
             }
 
-            // 最终所有匹配的对象都在currentLevel里，返回第一个类型匹配的
+            // 最终所有匹配的对象都在currentLevel里，返回最后一个类型匹配的（新创建的对象通常在后面）
+            object lastMatch = null;
             foreach (var obj in currentLevel)
             {
                 // 如果指定了组件类型名，优先使用指定的组件类型
@@ -315,7 +316,7 @@ namespace UnityMcp.Tools
                     {
                         var comp = obj.GetComponent(specifiedComponentType);
                         if (comp != null)
-                            return comp;
+                            lastMatch = comp; // 记录最后匹配的组件
                     }
                     continue;
                 }
@@ -323,16 +324,20 @@ namespace UnityMcp.Tools
                 // 如果type是GameObject类型，直接返回
                 if (type == typeof(GameObject))
                 {
-                    return obj;
+                    lastMatch = obj; // 记录最后匹配的GameObject
                 }
                 // 如果T是Component类型，尝试获取组件
-                if (typeof(UnityEngine.Component).IsAssignableFrom(type))
+                else if (typeof(UnityEngine.Component).IsAssignableFrom(type))
                 {
                     var comp = obj.GetComponent(type);
                     if (comp != null)
-                        return comp;
+                        lastMatch = comp; // 记录最后匹配的组件
                 }
             }
+
+            // 返回最后匹配的对象
+            if (lastMatch != null)
+                return lastMatch;
 
             return null;
         }
@@ -590,7 +595,7 @@ namespace UnityMcp.Tools
         /// </summary>
         public static void ApplyParentSetting(JObject args, GameObject newGo, Action<string> logAction = null)
         {
-            JToken parentToken = args["parent_id"] ?? args["parent_path"];
+            JToken parentToken = args["parent_id"] ?? args["parent_path"] ?? args["parent"];
             if (parentToken != null)
             {
                 GameObject parentGo = FindObjectByIdOrPath(parentToken);

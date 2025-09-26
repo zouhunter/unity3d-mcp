@@ -117,7 +117,8 @@ namespace UnityMcp.Tools
 
             if (!hasId && !hasPath)
             {
-                return Response.Error("Either 'id' or 'path' parameter must be provided.");
+                Debug.LogError("Either 'instance_id' or 'path' parameter must be provided.");
+                return Response.Error("Either 'instance_id' or 'path' parameter must be provided.");
             }
 
             // 优先使用id查找

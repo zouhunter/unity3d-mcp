@@ -29,7 +29,7 @@ namespace UnityMcp.Tools
                 new MethodKey("script_class", "ScriptableObject脚本类名（创建时需要）", true),
                 new MethodKey("properties", "资产属性字典，用于设置ScriptableObject的各种属性", true),
                 new MethodKey("destination", "目标路径（复制时使用）", true),
-                new MethodKey("search_pattern", "搜索模式，如*.asset等（搜索时使用）", true),
+                new MethodKey("query", "搜索模式，如*.asset等（搜索时使用）", true),
                 new MethodKey("recursive", "是否递归搜索子文件夹", true),
                 new MethodKey("force", "是否强制执行操作（覆盖现有文件等）", true)
             };
@@ -216,7 +216,7 @@ namespace UnityMcp.Tools
 
         private object SearchScriptableObjects(JObject args)
         {
-            string searchPattern = args["search_pattern"]?.ToString();
+            string searchPattern = args["query"]?.ToString();
             string pathScope = args["path"]?.ToString(); // Use path as folder scope
             int pageSize = args["page_size"]?.ToObject<int?>() ?? 50; // Default page size
             int pageNumber = args["page_number"]?.ToObject<int?>() ?? 1; // Default page number (1-based)

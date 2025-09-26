@@ -28,7 +28,7 @@ namespace UnityMcp.Tools
             return new[]
             {
                 new MethodKey("search_type", "Search method: by_name, by_id, by_tag, by_layer, by_component, by_query, etc.", false),
-                new MethodKey("query", "Search criteria can be ID, name or path (supports wildcard *)", true),
+                new MethodKey("query", "Search criteria can be ID, name or path (supports wildcard *)", false),
                 new MethodKey("select_many", "Whether to find all matching items", true),
                 new MethodKey("root_only", "Whether to search only root objects (excluding child objects)", true),
                 new MethodKey("include_inactive", "Whether to search inactive objects", true),
@@ -58,20 +58,22 @@ namespace UnityMcp.Tools
         private object HandleSearchByName(JObject args)
         {
             string query = args["query"]?.ToString();
+            if (string.IsNullOrEmpty(query))
+            {
+                return Response.Error("query is required for by_name search.");
+            }
+
             bool findAll = args["select_many"]?.ToObject<bool>() ?? false;
             bool rootOnly = args["root_only"]?.ToObject<bool>() ?? false;
             bool searchInInactive = args["include_inactive"]?.ToObject<bool>() ?? false;
 
             List<GameObject> foundObjects = new List<GameObject>();
 
-            if (!string.IsNullOrEmpty(query))
+            // 精确名称搜索 - 使用Unity内置API
+            GameObject exactMatch = GameObject.Find(query);
+            if (exactMatch != null && (searchInInactive || exactMatch.activeInHierarchy))
             {
-                // 精确名称搜索 - 使用Unity内置API
-                GameObject exactMatch = GameObject.Find(query);
-                if (exactMatch != null && (searchInInactive || exactMatch.activeInHierarchy))
-                {
-                    foundObjects.Add(exactMatch);
-                }
+                foundObjects.Add(exactMatch);
             }
 
             if (findAll || foundObjects.Count == 0)
@@ -81,11 +83,14 @@ namespace UnityMcp.Tools
 
                 foreach (GameObject go in allObjects)
                 {
-                    bool nameMatches = string.IsNullOrEmpty(query) || go.name.Contains(query, StringComparison.OrdinalIgnoreCase);
+                    bool nameMatches = go.name.Contains(query, StringComparison.OrdinalIgnoreCase);
 
                     if (nameMatches)
                     {
-                        if (rootOnly && go.transform.parent != null) continue;
+                        if (rootOnly && go.transform.parent != null)
+                            continue;
+                        if (foundObjects.Contains(go))
+                            continue;
                         foundObjects.Add(go);
                     }
                 }
@@ -104,7 +109,7 @@ namespace UnityMcp.Tools
 
             if (string.IsNullOrEmpty(query))
             {
-                return Response.Error("query ID is required for by_id search.");
+                return Response.Error("query is required for by_id search.");
             }
 
             List<GameObject> foundObjects = new List<GameObject>();

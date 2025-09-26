@@ -207,14 +207,21 @@ namespace UnityMcp.Tools
 
                     // --- 格式化和类型推断 ---
                     string stackTrace = includeStacktrace ? ExtractStackTrace(message) : null;
-                    // 如果存在堆栈且被请求，获取第一行，否则使用完整消息
-                    string messageOnly =
-                        (includeStacktrace && !string.IsNullOrEmpty(stackTrace))
-                            ? message.Split(
-                                new[] { '\n', '\r' },
-                                StringSplitOptions.RemoveEmptyEntries
-                            )[0]
-                            : message;
+                    // 根据includeStacktrace参数决定是否包含堆栈信息
+                    string messageOnly;
+                    if (includeStacktrace)
+                    {
+                        // 需要堆栈跟踪时，使用完整消息
+                        messageOnly = message;
+                    }
+                    else
+                    {
+                        // 不需要堆栈跟踪时，只提取第一行作为纯消息
+                        messageOnly = message.Split(
+                            new[] { '\n', '\r' },
+                            StringSplitOptions.RemoveEmptyEntries
+                        )[0];
+                    }
 
                     // 使用堆栈跟踪信息进行更准确的类型识别
                     LogType currentType = GetLogTypeFromModeAndStackTrace(mode, message, stackTrace);
@@ -348,6 +355,13 @@ namespace UnityMcp.Tools
         /// </summary>
         private static LogType GetLogTypeFromModeAndStackTrace(int mode, string fullMessage, string stackTrace)
         {
+            // 首先检查编译警告 - Unity将编译警告标记为Error，但我们应该将其识别为Warning
+            if (!string.IsNullOrEmpty(fullMessage) &&
+                (fullMessage.Contains("warning CS") || fullMessage.Contains(": warning ")))
+            {
+                return LogType.Warning;
+            }
+
             // 优先使用堆栈跟踪进行类型判断，这是最可靠的方法
             string textToSearch = stackTrace ?? fullMessage;
 

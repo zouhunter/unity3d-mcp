@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5e1012b4cffbb64cb70209e789e9b08, type: 3}
+  m_Name: MatchRuleUI
+  m_EditorClassIdentifier: 
+  link_url: https://www.figma.com/design/NOthutkClw7kcJbVLfKHC3/Mcp-Mate?node-id=2-515&t=04bO7BidRC3spUUd-4
+  optimize_rule_path: 
+  img_save_to: Assets/Pics/MatchRule
+  prototype_pic: 
+  image_scale: 1
+  descriptions: "- \u9700\u8981\u63A7\u4EF6\u4EA4\u4E92\u7EC4\u4EF6\uFF01\n- \u9700\u8981\u8F83\u9AD8\u7684\u8FD8\u539F\u5EA6\uFF01\n-
+    \u5E03\u5C40\u9700\u8981\u8BA1\u7B97\u5E76\u9AD8\u5EA6\u8FD8\u539F\uFF01"
+  modify_records:
+  - "[2025-09-26 10:52:30] \u57FA\u4E8EMCP\u5DE5\u5177\u96C6\u6210\u529F\u6784\u5EFA\u4E86MatchRuleUI\u754C\u9762\uFF0C\u5305\u542B\u6807\u9898\u6587\u672C\u3001\u6807\u7B7E\u6309\u94AE\u548C\u63CF\u8FF0\u6587\u672C\uFF0C\u5B8C\u5168\u6309\u7167Figma\u8BBE\u8BA1\u7A3F\u8FD8\u539F\u4E86\u5E03\u5C40\u548C\u6837\u5F0F"
+  - "[2025-09-26 10:58:01] \u57FA\u4E8EMCP\u5DE5\u5177\u96C6\u6210\u529F\u6784\u5EFA\u4E86MatchRuleUI\u754C\u9762\uFF0C\u5305\u542B\u6807\u9898\u6587\u672C\u3001\u6807\u7B7E\u6309\u94AE\u548C\u63CF\u8FF0\u6587\u672C\uFF0C\u5B8C\u5168\u6309\u7167Figma\u8BBE\u8BA1\u7A3F\u8FD8\u539F\u4E86\u5E03\u5C40\u548C\u6837\u5F0F"
+  node_names:
+  - id: 2:515
+    name: MatchRulePanel
+    originName: Frame 131
+  - id: 2:517
+    name: TitleText
+    originName: Jackson Chen
+  - id: 2:518
+    name: TagsPanel
+    originName: Frame 57
+  - id: 2:519
+    name: FantasyTag
+    originName: "\u6807\u7B7E"
+  - id: 2:521
+    name: RomanceTag
+    originName: "\u6807\u7B7E"
+  - id: 2:523
+    name: AdventureTag
+    originName: "\u6807\u7B7E"
+  - id: 2:525
+    name: DescriptionText
+    originName: Here is an introduction to a list. There is a lot of content in the
+      introduction, maybe three lines
+  node_sprites: []

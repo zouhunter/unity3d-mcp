@@ -12,10 +12,116 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5e1012b4cffbb64cb70209e789e9b08, type: 3}
   m_Name: FigmaUGUIData
   m_EditorClassIdentifier: 
-  link_url: https://www.figma.com/design/oNOE3NSRYt023cdpXVHs4y/Figma-basics?node-id=4368-321123&t=pxf6n8pL7Y29CvKp-4
-  picture_url: Assets/Pics/Shopping
-  picture_level: 1
-  build_steps: []
-  preferred_components: []
-  extra_description: 
-  modify_records: []
+  link_url: https://www.figma.com/design/7WnpV97EOKmlzilSUjC1Ia/McpTest?node-id=1-1512&t=Bpu8cHMaadizpnnw-4
+  optimize_rule_path: 
+  img_save_to: Assets/Pics/FigmaU
+  prototype_pic: 
+  image_scale: 1
+  descriptions: "- \u9700\u8981\u63A7\u4EF6\u4EA4\u4E92\u7EC4\u4EF6\uFF01\n- \u9700\u8981\u8F83\u9AD8\u7684\u8FD8\u539F\u5EA6\uFF01\n-
+    \u5E03\u5C40\u9700\u8981\u8BA1\u7B97\u5E76\u9AD8\u5EA6\u8FD8\u539F\uFF01\n- \u5217\u8868\u6DFB\u52A0\u6ED1\u52A8\u5217\u8868\u529F\u80FD"
+  modify_records:
+  - "[2025-09-26 11:06:42] \u57FA\u4E8EMCP\u5DE5\u5177\u96C6\u548CFigmaDataSimplifier\u6210\u529F\u6784\u5EFA\u4E86\u7535\u5546\u5E94\u7528UGUI\u754C\u9762\uFF0C\u5305\u542B\u72B6\u6001\u680F\u3001\u6A2A\u5E45\u3001\u641C\u7D22\u680F\u3001\u6807\u7B7E\u5BB9\u5668\u3001\u5185\u5BB9\u6EDA\u52A8\u89C6\u56FE\u548C\u6807\u7B7E\u680F\uFF0C\u5B8C\u5168\u6309\u7167Figma\u8BBE\u8BA1\u7A3F(375x812)\u8FD8\u539F\u4E86\u5E03\u5C40\u548C\u7ED3\u6784\uFF0C\u652F\u6301\u54CD\u5E94\u5F0F\u7F29\u653E"
+  - "[2025-09-26 11:29:24] \u57FA\u4E8EMCP\u5DE5\u5177\u6210\u529F\u6784\u5EFA\u4E86FigmaUGUIData\u754C\u9762\uFF0C\u5305\u542BCheckout
+    Info\u4E3B\u9762\u677F\u3001Shipping\u3001Delivery\u3001Payment\u3001Promos\u548CItems\u7B49\u4E3B\u8981\u90E8\u5206\uFF0C\u4F7F\u7528TMP\u6587\u672C\u7EC4\u4EF6\uFF0C\u6309\u7167Figma\u8BBE\u8BA1\u7A3F\u8FDB\u884C\u4E86\u7CBE\u786E\u7684\u5E03\u5C40\u8FD8\u539F"
+  - "[2025-09-26 11:30:27] \u57FA\u4E8EMCP\u5DE5\u5177\u6210\u529F\u6784\u5EFA\u4E86FigmaUGUIData\u8D2D\u7269\u7ED3\u7B97\u9875\u9762\uFF0C\u5305\u542B\u8FD0\u8F93\u3001\u914D\u9001\u3001\u4ED8\u6B3E\u3001\u4FC3\u9500\u548C\u5546\u54C1\u5217\u8868\u7B49\u5B8C\u6574\u6A21\u5757\uFF0C\u4F7F\u7528TMP\u6587\u672C\u7EC4\u4EF6\uFF0C\u7CBE\u786E\u8FD8\u539FFigma\u8BBE\u8BA1\u7A3F\u5E03\u5C40\uFF0C\u652F\u6301\u5C4F\u5E55\u9002\u914D\uFF0C\u5E76\u6210\u529F\u52A0\u8F7D\u4E86\u5546\u54C1\u56FE\u7247\u8D44\u6E90"
+  node_names:
+  - id: 1:1225
+    name: EcommerceCanvas
+    originName: Ecommerce
+  - id: 1:1281
+    name: Banner
+    originName: Banner
+  - id: 1:1282
+    name: BannerTitle
+    originName: Banner title
+  - id: 1:1306
+    name: SearchBar
+    originName: Search
+  - id: 1:1310
+    name: SearchText
+    originName: Label
+  - id: 1:1289
+    name: PillsContainer
+    originName: Pills
+  - id: 1:1311
+    name: TabBar
+    originName: Tab Bar
+  - id: 1:1327
+    name: StatusBar
+    originName: Status Bar
+  - id: 1:1512
+    name: CheckoutInfoPanel
+    originName: Checkout Info
+  - id: 1:1513
+    name: ShippingPanel
+    originName: Shipping
+  - id: 1:1514
+    name: ShippingLabel
+    originName: SHIPPING
+  - id: 1:1515
+    name: ShippingInfo
+    originName: Info
+  - id: 1:1519
+    name: DeliveryPanel
+    originName: Delivery
+  - id: 1:1520
+    name: DeliveryLabel
+    originName: DELIVERY
+  - id: 1:1521
+    name: DeliveryInfo
+    originName: Info
+  - id: 1:1527
+    name: PaymentPanel
+    originName: Payment
+  - id: 1:1528
+    name: PaymentLabel
+    originName: PAYMENT
+  - id: 1:1529
+    name: PaymentInfo
+    originName: Info
+  - id: 1:1533
+    name: PromosPanel
+    originName: Promos
+  - id: 1:1534
+    name: PromosLabel
+    originName: PROMOS
+  - id: 1:1535
+    name: PromosInfo
+    originName: Info
+  - id: 1:1539
+    name: ItemsPanel
+    originName: Items
+  - id: 1:1540
+    name: ItemsLabel
+    originName: ITEMS
+  - id: 1:1541
+    name: DescriptionLabel
+    originName: DESCRIPTION
+  - id: 1:1542
+    name: PriceLabel
+    originName: PRICE
+  - id: 1:1543
+    name: Item1Panel
+    originName: Item
+  - id: 1:1551
+    name: Item2Panel
+    originName: Item
+  node_sprites:
+  - id: 1:1544
+    fileName: Checkout_Info_24fc3a03.png
+    sprite: {fileID: 21300000, guid: 675d9d781090c554f8696d32bfd7bbcf, type: 3}
+  - id: 1:1552
+    fileName: Checkout_Info_24fc3a03.png
+    sprite: {fileID: 21300000, guid: 675d9d781090c554f8696d32bfd7bbcf, type: 3}
+  - id: 1:1518
+    fileName: Vector_b3b7269a.png
+    sprite: {fileID: 21300000, guid: 5d6a2a3435c3ecf468c45e83626ec6f3, type: 3}
+  - id: 1:1526
+    fileName: Vector_b3b7269a.png
+    sprite: {fileID: 21300000, guid: 5d6a2a3435c3ecf468c45e83626ec6f3, type: 3}
+  - id: 1:1532
+    fileName: Vector_b3b7269a.png
+    sprite: {fileID: 21300000, guid: 5d6a2a3435c3ecf468c45e83626ec6f3, type: 3}
+  - id: 1:1538
+    fileName: Vector_b3b7269a.png
+    sprite: {fileID: 21300000, guid: 5d6a2a3435c3ecf468c45e83626ec6f3, type: 3}

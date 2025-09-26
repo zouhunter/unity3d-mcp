@@ -31,7 +31,7 @@ namespace UnityMcp.Tools
                 new MethodKey("from", "操作类型：menu, primitive, prefab", false),
                 new MethodKey("tag", "GameObject标签", true),
                 new MethodKey("layer", "GameObject所在层", true),
-                new MethodKey("parent_id", "父对象标识符", true),
+                new MethodKey("parent_id", "父对象唯一id", true),
                 new MethodKey("position", "位置坐标 [x, y, z]", true),
                 new MethodKey("rotation", "旋转角度 [x, y, z]", true),
                 new MethodKey("scale", "缩放比例 [x, y, z]", true),
@@ -132,6 +132,22 @@ namespace UnityMcp.Tools
                 yield return null;
 
                 LogInfo($"[HierarchyCreate] Finalizing newly created object: '{newObject.name}' (ID: {newObject.GetInstanceID()})");
+
+                // 先取消选中以退出重命名模式
+                Selection.activeGameObject = null;
+
+                // 强制退出编辑状态
+                EditorGUIUtility.editingTextField = false;
+                GUIUtility.keyboardControl = 0;
+                EditorGUIUtility.keyboardControl = 0;
+
+                // 发送ESC键事件
+                Event escapeEvent = new Event();
+                escapeEvent.type = EventType.KeyDown;
+                escapeEvent.keyCode = KeyCode.Escape;
+                EditorWindow.focusedWindow?.SendEvent(escapeEvent);
+
+                yield return null; // 等待一帧
 
                 // 应用其他设置（名称、位置等）
                 var finalizeResult = FinalizeGameObjectCreation(ctx.JsonData, newObject, false);
@@ -432,11 +448,33 @@ namespace UnityMcp.Tools
                     }
                 }
 
-                // 等待一下再选择对象
-                //Thread.Sleep(5);
+                // 取消选中并退出重命名模式
+                Selection.activeGameObject = null;
 
-                // 选择对象
-                Selection.activeGameObject = finalInstance;
+                // 延迟调用确保退出重命名状态
+                EditorApplication.delayCall += () =>
+                {
+                    // 多种方法尝试退出编辑状态
+                    Selection.activeGameObject = null;
+                    EditorGUIUtility.editingTextField = false;
+
+                    // 发送ESC键事件来退出编辑
+                    Event escapeEvent = new Event();
+                    escapeEvent.type = EventType.KeyDown;
+                    escapeEvent.keyCode = KeyCode.Escape;
+                    EditorWindow.focusedWindow?.SendEvent(escapeEvent);
+
+                    // 强制结束编辑状态
+                    GUIUtility.keyboardControl = 0;
+                    EditorGUIUtility.keyboardControl = 0;
+
+                    // 刷新相关窗口
+                    EditorApplication.RepaintHierarchyWindow();
+                    if (EditorWindow.focusedWindow != null)
+                    {
+                        EditorWindow.focusedWindow.Repaint();
+                    }
+                };
 
                 LogInfo($"[HierarchyCreate] Finalized '{finalInstance.name}' (ID: {finalInstance.GetInstanceID()})");
 

@@ -15,13 +15,20 @@ namespace UnityMcp.Tools
     /// Second tree: Layout operations based on action type
     /// 
     /// 使用方式：
-    /// - do_layout: 执行布局修改 (可通过property_name+value设置特定属性，或直接传递各种属性参数)
-    /// - set_props: 设置RectTransform属性 (可通过property_name+value设置特定属性，或直接传递各种属性参数)
-    /// - get_layout: 获取RectTransform属性 (可指定property_name获取特定属性，否则获取所有属性)
+    /// - do_layout: 执行综合布局修改 (可同时设置多个属性)
+    /// - get_layout: 获取RectTransform属性 (获取所有属性信息)
+    /// - layout_anchor: 单独设置锚点 (anchor_min, anchor_max, anchor_preset)
+    /// - layout_sizedelta: 单独设置尺寸 (size_delta)
+    /// - layout_position: 单独设置位置 (anchored_pos, local_position)
+    /// - layout_pivot: 单独设置轴心点 (pivot)
+    /// - layout_scale: 单独设置缩放 (local_scale)
+    /// - layout_rotation: 单独设置旋转 (local_rotation)
+    /// - layout_sibling: 单独设置层级索引 (sibling_index)
     /// 
     /// 例如：
-    /// action="do_layout", anchor_preset="middle_center", width=100, height=50
-    /// action="get_layout", property_name="anchoredPosition"
+    /// action="layout_anchor", anchor_preset="middle_center"
+    /// action="layout_sizedelta", size_delta=[100, 50]
+    /// action="layout_sibling", sibling_index=2
     /// 
     /// 对应方法名: edit_recttransform
     /// </summary>
@@ -36,11 +43,11 @@ namespace UnityMcp.Tools
             return new[]
             {
                 // 目标查找参数
-                new MethodKey("id", "Object InstanceID", true),
+                new MethodKey("instance_id", "Object InstanceID", true),
                 new MethodKey("path", "Object Hierarchy path", false),
                 
                 // 操作参数
-                new MethodKey("action", "Operation type: do_layout(execute layout modification), get_layout(get properties)", true),
+                new MethodKey("action", "Operation type: do_layout(综合布局), get_layout(获取属性), layout_anchor(锚点), layout_sizedelta(尺寸), layout_position(位置), layout_pivot(轴心), layout_scale(缩放), layout_rotation(旋转), layout_sibling(层级)", true),
                 
                 // RectTransform基本属性
                 new MethodKey("anchored_pos", "Anchor position [x, y]", true),
@@ -55,6 +62,9 @@ namespace UnityMcp.Tools
                 new MethodKey("local_position", "Local position [x, y, z]", true),
                 new MethodKey("local_rotation", "Local rotation [x, y, z]", true),
                 new MethodKey("local_scale", "Local scale [x, y, z]", true),
+                
+                // 层级控制
+                new MethodKey("sibling_index", "Sibling index in parent hierarchy", true),
             };
         }
 
@@ -76,6 +86,14 @@ namespace UnityMcp.Tools
                 .Key("action")
                     .Leaf("do_layout", (Func<StateTreeContext, object>)HandleDoLayoutAction)
                     .Leaf("get_layout", (Func<StateTreeContext, object>)HandleGetLayoutAction)
+                    // 独立的布局操作
+                    .Leaf("layout_anchor", (Func<StateTreeContext, object>)HandleAnchorAction)
+                    .Leaf("layout_sizedelta", (Func<StateTreeContext, object>)HandleSizeDeltaAction)
+                    .Leaf("layout_position", (Func<StateTreeContext, object>)HandlePositionAction)
+                    .Leaf("layout_pivot", (Func<StateTreeContext, object>)HandlePivotAction)
+                    .Leaf("layout_scale", (Func<StateTreeContext, object>)HandleScaleAction)
+                    .Leaf("layout_rotation", (Func<StateTreeContext, object>)HandleRotationAction)
+                    .Leaf("layout_sibling", (Func<StateTreeContext, object>)HandleSiblingIndexAction)
                     .DefaultLeaf((Func<StateTreeContext, object>)HandleDefaultAction)
                 .Build();
         }
@@ -170,6 +188,8 @@ namespace UnityMcp.Tools
             modified |= ApplyLocalRotation(rectTransform, args);
             modified |= ApplyLocalScale(rectTransform, args);
 
+            // 应用层级控制
+            modified |= ApplySetSiblingIndex(rectTransform, args);
             if (!modified)
             {
                 return Response.Success(
@@ -463,6 +483,193 @@ namespace UnityMcp.Tools
                 }
             }
             return false;
+        }
+
+        /// <summary>
+        /// 应用SiblingIndex修改
+        /// </summary>
+        private bool ApplySetSiblingIndex(RectTransform rectTransform, StateTreeContext args)
+        {
+            if (args.TryGetValue("sibling_index", out object indexObj))
+            {
+                if (int.TryParse(indexObj?.ToString(), out int siblingIndex))
+                {
+                    int currentIndex = rectTransform.GetSiblingIndex();
+                    if (currentIndex != siblingIndex)
+                    {
+                        rectTransform.SetSiblingIndex(siblingIndex);
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        #endregion
+
+        #region 独立Action处理方法
+
+        /// <summary>
+        /// 处理锚点设置操作
+        /// </summary>
+        private object HandleAnchorAction(StateTreeContext args)
+        {
+            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
+            if (targets.Length == 0)
+            {
+                return Response.Error("No target GameObjects found in execution context.");
+            }
+
+            return ApplySingleProperty(targets, args, (rectTransform, context) =>
+            {
+                bool modified = false;
+                modified |= ApplyAnchorMin(rectTransform, context);
+                modified |= ApplyAnchorMax(rectTransform, context);
+                modified |= ApplyAnchorPreset(rectTransform, context);
+                return modified;
+            }, "anchor settings");
+        }
+
+        /// <summary>
+        /// 处理尺寸设置操作
+        /// </summary>
+        private object HandleSizeDeltaAction(StateTreeContext args)
+        {
+            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
+            if (targets.Length == 0)
+            {
+                return Response.Error("No target GameObjects found in execution context.");
+            }
+
+            return ApplySingleProperty(targets, args, (rectTransform, context) =>
+                ApplySizeDelta(rectTransform, context), "size delta");
+        }
+
+        /// <summary>
+        /// 处理位置设置操作
+        /// </summary>
+        private object HandlePositionAction(StateTreeContext args)
+        {
+            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
+            if (targets.Length == 0)
+            {
+                return Response.Error("No target GameObjects found in execution context.");
+            }
+
+            return ApplySingleProperty(targets, args, (rectTransform, context) =>
+            {
+                bool modified = false;
+                modified |= ApplyAnchoredPosition(rectTransform, context);
+                modified |= ApplyLocalPosition(rectTransform, context);
+                return modified;
+            }, "position");
+        }
+
+        /// <summary>
+        /// 处理轴心点设置操作
+        /// </summary>
+        private object HandlePivotAction(StateTreeContext args)
+        {
+            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
+            if (targets.Length == 0)
+            {
+                return Response.Error("No target GameObjects found in execution context.");
+            }
+
+            return ApplySingleProperty(targets, args, (rectTransform, context) =>
+                ApplyPivot(rectTransform, context), "pivot");
+        }
+
+        /// <summary>
+        /// 处理缩放设置操作
+        /// </summary>
+        private object HandleScaleAction(StateTreeContext args)
+        {
+            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
+            if (targets.Length == 0)
+            {
+                return Response.Error("No target GameObjects found in execution context.");
+            }
+
+            return ApplySingleProperty(targets, args, (rectTransform, context) =>
+                ApplyLocalScale(rectTransform, context), "scale");
+        }
+
+        /// <summary>
+        /// 处理旋转设置操作
+        /// </summary>
+        private object HandleRotationAction(StateTreeContext args)
+        {
+            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
+            if (targets.Length == 0)
+            {
+                return Response.Error("No target GameObjects found in execution context.");
+            }
+
+            return ApplySingleProperty(targets, args, (rectTransform, context) =>
+                ApplyLocalRotation(rectTransform, context), "rotation");
+        }
+
+        /// <summary>
+        /// 处理层级索引设置操作
+        /// </summary>
+        private object HandleSiblingIndexAction(StateTreeContext args)
+        {
+            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
+            if (targets.Length == 0)
+            {
+                return Response.Error("No target GameObjects found in execution context.");
+            }
+
+            return ApplySingleProperty(targets, args, (rectTransform, context) =>
+                ApplySetSiblingIndex(rectTransform, context), "sibling index");
+        }
+
+        /// <summary>
+        /// 应用单个属性的通用方法
+        /// </summary>
+        private object ApplySingleProperty(GameObject[] targets, StateTreeContext args,
+            Func<RectTransform, StateTreeContext, bool> applyFunc, string operationName)
+        {
+            var results = new List<Dictionary<string, object>>();
+            var errors = new List<string>();
+            int successCount = 0;
+
+            foreach (GameObject targetGo in targets)
+            {
+                if (targetGo == null) continue;
+
+                try
+                {
+                    RectTransform rectTransform = targetGo.GetComponent<RectTransform>();
+                    if (rectTransform == null)
+                    {
+                        errors.Add($"[{targetGo.name}] No RectTransform component found");
+                        continue;
+                    }
+
+                    Undo.RecordObject(rectTransform, $"Set {operationName}");
+
+                    bool modified = applyFunc(rectTransform, args);
+
+                    if (modified)
+                    {
+                        EditorUtility.SetDirty(rectTransform);
+                        successCount++;
+                        results.Add(GetRectTransformData(rectTransform));
+                    }
+                    else
+                    {
+                        errors.Add($"[{targetGo.name}] No modifications applied");
+                    }
+                }
+                catch (Exception e)
+                {
+                    errors.Add($"[{targetGo.name}] Error: {e.Message}");
+                }
+            }
+
+            return CreateBatchOperationResponse($"set {operationName}", successCount, targets.Length, results, errors);
         }
 
         #endregion

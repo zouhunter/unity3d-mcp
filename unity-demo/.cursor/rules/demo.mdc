@@ -1,0 +1,15 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Unity工程环境
+- Unity版本：2022.3.61f1c1
+- 脚本语言：C#
+- 发布平台：Android/IOS
+- 编辑器环境：Windows/MacOS
+
+# 代码文件生成
+- python生成到根目录的Python文件夹下
+- c#生成到Assets/Scripts文件夹下

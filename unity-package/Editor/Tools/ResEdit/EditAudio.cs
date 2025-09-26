@@ -27,7 +27,7 @@ namespace UnityMcp.Tools
                 new MethodKey("path", "音频资源路径，Unity标准格式：Assets/Audio/AudioName.wav", false),
                 new MethodKey("source_file", "源文件路径（导入时使用）", true),
                 new MethodKey("destination", "目标路径（复制/移动时使用）", true),
-                new MethodKey("search_pattern", "搜索模式，如*.wav, *.mp3, *.ogg", true),
+                new MethodKey("query", "搜索模式，如*.wav, *.mp3, *.ogg", true),
                 new MethodKey("recursive", "是否递归搜索子文件夹", true),
                 new MethodKey("force", "是否强制执行操作（覆盖现有文件等）", true),
                 new MethodKey("import_settings", "导入设置", true),
@@ -312,13 +312,13 @@ namespace UnityMcp.Tools
         /// </summary>
         private object HandleSearchAction(JObject args)
         {
-            string searchPattern = args["search_pattern"]?.ToString();
+            string searchPattern = args["query"]?.ToString();
             string pathScope = args["path"]?.ToString();
 
-            // 搜索操作至少需要search_pattern或path之一
+            // 搜索操作至少需要query或path之一
             if (string.IsNullOrEmpty(searchPattern) && string.IsNullOrEmpty(pathScope))
             {
-                return Response.Error("Either 'search_pattern' or 'path' parameter is required for search.");
+                return Response.Error("Either 'query' or 'path' parameter is required for search.");
             }
 
             return SearchAudios(args);
@@ -326,7 +326,7 @@ namespace UnityMcp.Tools
 
         private object SearchAudios(JObject args)
         {
-            string searchPattern = args["search_pattern"]?.ToString();
+            string searchPattern = args["query"]?.ToString();
             string pathScope = args["path"]?.ToString();
             bool recursive = true;
             if (args["recursive"] != null)

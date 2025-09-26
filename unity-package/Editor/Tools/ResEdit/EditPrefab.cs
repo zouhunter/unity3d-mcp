@@ -27,7 +27,7 @@ namespace UnityMcp.Tools
                 new MethodKey("path", "预制体资源路径，Unity标准格式：Assets/Prefabs/PrefabName.prefab", false),
                 new MethodKey("source_object", "源GameObject名称或路径（创建时使用）", true),
                 new MethodKey("destination", "目标路径（复制/移动时使用）", true),
-                new MethodKey("search_pattern", "搜索模式，如*.prefab", true),
+                new MethodKey("query", "搜索模式，如*.prefab", true),
                 new MethodKey("recursive", "是否递归搜索子文件夹", true),
                 new MethodKey("force", "是否强制执行操作（覆盖现有文件等）", true),
                 new MethodKey("prefab_variant", "是否创建预制体变体", true),
@@ -283,7 +283,7 @@ namespace UnityMcp.Tools
 
         private object SearchPrefabs(JObject args)
         {
-            string searchPattern = args["search_pattern"]?.ToString();
+            string searchPattern = args["query"]?.ToString();
             string pathScope = args["path"]?.ToString();
             bool recursive = args["recursive"]?.ToObject<bool>() ?? true;
 

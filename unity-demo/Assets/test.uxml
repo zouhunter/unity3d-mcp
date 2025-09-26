@@ -1,0 +1,29 @@
+<UXML xmlns="UnityEngine.UIElements" xmlns:ui="UnityEditor.UIElements">
+    <ui:VisualElement style="flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%;">
+        <!-- Top Navigation Bar -->
+        <ui:VisualElement style="flex-direction: row; justify-content: space-between; width: 100%; height: 10%; padding: 10px;">
+            <ui:Button name="backButton" text="←" style="width: 50px; height: 50px;" />
+            <ui:Button name="helpButton" text="?" style="width: 50px; height: 50px;" />
+        </ui:VisualElement>
+
+        <!-- Center Content -->
+        <ui:VisualElement style="flex-direction: column; align-items: center; width: 100%; height: 80%;">
+            <!-- Character Image -->
+            <ui:Image name="characterImage" src="path/to/character/image" style="width: 80%; height: auto; max-height: 70%;" />
+            
+            <!-- Action Panel -->
+            <ui:VisualElement style="flex-direction: row; justify-content: center; align-items: center; width: 100%; padding: 10px;">
+                <ui:Button name="actionButton1" text="Pose 1" style="width: 50px; height: 50px;" />
+                <ui:Button name="actionButton2" text="Pose 2" style="width: 50px; height: 50px;" />
+                <ui:Button name="actionButton3" text="Pose 3" style="width: 50px; height: 50px;" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Bottom Navigation Bar -->
+        <ui:VisualElement style="flex-direction: row; justify-content: space-evenly; align-items: center; width: 100%; height: 10%; padding: 10px;">
+            <ui:Button name="homeButton" text="🏠" style="width: 50px; height: 50px;" />
+            <ui:Button name="captureButton" text="●" style="width: 70px; height: 70px; background-color: white; border-radius: 35px;" />
+            <ui:Button name="optionsButton" text="⚙" style="width: 50px; height: 50px;" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</UXML>

@@ -150,8 +150,8 @@ namespace UnityMcp.Tools
             var processedTarget = ProcessTargetResult(targetResult);
             if (processedTarget == null)
             {
-                Debug.LogError("[DualStateMethodBase] Target processing failed or returned null:" + args["path"] + " ," + args["instance_id"]);
-                args.Complete(Response.Error("Target could not be located or processed！"));
+                Debug.LogError("[DualStateMethodBase] Target processing failed or returned null:，path:" + args["path"] + " ,instance_id:" + args["instance_id"]);
+                args.Complete(targetResult);
                 return;
             }
 

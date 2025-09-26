@@ -25,15 +25,15 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("action", "操作类型：import, modify, move, duplicate, rename, search, get_info, create_folder, reload等", false),
+                new MethodKey("action", "操作类型：import, modify, move, duplicate, rename, get_info, create_folder, reload, select, ping, select_depends, select_usage等", false),
                 new MethodKey("path", "资产路径，Unity标准格式：Assets/Folder/File.extension", false),
                 new MethodKey("properties", "资产属性字典，用于设置资产的各种属性", true),
                 new MethodKey("destination", "目标路径（移动/复制时使用）", true),
-                new MethodKey("search_pattern", "搜索模式，如*.prefab, *.cs等（搜索时使用）", true),
-                new MethodKey("recursive", "是否递归搜索子文件夹", true),
                 new MethodKey("force", "是否强制执行操作（覆盖现有文件等）", true),
                 new MethodKey("refresh_type", "刷新类型：all(全部), assets(仅资产), scripts(仅脚本)，默认all", true),
-                new MethodKey("save_before_refresh", "刷新前是否保存所有资产，默认true", true)
+                new MethodKey("save_before_refresh", "刷新前是否保存所有资产，默认true", true),
+                new MethodKey("include_indirect", "是否包含间接依赖/引用，默认false", true),
+                new MethodKey("max_results", "最大结果数量，默认100", true)
             };
         }
 
@@ -52,9 +52,12 @@ namespace UnityMcp.Tools
                     .Leaf("duplicate", DuplicateAsset)
                     .Leaf("move", MoveOrRenameAsset)
                     .Leaf("rename", MoveOrRenameAsset)
-                    .Leaf("search", SearchAssets)
                     .Leaf("get_info", GetAssetInfo)
                     .Leaf("create_folder", CreateFolder)
+                    .Leaf("select", SelectAsset)
+                    .Leaf("ping", PingAsset)
+                    .Leaf("select_depends", SelectDependencies)
+                    .Leaf("select_usage", SelectUsages)
                 .Build();
         }
 
@@ -425,108 +428,269 @@ namespace UnityMcp.Tools
             }
         }
 
-        private object SearchAssets(JObject args)
+        /// <summary>
+        /// 选中指定路径的资源
+        /// </summary>
+        private object SelectAsset(JObject args)
         {
-            string searchPattern = args["search_pattern"]?.ToString();
-            string filterType = args["filter_type"]?.ToString();
-            string pathScope = args["path"]?.ToString(); // Use path as folder scope
-            string filterDateAfterStr = args["filter_date_after"]?.ToString();
-            int pageSize = args["page_size"]?.ToObject<int?>() ?? 50; // Default page size
-            int pageNumber = args["page_number"]?.ToObject<int?>() ?? 1; // Default page number (1-based)
-            bool generatePreview = args["generate_preview"]?.ToObject<bool>() ?? false;
+            string path = args["path"]?.ToString();
+            if (string.IsNullOrEmpty(path))
+                return Response.Error("'path' is required for select.");
 
-            List<string> searchFilters = new List<string>();
-            if (!string.IsNullOrEmpty(searchPattern))
-                searchFilters.Add(searchPattern);
-            if (!string.IsNullOrEmpty(filterType))
-                searchFilters.Add($"t:{filterType}");
-
-            string[] folderScope = null;
-            if (!string.IsNullOrEmpty(pathScope))
-            {
-                folderScope = new string[] { SanitizeAssetPath(pathScope) };
-                if (!AssetDatabase.IsValidFolder(folderScope[0]))
-                {
-                    // Maybe the user provided a file path instead of a folder?
-                    // We could search in the containing folder, or return an error.
-                    Debug.LogWarning(
-                        $"Search path '{folderScope[0]}' is not a valid folder. Searching entire project."
-                    );
-                    folderScope = null; // Search everywhere if path isn't a folder
-                }
-            }
-
-            DateTime? filterDateAfter = null;
-            if (!string.IsNullOrEmpty(filterDateAfterStr))
-            {
-                if (
-                    DateTime.TryParse(
-                        filterDateAfterStr,
-                        CultureInfo.InvariantCulture,
-                        DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                        out DateTime parsedDate
-                    )
-                )
-                {
-                    filterDateAfter = parsedDate;
-                }
-                else
-                {
-                    Debug.LogWarning(
-                        $"Could not parse filter_date_after: '{filterDateAfterStr}'. Expected ISO 8601 format."
-                    );
-                }
-            }
+            string fullPath = SanitizeAssetPath(path);
+            if (!AssetExists(fullPath))
+                return Response.Error($"Asset not found at path: {fullPath}");
 
             try
             {
-                string[] guids = AssetDatabase.FindAssets(
-                    string.Join(" ", searchFilters),
-                    folderScope
+                UnityEngine.Object asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(fullPath);
+                if (asset == null)
+                    return Response.Error($"Failed to load asset at path: {fullPath}");
+
+                Selection.activeObject = asset;
+                return Response.Success(
+                    $"Asset '{fullPath}' selected successfully.",
+                    GetAssetData(fullPath)
                 );
-                List<object> results = new List<object>();
-                int totalFound = 0;
+            }
+            catch (Exception e)
+            {
+                return Response.Error($"Error selecting asset '{fullPath}': {e.Message}");
+            }
+        }
 
-                foreach (string guid in guids)
+        /// <summary>
+        /// 定位（ping）指定路径的资源，在Project窗口中高亮显示
+        /// </summary>
+        private object PingAsset(JObject args)
+        {
+            string path = args["path"]?.ToString();
+            if (string.IsNullOrEmpty(path))
+                return Response.Error("'path' is required for ping.");
+
+            string fullPath = SanitizeAssetPath(path);
+            if (!AssetExists(fullPath))
+                return Response.Error($"Asset not found at path: {fullPath}");
+
+            try
+            {
+                UnityEngine.Object asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(fullPath);
+                if (asset == null)
+                    return Response.Error($"Failed to load asset at path: {fullPath}");
+
+                EditorGUIUtility.PingObject(asset);
+                return Response.Success(
+                    $"Asset '{fullPath}' pinged successfully.",
+                    GetAssetData(fullPath)
+                );
+            }
+            catch (Exception e)
+            {
+                return Response.Error($"Error pinging asset '{fullPath}': {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 选择指定资源的所有依赖项
+        /// </summary>
+        private object SelectDependencies(JObject args)
+        {
+            string path = args["path"]?.ToString();
+            bool includeIndirect = args["include_indirect"]?.ToObject<bool?>() ?? false;
+
+            if (string.IsNullOrEmpty(path))
+                return Response.Error("'path' is required for select_depends.");
+
+            string fullPath = SanitizeAssetPath(path);
+            if (!AssetExists(fullPath))
+                return Response.Error($"Asset not found at path: {fullPath}");
+
+            try
+            {
+                string[] dependencies = AssetDatabase.GetDependencies(fullPath, includeIndirect);
+                List<UnityEngine.Object> dependencyObjects = new List<UnityEngine.Object>();
+                List<object> dependencyData = new List<object>();
+
+                foreach (string depPath in dependencies)
                 {
-                    string assetPath = AssetDatabase.GUIDToAssetPath(guid);
-                    if (string.IsNullOrEmpty(assetPath))
-                        continue;
+                    if (depPath == fullPath) continue; // 排除自身
 
-                    // Apply date filter if present
-                    if (filterDateAfter.HasValue)
+                    UnityEngine.Object depAsset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(depPath);
+                    if (depAsset != null)
                     {
-                        DateTime lastWriteTime = File.GetLastWriteTimeUtc(
-                            Path.Combine(Directory.GetCurrentDirectory(), assetPath)
-                        );
-                        if (lastWriteTime <= filterDateAfter.Value)
-                        {
-                            continue; // Skip assets older than or equal to the filter date
-                        }
+                        dependencyObjects.Add(depAsset);
+                        dependencyData.Add(GetAssetData(depPath));
                     }
-
-                    totalFound++; // Count matching assets before pagination
-                    results.Add(GetAssetData(assetPath, generatePreview));
                 }
 
-                // Apply pagination
-                int startIndex = (pageNumber - 1) * pageSize;
-                var pagedResults = results.Skip(startIndex).Take(pageSize).ToList();
+                // 选中所有依赖项
+                Selection.objects = dependencyObjects.ToArray();
 
                 return Response.Success(
-                    $"Found {totalFound} asset(s). Returning page {pageNumber} ({pagedResults.Count} assets).",
+                    $"Selected {dependencyObjects.Count} dependencies for asset '{fullPath}' (indirect: {includeIndirect}).",
                     new
                     {
-                        totalAssets = totalFound,
-                        pageSize = pageSize,
-                        pageNumber = pageNumber,
-                        assets = pagedResults,
+                        sourceAsset = GetAssetData(fullPath),
+                        dependencyCount = dependencyObjects.Count,
+                        includeIndirect = includeIndirect,
+                        dependencies = dependencyData
                     }
                 );
             }
             catch (Exception e)
             {
-                return Response.Error($"Error searching assets: {e.Message}");
+                return Response.Error($"Error selecting dependencies for asset '{fullPath}': {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 查询并选择引用指定资源的所有资源（优化版本）
+        /// </summary>
+        private object SelectUsages(JObject args)
+        {
+            string path = args["path"]?.ToString();
+            bool includeIndirect = args["include_indirect"]?.ToObject<bool?>() ?? false;
+            int maxResults = args["max_results"]?.ToObject<int?>() ?? 100; // 限制结果数量
+
+            if (string.IsNullOrEmpty(path))
+                return Response.Error("'path' is required for select_usage.");
+
+            string fullPath = SanitizeAssetPath(path);
+            if (!AssetExists(fullPath))
+                return Response.Error($"Asset not found at path: {fullPath}");
+
+            try
+            {
+                var startTime = System.DateTime.Now;
+
+                // 获取资源的GUID
+                string targetGuid = AssetDatabase.AssetPathToGUID(fullPath);
+                if (string.IsNullOrEmpty(targetGuid))
+                    return Response.Error($"Could not get GUID for asset: {fullPath}");
+
+                List<string> referencingPaths = new List<string>();
+
+                // 方法1: 使用Unity内置的引用查找（更高效）
+                if (TryFindReferencesUsingBuiltinAPI(fullPath, targetGuid, referencingPaths, maxResults))
+                {
+                    LogInfo($"[SelectUsages] Used builtin API to find references");
+                }
+                else
+                {
+                    // 方法2: 优化的手动查找（仅查找常见资源类型）
+                    FindReferencesOptimized(fullPath, targetGuid, referencingPaths, includeIndirect, maxResults);
+                }
+
+                List<UnityEngine.Object> referencingObjects = new List<UnityEngine.Object>();
+                List<object> referencingData = new List<object>();
+
+                foreach (string refPath in referencingPaths.Take(maxResults))
+                {
+                    UnityEngine.Object refAsset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(refPath);
+                    if (refAsset != null)
+                    {
+                        referencingObjects.Add(refAsset);
+                        referencingData.Add(GetAssetData(refPath));
+                    }
+                }
+
+                // 选中所有引用此资源的资源
+                Selection.objects = referencingObjects.ToArray();
+
+                var duration = System.DateTime.Now - startTime;
+                string message = referencingPaths.Count >= maxResults
+                    ? $"Found {referencingPaths.Count}+ references (showing first {referencingObjects.Count}) for '{fullPath}' in {duration.TotalMilliseconds:F0}ms"
+                    : $"Selected {referencingObjects.Count} assets that reference '{fullPath}' in {duration.TotalMilliseconds:F0}ms";
+
+                return Response.Success(message, new
+                {
+                    targetAsset = GetAssetData(fullPath),
+                    referencingCount = referencingObjects.Count,
+                    totalFound = referencingPaths.Count,
+                    maxResults = maxResults,
+                    includeIndirect = includeIndirect,
+                    searchDurationMs = duration.TotalMilliseconds,
+                    referencingAssets = referencingData
+                });
+            }
+            catch (Exception e)
+            {
+                return Response.Error($"Error finding usages for asset '{fullPath}': {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 尝试使用Unity内置API查找引用（如果可用）
+        /// </summary>
+        private bool TryFindReferencesUsingBuiltinAPI(string targetPath, string targetGuid, List<string> referencingPaths, int maxResults)
+        {
+            try
+            {
+                // 尝试使用Unity 2020+的内置引用查找API
+                var searchFilter = $"ref:{targetGuid}";
+                string[] foundGuids = AssetDatabase.FindAssets(searchFilter);
+
+                if (foundGuids != null && foundGuids.Length > 0)
+                {
+                    foreach (string guid in foundGuids.Take(maxResults))
+                    {
+                        string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+                        if (!string.IsNullOrEmpty(assetPath) && assetPath != targetPath)
+                        {
+                            referencingPaths.Add(assetPath);
+                        }
+                    }
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                LogInfo($"[SelectUsages] Builtin API not available or failed: {ex.Message}");
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 优化的手动引用查找（仅查找常见资源类型）
+        /// </summary>
+        private void FindReferencesOptimized(string targetPath, string targetGuid, List<string> referencingPaths, bool includeIndirect, int maxResults)
+        {
+            // 只查找常见的可能包含引用的资源类型，而不是所有资源
+            string[] searchFilters = {
+                "t:Scene",           // 场景文件
+                "t:Prefab",          // 预制体
+                "t:Material",        // 材质
+                "t:AnimationClip",   // 动画片段
+                "t:AnimatorController", // 动画控制器
+                "t:ScriptableObject", // ScriptableObject
+                "t:Shader"           // 着色器
+            };
+
+            var processedGuids = new HashSet<string>();
+
+            foreach (string filter in searchFilters)
+            {
+                if (referencingPaths.Count >= maxResults) break;
+
+                string[] guids = AssetDatabase.FindAssets(filter);
+
+                foreach (string guid in guids)
+                {
+                    if (referencingPaths.Count >= maxResults) break;
+                    if (processedGuids.Contains(guid)) continue;
+
+                    processedGuids.Add(guid);
+                    string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+
+                    if (string.IsNullOrEmpty(assetPath) || assetPath == targetPath) continue;
+
+                    // 检查依赖关系
+                    string[] dependencies = AssetDatabase.GetDependencies(assetPath, includeIndirect);
+                    if (dependencies.Contains(targetPath))
+                    {
+                        referencingPaths.Add(assetPath);
+                    }
+                }
             }
         }
 

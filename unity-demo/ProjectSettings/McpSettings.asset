@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &1
+MonoBehaviour:
+  m_ObjectHideFlags: 61
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aec05590159ad674a9228e2c319ce82d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  uiSettings:
+    _ui_build_steps:
+    - "\u5229\u7528figma_manage\u4E0B\u8F7D\u5E76\u5206\u6790Figma\u8BBE\u8BA1\u7A3F\u7ED3\u6784"
+    - "\u521B\u5EFACanvas\u548C\u6839\u5BB9\u5668\u5E76\u8BBE\u7F6E\u597D\u5C3A\u5BF8"
+    - "\u5C06Game\u5C3A\u5BF8\u548CUI\u5C3A\u5BF8\u5339\u914D"
+    - "\u6309\u7167\u8BBE\u8BA1\u7A3F\u521B\u5EFA\u5FC5\u8981\u7684UI\u7EC4\u4EF6"
+    - "\u6309\u7406\u60F3\u7684UI\u5C42\u7EA7\u8FDB\u884C\u7EC4\u4EF6\u8C03\u6574"
+    - "\u8BB0\u5F55\u521B\u5EFA\u7684UI\u7EC4\u4EF6\u540D\u79F0\u548C\u539F\u6765\u7684\u8282\u70B9id\u5230\u89C4\u5219\u6587\u4EF6"
+    - "\u914D\u7F6E\u7EC4\u4EF6\u5C5E\u6027"
+    - "\u57FA\u4E8Eugui_layout\u7684mcp\u5DE5\u5177\u548C\u8BBE\u8BA1\u7A3F\u4FE1\u606F\uFF0C\u8FDB\u884C\u754C\u9762\u5E03\u5C40\u8C03\u6574"
+    - "\u4F18\u5316\u5C4F\u5E55\u9002\u914D"
+    - "\u8BB0\u5F55\u66F4\u6539\u65B9\u5F0F\u5230\u89C4\u5219\u6587\u4EF6"
+    - "\u4E0B\u8F7D\u754C\u9762\u9700\u8981\u7684\u56FE\u7247\u8D44\u6E90"
+    - "\u5C06\u56FE\u7247\u4FE1\u606F\u8BB0\u5F55\u5230\u89C4\u5219\u6587\u4EF6"
+    - "\u5C06\u56FE\u7247\u8F7D\u5165\u5230UI\u7EC4\u4EF6\u4E0A"
+    _ui_build_enviroments:
+    - "\u57FA\u4E8EUGUI\u754C\u9762"
+    - "\u652F\u6301TMP\u5B57\u4F53"
+    - "\u6587\u672C\u76F8\u5173\u7EC4\u4EF6\u5FC5\u987B\u4F7F\u7528TMP"
+  figmaSettings:
+    _figma_access_token: figd_MDWK9P_2FirU4qbzw1DwsXZMNoWJ_S3CPTwzRXrQ
+    _default_download_path: Assets/UI/Figma
+    _figma_assets_path: Assets/FigmaCache
+    auto_download_images: 1
+    image_scale: 1
+    auto_convert_to_sprite: 1

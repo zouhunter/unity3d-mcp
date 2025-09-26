@@ -816,7 +816,8 @@ PlayerSettings:
   webGLThreadsSupport: 0
   webGLDecompressionFallback: 0
   webGLPowerPreference: 2
-  scriptingDefineSymbols: {}
+  scriptingDefineSymbols:
+    Android: JSONNET_EXISTS;TextMeshPro;UITK_EXISTS;FCU_EXISTS
   additionalCompilerArguments: {}
   platformArchitecture: {}
   scriptingBackend:

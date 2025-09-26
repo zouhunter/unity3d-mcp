@@ -643,9 +643,12 @@ namespace UnityMcp
                 {
                     var endTime = System.DateTime.Now;
                     var duration = (endTime - startTime).TotalMilliseconds;
-
+                    var response = new
+                    {
+                        status = "success",
+                        result = result
+                    };
                     // Standard success response format
-                    var response = new { status = "success", result };
                     Log($"[UnityMcp] 命令执行成功: Type={command.type}");
                     var re = JsonConvert.SerializeObject(response);
                     Log($"[UnityMcp] 工具执行完成，结果: {re}");

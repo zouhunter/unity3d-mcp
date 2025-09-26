@@ -47,9 +47,9 @@ namespace UnityMcp.Tools
         {
             return new[]
             {
-                new MethodKey("action", "Operation type: execute, validate, install_package", false),
+                new MethodKey("action", "Operation type: execute, validate, install_package, create", false),
                 new MethodKey("code", "Python script code content (mutually exclusive with script_path)", true),
-                new MethodKey("script_path", "Path to existing Python script file to execute (mutually exclusive with code)", true),
+                new MethodKey("script_path", "Path to existing Python script file to execute or path for creating new script", true),
                 new MethodKey("script_name", "Python script name, default is script.py", true),
                 new MethodKey("python_path", "Path to Python interpreter, default is 'python'", true),
                 new MethodKey("working_directory", "Working directory for script execution", true),
@@ -73,6 +73,7 @@ namespace UnityMcp.Tools
                     .Leaf("execute", HandleExecutePython)
                     .Leaf("validate", HandleValidatePython)
                     .Leaf("install_package", HandleInstallPackage)
+                    .Leaf("create", HandleCreateScript)
                     .DefaultLeaf(HandleExecutePython)
                 .Build();
         }
@@ -104,6 +105,15 @@ namespace UnityMcp.Tools
         {
             LogInfo("[PythonRunner] Installing Python packages");
             return ctx.AsyncReturn(InstallPackageCoroutine(ctx.JsonData));
+        }
+
+        /// <summary>
+        /// 处理创建Python脚本操作
+        /// </summary>
+        private object HandleCreateScript(StateTreeContext ctx)
+        {
+            LogInfo("[PythonRunner] Creating Python script");
+            return ctx.AsyncReturn(CreateScriptCoroutine(ctx.JsonData));
         }
 
         // --- 异步执行方法 ---
@@ -366,6 +376,83 @@ namespace UnityMcp.Tools
             }
 
             yield return installResult;
+        }
+
+        /// <summary>
+        /// 创建Python脚本协程
+        /// </summary>
+        private IEnumerator CreateScriptCoroutine(JObject args)
+        {
+            object result = null;
+
+            string pythonCode = args["code"]?.ToString();
+            string scriptPath = args["script_path"]?.ToString();
+            string scriptName = args["script_name"]?.ToString() ?? "script.py";
+
+            // 检查参数：必须提供 code
+            if (string.IsNullOrEmpty(pythonCode))
+            {
+                result = Response.Error("'code' parameter is required for create action");
+                yield return result;
+                yield break;
+            }
+
+            try
+            {
+                // 确定脚本保存路径
+                string targetPath;
+                if (!string.IsNullOrEmpty(scriptPath))
+                {
+                    // 如果提供了 script_path，使用它
+                    targetPath = scriptPath;
+                }
+                else
+                {
+                    // 默认保存到 Python 目录
+                    string pythonDir = Path.Combine(System.Environment.CurrentDirectory, "Python");
+                    if (!Directory.Exists(pythonDir))
+                    {
+                        Directory.CreateDirectory(pythonDir);
+                        LogInfo($"[PythonRunner] Created Python directory: {pythonDir}");
+                    }
+                    targetPath = Path.Combine(pythonDir, scriptName);
+                }
+
+                // 如果 targetPath 是目录，则在其中创建脚本文件
+                if (Directory.Exists(targetPath))
+                {
+                    targetPath = Path.Combine(targetPath, scriptName);
+                }
+
+                // 确保目录存在
+                string directory = Path.GetDirectoryName(targetPath);
+                if (!Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                    LogInfo($"[PythonRunner] Created directory: {directory}");
+                }
+
+                LogInfo($"[PythonRunner] Creating Python script: {targetPath}");
+
+                // 写入脚本文件
+                File.WriteAllText(targetPath, pythonCode, Encoding.UTF8);
+
+                result = Response.Success("Python script created successfully", new
+                {
+                    operation = "create",
+                    script_path = targetPath,
+                    script_name = Path.GetFileName(targetPath),
+                    directory = directory,
+                    file_size = new FileInfo(targetPath).Length
+                });
+            }
+            catch (Exception ex)
+            {
+                LogError($"[PythonRunner] Failed to create script: {ex.Message}");
+                result = Response.Error($"Failed to create Python script: {ex.Message}");
+            }
+
+            yield return result;
         }
 
         /// <summary>

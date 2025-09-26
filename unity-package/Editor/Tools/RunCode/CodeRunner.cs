@@ -62,7 +62,7 @@ namespace UnityMcp.Tools
                 new MethodKey("action", "Operation type: execute, validate", false),
                 new MethodKey("code", "C# code content to execute", true),
                 new MethodKey("class_name", "Class name, default is CodeClass", true),
-                new MethodKey("method_name", "Method name to execute, default is Run", true),
+                new MethodKey("entry_method", "Entry method name to execute, default is Execute", true),
                 new MethodKey("namespace", "Namespace, default is CodeNamespace", true),
                 new MethodKey("includes", "Referenced using statements list, JSON array format", true),
                 new MethodKey("parameters", "Method parameters, JSON array format", true),
@@ -126,7 +126,7 @@ namespace UnityMcp.Tools
                 }
 
                 string className = args["class_name"]?.ToString() ?? "CodeClass";
-                string methodName = args["method_name"]?.ToString() ?? "Run";
+                string methodName = args["entry_method"]?.ToString() ?? "Run";
                 string namespaceName = args["namespace"]?.ToString() ?? "CodeNamespace";
                 var includes = args["includes"]?.ToObject<string[]>() ?? GetDefaultIncludes();
                 var parameters = args["parameters"]?.ToObject<object[]>() ?? new object[0];
@@ -170,7 +170,7 @@ namespace UnityMcp.Tools
                 }
 
                 string className = args["class_name"]?.ToString() ?? "CodeClass";
-                string methodName = args["method_name"]?.ToString() ?? "Run";
+                string methodName = args["entry_method"]?.ToString() ?? "Run";
                 string namespaceName = args["namespace"]?.ToString() ?? "CodeNamespace";
                 var includes = args["includes"]?.ToObject<string[]>() ?? GetDefaultIncludes();
 
@@ -210,7 +210,7 @@ namespace UnityMcp.Tools
                                 {
                                     operation = "validate",
                                     class_name = className,
-                                    method_name = methodName,
+                                    entry_method = methodName,
                                     namespace_name = namespaceName,
                                     generated_code = fullCode
                                 });
@@ -307,7 +307,7 @@ namespace UnityMcp.Tools
                                 {
                                     operation = "execute",
                                     class_name = className,
-                                    method_name = methodName,
+                                    entry_method = methodName,
                                     namespace_name = namespaceName,
                                     success = result.Success,
                                     message = result.Message,

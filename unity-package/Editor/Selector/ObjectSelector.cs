@@ -129,12 +129,13 @@ namespace UnityMcp.Tools
         private object HandleDefaultSearch(StateTreeContext context)
         {
             // 检查是否至少提供了id或path参数之一
-            bool hasId = context.TryGetValue("id", out object idObj) && idObj != null;
+            bool hasId = context.TryGetValue("instance_id", out object idObj) && idObj != null;
             bool hasPath = context.TryGetValue("path", out object pathObj) && pathObj != null;
 
             if (!hasId && !hasPath)
             {
-                return Response.Error("Either 'id' or 'path' parameter must be provided.");
+                Debug.LogError("Either 'instance_id' or 'path' parameter must be provided.");
+                return Response.Error("Either 'instance_id' or 'path' parameter must be provided.");
             }
 
             // 优先使用id查找

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
 using UnityMcp;
+using UnityEngine.Networking;
 
 namespace UnityMcp.Tools
 {
@@ -32,10 +33,16 @@ namespace UnityMcp.Tools
             public Exception Error { get; set; } // 存储异常信息
             public CoroutineInfo SubCoroutine { get; set; } // 子协程
             public bool WaitingForSubCoroutine { get; set; } // 是否在等待子协程
+            public object SubCoroutineResult { get; set; } // 子协程的结果，用于传递给主协程
+            public bool HasSubCoroutineResult { get; set; } // 是否有子协程结果
 
             // WaitForSeconds支持
             public bool IsWaitingForTime { get; set; } // 是否在等待时间
             public double WaitEndTime { get; set; } // 等待结束时间（使用EditorApplication.timeSinceStartup）
+
+            // UnityWebRequestAsyncOperation支持
+            public bool IsWaitingForWebRequest { get; set; } // 是否在等待网络请求
+            public UnityWebRequestAsyncOperation WebRequestOperation { get; set; } // 网络请求操作
         }
 
         /// <summary>
@@ -97,7 +104,23 @@ namespace UnityMcp.Tools
                 {
                     // 检查等待状态
 
-                    // 1. 如果正在等待时间，检查时间是否到了
+                    // 1. 如果正在等待网络请求，检查请求是否完成
+                    if (coroutineInfo.IsWaitingForWebRequest)
+                    {
+                        if (coroutineInfo.WebRequestOperation != null && !coroutineInfo.WebRequestOperation.isDone)
+                        {
+                            // 网络请求还未完成，继续等待
+                            continue;
+                        }
+                        else
+                        {
+                            // 网络请求完成，继续执行协程
+                            coroutineInfo.IsWaitingForWebRequest = false;
+                            coroutineInfo.WebRequestOperation = null;
+                        }
+                    }
+
+                    // 2. 如果正在等待时间，检查时间是否到了
                     if (coroutineInfo.IsWaitingForTime)
                     {
                         if (EditorApplication.timeSinceStartup < coroutineInfo.WaitEndTime)
@@ -130,14 +153,26 @@ namespace UnityMcp.Tools
                                 throw coroutineInfo.SubCoroutine.Error;
                             }
 
-                            // 子协程正常完成，继续执行主协程
+                            // 子协程正常完成，将子协程的结果设置为主协程的结果
+                            if (coroutineInfo.SubCoroutine.HasResult)
+                            {
+                                // 将子协程的结果直接设置为主协程的结果
+                                coroutineInfo.Result = coroutineInfo.SubCoroutine.Result;
+                                coroutineInfo.HasResult = true;
+
+                                // 同时保存到SubCoroutineResult（用于调试）
+                                coroutineInfo.SubCoroutineResult = coroutineInfo.SubCoroutine.Result;
+                                coroutineInfo.HasSubCoroutineResult = true;
+                            }
+
+                            // 继续执行主协程
                             coroutineInfo.WaitingForSubCoroutine = false;
                             coroutineInfo.SubCoroutine = null;
                         }
                     }
 
-                    // 3. 如果不在等待子协程且不在等待时间，执行协程的下一步
-                    if (!coroutineInfo.WaitingForSubCoroutine && !coroutineInfo.IsWaitingForTime)
+                    // 3. 如果不在等待子协程、时间和网络请求，执行协程的下一步
+                    if (!coroutineInfo.WaitingForSubCoroutine && !coroutineInfo.IsWaitingForTime && !coroutineInfo.IsWaitingForWebRequest)
                     {
                         if (coroutineInfo.Coroutine.MoveNext())
                         {
@@ -158,8 +193,12 @@ namespace UnityMcp.Tools
                                     Error = null,
                                     SubCoroutine = null,
                                     WaitingForSubCoroutine = false,
+                                    SubCoroutineResult = null,
+                                    HasSubCoroutineResult = false,
                                     IsWaitingForTime = false,
-                                    WaitEndTime = 0
+                                    WaitEndTime = 0,
+                                    IsWaitingForWebRequest = false,
+                                    WebRequestOperation = null
                                 };
 
                                 // 将子协程添加到协程列表
@@ -168,6 +207,17 @@ namespace UnityMcp.Tools
                                 // 设置主协程等待子协程
                                 coroutineInfo.SubCoroutine = subCoroutineInfo;
                                 coroutineInfo.WaitingForSubCoroutine = true;
+                            }
+                            // 检查是否返回了UnityWebRequestAsyncOperation
+                            else if (current is UnityWebRequestAsyncOperation webRequestOp)
+                            {
+                                // 设置等待网络请求状态
+                                coroutineInfo.IsWaitingForWebRequest = true;
+                                coroutineInfo.WebRequestOperation = webRequestOp;
+
+                                // 保存结果
+                                coroutineInfo.Result = current;
+                                coroutineInfo.HasResult = true;
                             }
                             // 检查是否返回了WaitForSeconds
                             else if (current is WaitForSeconds waitForSeconds)
@@ -212,14 +262,18 @@ namespace UnityMcp.Tools
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"[CoroutineRunner] Error executing coroutine: {e}");
+                    Debug.LogException(new Exception($"[CoroutineRunner] Error executing coroutine: ", e));
                     coroutineInfo.IsRunning = false;
                     coroutineInfo.Error = e;
                     coroutineInfo.HasResult = false;
                     coroutineInfo.WaitingForSubCoroutine = false;
                     coroutineInfo.SubCoroutine = null;
+                    coroutineInfo.SubCoroutineResult = null;
+                    coroutineInfo.HasSubCoroutineResult = false;
                     coroutineInfo.IsWaitingForTime = false;
                     coroutineInfo.WaitEndTime = 0;
+                    coroutineInfo.IsWaitingForWebRequest = false;
+                    coroutineInfo.WebRequestOperation = null;
                     completedCoroutines.Add(coroutineInfo);
                 }
             }
@@ -247,7 +301,7 @@ namespace UnityMcp.Tools
                         // 既没有异常也没有结果，传递null
                         resultToPass = null;
                     }
-                    Debug.Log($"[CoroutineRunner] Complete callback: {resultToPass}");
+                    //Debug.Log($"[CoroutineRunner] Complete callback: {resultToPass}");
                     completed.CompleteCallback?.Invoke(resultToPass);
                 }
                 catch (Exception e)
@@ -278,8 +332,12 @@ namespace UnityMcp.Tools
                     Error = null,
                     SubCoroutine = null,
                     WaitingForSubCoroutine = false,
+                    SubCoroutineResult = null,
+                    HasSubCoroutineResult = false,
                     IsWaitingForTime = false,
-                    WaitEndTime = 0
+                    WaitEndTime = 0,
+                    IsWaitingForWebRequest = false,
+                    WebRequestOperation = null
                 };
 
                 _coroutines.Add(coroutineInfo);

@@ -1,0 +1,13 @@
+{
+	"name": "weli-unity.procedural_ui_image",
+	"displayName": "ProceduralUIImage",
+	"description": "This is ProceduralUIImage",
+	"version": "1.0.0",
+	"unity": "2018.3",
+	"author": "assetstore@unity",
+	"repository": "https://assetstore.unity.com/",
+	"keywords": [
+		"ui",
+		"procedural"
+	]
+}

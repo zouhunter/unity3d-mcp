@@ -29,7 +29,7 @@ namespace UnityMcp.Tools
                 new MethodKey("properties", "材质属性字典，包含颜色、纹理、浮点数等属性", true),
                 new MethodKey("source_path", "源材质路径（复制时使用）", true),
                 new MethodKey("destination", "目标路径（复制/移动时使用）", true),
-                new MethodKey("search_pattern", "搜索模式，如*.mat", true),
+                new MethodKey("query", "搜索模式，如*.mat", true),
                 new MethodKey("recursive", "是否递归搜索子文件夹", true),
                 new MethodKey("force", "是否强制执行操作（覆盖现有文件等）", true),
                 new MethodKey("render_queue", "渲染队列值", true),
@@ -232,7 +232,7 @@ namespace UnityMcp.Tools
 
         private object SearchMaterials(JObject args)
         {
-            string searchPattern = args["search_pattern"]?.ToString();
+            string searchPattern = args["query"]?.ToString();
             string pathScope = args["path"]?.ToString();
             bool recursive = args["recursive"]?.ToObject<bool>() ?? true;
 

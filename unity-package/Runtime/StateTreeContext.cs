@@ -353,6 +353,7 @@ namespace UnityMcp.Tools
             CoroutineRunner.StartCoroutine(coroutine, (result) =>
             {
                 // 调用完成回调
+                UnityEngine.Debug.Log($"AsyncReturn: {result}");
                 CompleteAction?.Invoke(result);
             });
             return this;

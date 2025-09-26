@@ -251,8 +251,8 @@ namespace UnityMcp.Tools
             var responseData = new Dictionary<string, object>
             {
                 ["success"] = success,
-                ["results"] = results ?? new List<object>(),
-                ["errors"] = errors ?? new List<string>(),
+                ["results"] = JArray.FromObject(results) ?? new JArray(),
+                ["errors"] = JArray.FromObject(errors) ?? new JArray(),
                 ["total_calls"] = totalCalls,
                 ["successful_calls"] = successfulCalls,
                 ["failed_calls"] = failedCalls
@@ -267,7 +267,7 @@ namespace UnityMcp.Tools
             }
 
             // 返回包含data字段的Response格式，以便Python层可以提取data部分
-            return Response.Success("Batch function calls completed", responseData);
+            return Response.Success("Batch function calls completed", JObject.FromObject(responseData));
         }
     }
 }

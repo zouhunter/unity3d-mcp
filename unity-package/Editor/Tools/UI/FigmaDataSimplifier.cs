@@ -21,28 +21,27 @@ namespace UnityMcp.Tools
             public string id;              // 节点ID
             public string name;            // 节点名称
             public string type;            // 节点类型 (FRAME, TEXT, RECTANGLE等)
-            public bool visible = true;    // 是否可见
+            // visible字段已移除，因为所有返回的节点都是可见的
 
             // 文本相关
             public string text;            // 文本内容
             public TextStyle textStyle;    // 文本样式
 
             // 样式相关
-            public ColorInfo backgroundColor; // 背景色
+            public ColorInfo backgroundColor; // 背景色（主要填充色，保持向后兼容）
             public ColorInfo textColor;      // 文字颜色
+            public List<FillInfo> fills;     // 完整的填充信息列表
             public float cornerRadius;       // 圆角
-            public bool hasImage;            // 是否需要下载为图片
+            public bool hasImage;            // 是否包含图片引用
+            public bool hasEffect;           // 是否需要下载为图片（复杂效果）
             public string imageRef;          // 图片引用
 
             // 布局相关
             public LayoutInfo layout;        // 布局信息
 
-            // UGUI锚点信息（直接在节点中）
-            public float[] anchoredPos;      // 锚点位置 [x, y]
-            public float[] sizeDelta;        // 尺寸增量 [width, height]
-            public float[] anchorMin;        // 最小锚点 [x, y]
-            public float[] anchorMax;        // 最大锚点 [x, y]
-            public float[] pivot;            // 轴心点 [x, y]
+            // 简化的布局信息（支持Figma和Unity坐标系转换）
+            public float[] unityPos;         // Unity位置 [x, y] (Figma: 左上角原点, Unity: 屏幕中心原点)
+            public float[] size;             // 控件尺寸 [width, height]
 
             public List<SimplifiedNode> children; // 子节点
 
@@ -75,6 +74,42 @@ namespace UnityMcp.Tools
         }
 
         /// <summary>
+        /// 填充信息（完整的Figma填充数据）
+        /// </summary>
+        [Serializable]
+        public class FillInfo
+        {
+            public string type;            // 填充类型 (SOLID, GRADIENT_LINEAR, GRADIENT_RADIAL, IMAGE等)
+            public bool visible;           // 填充是否可见
+            public float opacity;          // 不透明度
+            public string blendMode;       // 混合模式
+            public ColorInfo color;        // 纯色填充的颜色信息
+            public string imageRef;        // 图片填充的引用
+            public GradientInfo gradient;  // 渐变填充信息
+        }
+
+        /// <summary>
+        /// 渐变信息
+        /// </summary>
+        [Serializable]
+        public class GradientInfo
+        {
+            public string type;            // 渐变类型 (LINEAR, RADIAL, ANGULAR)
+            public List<GradientStop> gradientStops; // 渐变停止点
+            public float[] gradientHandlePositions;  // 渐变句柄位置
+        }
+
+        /// <summary>
+        /// 渐变停止点
+        /// </summary>
+        [Serializable]
+        public class GradientStop
+        {
+            public float position;         // 位置 (0-1)
+            public ColorInfo color;        // 颜色
+        }
+
+        /// <summary>
         /// 布局信息
         /// </summary>
         [Serializable]
@@ -86,25 +121,35 @@ namespace UnityMcp.Tools
             public float[] padding;        // 内边距 [left, top, right, bottom]
         }
 
-        /// <summary>
-        /// Figma约束信息（仅用于内部计算）
-        /// </summary>
-        private class ConstraintInfo
-        {
-            public string horizontal;  // 水平约束 (LEFT, RIGHT, CENTER, LEFT_RIGHT, SCALE)
-            public string vertical;    // 垂直约束 (TOP, BOTTOM, CENTER, TOP_BOTTOM, SCALE)
-        }
 
 
         /// <summary>
-        /// 简化Figma节点数据并转换为UGUI锚点信息
+        /// 简化Figma节点数据，提取绝对位置和尺寸信息，并转换为Unity坐标系
         /// </summary>
         /// <param name="figmaNode">原始Figma节点数据</param>
         /// <param name="maxDepth">最大深度，默认无限制</param>
-        /// <param name="convertToUGUI">是否转换为UGUI锚点信息，默认true</param>
-        /// <param name="cleanupRedundantData">是否清理冗余数据，默认true</param>
+        /// <param name="convertToUGUI">是否转换为Unity坐标系（屏幕中心原点，Y轴向上），默认true</param>
+        /// <param name="cleanupRedundantData">保留参数以兼容</param>
+        /// <param name="canvasHeight">Canvas高度，用于Unity坐标系转换，默认720</param>
+        /// <param name="canvasWidth">Canvas宽度，用于Unity坐标系转换，默认1200</param>
         /// <returns>简化后的节点数据</returns>
-        public static SimplifiedNode SimplifyNode(JToken figmaNode, int maxDepth = -1, bool convertToUGUI = true, bool cleanupRedundantData = true)
+        public static SimplifiedNode SimplifyNode(JToken figmaNode, int maxDepth = -1, bool convertToUGUI = true, bool cleanupRedundantData = true, float canvasHeight = 720f, float canvasWidth = 1200f)
+        {
+            var result = SimplifyNodeInternal(figmaNode, maxDepth, convertToUGUI, cleanupRedundantData, null, null, canvasHeight, canvasWidth);
+
+            // 将根节点坐标归零，并调整所有子节点坐标
+            if (result != null)
+            {
+                NormalizeCoordinates(result, convertToUGUI, canvasHeight, canvasWidth);
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// 内部简化方法，支持传递父节点信息
+        /// </summary>
+        private static SimplifiedNode SimplifyNodeInternal(JToken figmaNode, int maxDepth, bool convertToUGUI, bool cleanupRedundantData, SimplifiedNode parentNode, JToken parentFigmaNode, float canvasHeight = 720f, float canvasWidth = 1200f)
         {
             if (figmaNode == null || maxDepth == 0)
                 return null;
@@ -118,25 +163,47 @@ namespace UnityMcp.Tools
             {
                 id = figmaNode["id"]?.ToString(),
                 name = figmaNode["name"]?.ToString(),
-                type = figmaNode["type"]?.ToString(),
-                visible = true // 由于已经过滤了不可见节点，这里总是true
+                type = figmaNode["type"]?.ToString()
+                // visible字段已移除，因为所有返回的节点都是可见的
             };
 
-            // 临时提取位置和尺寸用于UGUI锚点计算（后续会被清理）
-            float[] tempPosition = null;
-            float[] tempSize = null;
+            // 提取绝对位置和尺寸信息，并根据需要转换坐标系
             var absoluteBoundingBox = figmaNode["absoluteBoundingBox"];
             if (absoluteBoundingBox != null)
             {
-                tempPosition = new float[]
+                float figmaX = absoluteBoundingBox["x"]?.ToObject<float>() ?? 0;
+                float figmaY = absoluteBoundingBox["y"]?.ToObject<float>() ?? 0;
+                float width = absoluteBoundingBox["width"]?.ToObject<float>() ?? 0;
+                float height = absoluteBoundingBox["height"]?.ToObject<float>() ?? 0;
+
+                if (convertToUGUI)
                 {
-                    (float)Math.Round(absoluteBoundingBox["x"]?.ToObject<float>() ?? 0, 2),
-                    (float)Math.Round(absoluteBoundingBox["y"]?.ToObject<float>() ?? 0, 2)
-                };
-                tempSize = new float[]
+                    // 转换为Unity坐标系（屏幕中心原点，Y轴向上）
+                    // X坐标：左边距 + 半宽 - Canvas半宽（转换为以屏幕中心为原点的坐标）
+                    float unityX = figmaX + width / 2f - (canvasWidth / 2f);
+                    // Y坐标：Canvas高度 - Figma距离顶部 - 半高 - Canvas半高（转换为以屏幕中心为原点的坐标）
+                    float unityY = canvasHeight - figmaY - height / 2f - (canvasHeight / 2f);
+
+                    simplified.unityPos = new float[]
+                    {
+                        (float)Math.Round(unityX, 2),
+                        (float)Math.Round(unityY, 2)
+                    };
+                }
+                else
                 {
-                    (float)Math.Round(absoluteBoundingBox["width"]?.ToObject<float>() ?? 0, 2),
-                    (float)Math.Round(absoluteBoundingBox["height"]?.ToObject<float>() ?? 0, 2)
+                    // 保持Figma原始坐标系（左上角原点）
+                    simplified.unityPos = new float[]
+                    {
+                        (float)Math.Round(figmaX, 2),
+                        (float)Math.Round(figmaY, 2)
+                    };
+                }
+
+                simplified.size = new float[]
+                {
+                    (float)Math.Round(width, 2),
+                    (float)Math.Round(height, 2)
                 };
             }
 
@@ -149,8 +216,11 @@ namespace UnityMcp.Tools
             // 提取布局信息
             ExtractLayoutInfo(figmaNode, simplified);
 
-            // 判断是否需要下载为图片
-            simplified.hasImage = IsDownloadableNode(figmaNode);
+            // 判断是否包含图片引用
+            simplified.hasImage = HasImageRef(figmaNode);
+
+            // 判断是否需要下载为图片（复杂效果）
+            simplified.hasEffect = IsDownloadableNode(figmaNode);
 
             // 递归处理子节点
             var children = figmaNode["children"];
@@ -160,7 +230,7 @@ namespace UnityMcp.Tools
                 foreach (var child in children) // 处理所有子节点
                 {
                     var nextDepth = maxDepth > 0 ? maxDepth - 1 : -1; // 如果maxDepth为-1则保持无限制
-                    var simplifiedChild = SimplifyNode(child, nextDepth);
+                    var simplifiedChild = SimplifyNodeInternal(child, nextDepth, convertToUGUI, cleanupRedundantData, simplified, figmaNode, canvasHeight, canvasWidth);
                     if (simplifiedChild != null)
                     {
                         simplified.children.Add(simplifiedChild);
@@ -172,32 +242,61 @@ namespace UnityMcp.Tools
                     simplified.children = null;
             }
 
-            // 转换为UGUI锚点信息
-            if (convertToUGUI)
-            {
-                ConvertNodeToUGUI(figmaNode, simplified);
-                // 转换完成后清理不必要的数据（如果不需要保留布局信息）
-                if (!cleanupRedundantData)
-                {
-                    CleanupAfterUGUIConversion(simplified);
-                }
-            }
+            // 布局信息已直接提取到absolutePos和size，无需复杂的UGUI转换
 
             return simplified;
         }
 
         /// <summary>
-        /// 转换单个节点为UGUI锚点信息
+        /// 将根节点坐标归零，并相应调整所有子节点坐标
         /// </summary>
-        /// <param name="figmaNode">原始Figma节点</param>
-        /// <param name="node">简化节点</param>
-        private static void ConvertNodeToUGUI(JToken figmaNode, SimplifiedNode node)
+        /// <param name="rootNode">根节点</param>
+        /// <param name="convertToUGUI">是否已转换为Unity坐标系</param>
+        /// <param name="canvasHeight">Canvas高度</param>
+        /// <param name="canvasWidth">Canvas宽度</param>
+        private static void NormalizeCoordinates(SimplifiedNode rootNode, bool convertToUGUI, float canvasHeight, float canvasWidth)
         {
-            if (figmaNode == null || node == null)
-                return;
+            if (rootNode?.unityPos == null) return;
 
-            // 直接转换当前节点
-            ConvertToUGUIAnchors(figmaNode, node, null);
+            if (convertToUGUI)
+            {
+                // Unity坐标系下，根节点坐标已经是正确的anchored_position
+                // 不需要归零，保持原始的Unity坐标
+                return;
+            }
+            else
+            {
+                // Figma坐标系下，将根节点坐标归零
+                float offsetX = rootNode.unityPos[0];
+                float offsetY = rootNode.unityPos[1];
+
+                // 递归调整所有节点的坐标
+                AdjustNodeCoordinates(rootNode, offsetX, offsetY);
+            }
+        }
+
+        /// <summary>
+        /// 递归调整节点及其子节点的坐标
+        /// </summary>
+        /// <param name="node">要调整的节点</param>
+        /// <param name="offsetX">X轴偏移量</param>
+        /// <param name="offsetY">Y轴偏移量</param>
+        private static void AdjustNodeCoordinates(SimplifiedNode node, float offsetX, float offsetY)
+        {
+            if (node?.unityPos == null) return;
+
+            // 调整当前节点坐标
+            node.unityPos[0] = (float)Math.Round(node.unityPos[0] - offsetX, 2);
+            node.unityPos[1] = (float)Math.Round(node.unityPos[1] - offsetY, 2);
+
+            // 递归调整子节点坐标
+            if (node.children != null)
+            {
+                foreach (var child in node.children)
+                {
+                    AdjustNodeCoordinates(child, offsetX, offsetY);
+                }
+            }
         }
 
         /// <summary>
@@ -228,14 +327,17 @@ namespace UnityMcp.Tools
         /// </summary>
         private static void ExtractStyleInfo(JToken node, SimplifiedNode simplified)
         {
-            // 背景色
+            // 提取完整的填充信息
             var fills = node["fills"];
             if (fills != null && fills.Type == JTokenType.Array && fills.Any())
             {
-                var firstFill = fills.First();
-                if (firstFill != null && firstFill.Type == JTokenType.Object)
+                simplified.fills = ExtractFillsInfo(fills);
+
+                // 保持向后兼容：设置第一个可见填充作为背景色
+                var firstVisibleFill = simplified.fills?.FirstOrDefault(f => f.visible);
+                if (firstVisibleFill?.color != null)
                 {
-                    simplified.backgroundColor = ExtractColor(firstFill);
+                    simplified.backgroundColor = firstVisibleFill.color;
                 }
             }
 
@@ -253,17 +355,109 @@ namespace UnityMcp.Tools
             simplified.cornerRadius = (float)Math.Round(node["cornerRadius"]?.ToObject<float>() ?? 0, 2);
 
             // 图片信息 - 检查是否包含图片引用
-            if (fills != null && fills.Type == JTokenType.Array)
+            if (simplified.fills != null)
             {
-                foreach (var fill in fills)
+                var imageFill = simplified.fills.FirstOrDefault(f => f.type == "IMAGE" && !string.IsNullOrEmpty(f.imageRef));
+                if (imageFill != null)
                 {
-                    if (fill != null && fill.Type == JTokenType.Object && fill["type"]?.ToString() == "IMAGE")
-                    {
-                        simplified.imageRef = fill["imageRef"]?.ToString();
+                    simplified.imageRef = imageFill.imageRef;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 提取完整的填充信息列表
+        /// </summary>
+        private static List<FillInfo> ExtractFillsInfo(JToken fills)
+        {
+            var fillInfos = new List<FillInfo>();
+
+            if (fills == null || fills.Type != JTokenType.Array)
+                return fillInfos;
+
+            foreach (var fill in fills)
+            {
+                if (fill == null || fill.Type != JTokenType.Object)
+                    continue;
+
+                var fillInfo = new FillInfo
+                {
+                    type = fill["type"]?.ToString(),
+                    visible = fill["visible"]?.ToObject<bool?>() ?? true,
+                    opacity = (float)Math.Round(fill["opacity"]?.ToObject<float>() ?? 1.0f, 2),
+                    blendMode = fill["blendMode"]?.ToString()
+                };
+
+                // 根据填充类型提取具体信息
+                switch (fillInfo.type)
+                {
+                    case "SOLID":
+                        fillInfo.color = ExtractColor(fill);
                         break;
+
+                    case "IMAGE":
+                        fillInfo.imageRef = fill["imageRef"]?.ToString();
+                        break;
+
+                    case "GRADIENT_LINEAR":
+                    case "GRADIENT_RADIAL":
+                    case "GRADIENT_ANGULAR":
+                        fillInfo.gradient = ExtractGradientInfo(fill);
+                        break;
+                }
+
+                fillInfos.Add(fillInfo);
+            }
+
+            return fillInfos;
+        }
+
+        /// <summary>
+        /// 提取渐变信息
+        /// </summary>
+        private static GradientInfo ExtractGradientInfo(JToken fill)
+        {
+            var gradientInfo = new GradientInfo
+            {
+                type = fill["type"]?.ToString()
+            };
+
+            // 提取渐变停止点
+            var gradientStops = fill["gradientStops"];
+            if (gradientStops != null && gradientStops.Type == JTokenType.Array)
+            {
+                gradientInfo.gradientStops = new List<GradientStop>();
+                foreach (var stop in gradientStops)
+                {
+                    if (stop != null && stop.Type == JTokenType.Object)
+                    {
+                        var gradientStop = new GradientStop
+                        {
+                            position = (float)Math.Round(stop["position"]?.ToObject<float>() ?? 0, 2),
+                            color = ExtractColor(stop)
+                        };
+                        gradientInfo.gradientStops.Add(gradientStop);
                     }
                 }
             }
+
+            // 提取渐变句柄位置
+            var gradientHandlePositions = fill["gradientHandlePositions"];
+            if (gradientHandlePositions != null && gradientHandlePositions.Type == JTokenType.Array)
+            {
+                var positions = new List<float>();
+                foreach (var position in gradientHandlePositions)
+                {
+                    if (position != null && position.Type == JTokenType.Array && position.Count() >= 2)
+                    {
+                        positions.Add((float)Math.Round(position[0]?.ToObject<float>() ?? 0, 2));
+                        positions.Add((float)Math.Round(position[1]?.ToObject<float>() ?? 0, 2));
+                    }
+                }
+                gradientInfo.gradientHandlePositions = positions.ToArray();
+            }
+
+            return gradientInfo;
         }
 
         /// <summary>
@@ -348,8 +542,11 @@ namespace UnityMcp.Tools
         /// </summary>
         /// <param name="figmaNodes">原始节点数据字典</param>
         /// <param name="maxDepth">最大深度，默认无限制</param>
+        /// <param name="convertToUGUI">是否转换为Unity坐标系，默认true</param>
+        /// <param name="canvasHeight">Canvas高度，用于Unity坐标系转换，默认720</param>
+        /// <param name="canvasWidth">Canvas宽度，用于Unity坐标系转换，默认1200</param>
         /// <returns>简化后的节点字典</returns>
-        public static Dictionary<string, SimplifiedNode> SimplifyNodes(JObject figmaNodes, int maxDepth = -1)
+        public static Dictionary<string, SimplifiedNode> SimplifyNodes(JObject figmaNodes, int maxDepth = -1, bool convertToUGUI = true, float canvasHeight = 720f, float canvasWidth = 1200f)
         {
             var result = new Dictionary<string, SimplifiedNode>();
 
@@ -360,7 +557,7 @@ namespace UnityMcp.Tools
                 var nodeData = kvp.Value["document"];
                 if (nodeData != null)
                 {
-                    var simplified = SimplifyNode(nodeData, maxDepth);
+                    var simplified = SimplifyNode(nodeData, maxDepth, convertToUGUI, true, canvasHeight, canvasWidth);
                     if (simplified != null)
                     {
                         // 提取并简化 components
@@ -413,16 +610,13 @@ namespace UnityMcp.Tools
             // 基本信息
             summary.Add($"节点: {simplifiedNode.name} ({simplifiedNode.type})");
 
-            // 优先显示UGUI信息，其次是原始尺寸
-            if (simplifiedNode.sizeDelta != null)
+            // 显示尺寸和绝对位置信息
+            if (simplifiedNode.size != null)
             {
-                summary.Add($"UGUI尺寸: {simplifiedNode.sizeDelta[0]:F0}x{simplifiedNode.sizeDelta[1]:F0}");
-                if (simplifiedNode.anchoredPos != null)
-                    summary.Add($"锚点位置: [{simplifiedNode.anchoredPos[0]:F1}, {simplifiedNode.anchoredPos[1]:F1}]");
-                if (simplifiedNode.anchorMin != null && simplifiedNode.anchorMax != null)
-                    summary.Add($"锚点: [{simplifiedNode.anchorMin[0]:F2},{simplifiedNode.anchorMin[1]:F2}] - [{simplifiedNode.anchorMax[0]:F2},{simplifiedNode.anchorMax[1]:F2}]");
+                summary.Add($"尺寸: {simplifiedNode.size[0]:F0}x{simplifiedNode.size[1]:F0}");
+                if (simplifiedNode.unityPos != null)
+                    summary.Add($"Unity位置: [{simplifiedNode.unityPos[0]:F0}, {simplifiedNode.unityPos[1]:F0}]");
             }
-            // 如果没有UGUI信息，就不显示尺寸了，因为我们已经移除了原始size字段
 
             if (!string.IsNullOrEmpty(simplifiedNode.text))
             {
@@ -433,14 +627,55 @@ namespace UnityMcp.Tools
                 }
             }
 
-            if (simplifiedNode.backgroundColor != null)
+            // 显示背景信息（包含完整fills信息）
+            if (simplifiedNode.fills != null && simplifiedNode.fills.Count > 0)
+            {
+                var visibleFills = simplifiedNode.fills.Where(f => f.visible).ToList();
+                if (visibleFills.Count > 0)
+                {
+                    var fillDescriptions = new List<string>();
+                    foreach (var fill in visibleFills)
+                    {
+                        switch (fill.type)
+                        {
+                            case "SOLID":
+                                if (fill.color?.hex != null)
+                                    fillDescriptions.Add($"纯色({fill.color.hex})");
+                                break;
+                            case "IMAGE":
+                                fillDescriptions.Add("图片填充");
+                                break;
+                            case "GRADIENT_LINEAR":
+                                fillDescriptions.Add("线性渐变");
+                                break;
+                            case "GRADIENT_RADIAL":
+                                fillDescriptions.Add("径向渐变");
+                                break;
+                            case "GRADIENT_ANGULAR":
+                                fillDescriptions.Add("角度渐变");
+                                break;
+                            default:
+                                fillDescriptions.Add(fill.type);
+                                break;
+                        }
+                    }
+                    if (fillDescriptions.Count > 0)
+                        summary.Add($"填充: {string.Join(", ", fillDescriptions)}");
+                }
+            }
+            else if (simplifiedNode.backgroundColor != null)
             {
                 summary.Add($"背景: {simplifiedNode.backgroundColor.hex}");
             }
 
             if (simplifiedNode.hasImage)
             {
-                summary.Add("包含图片");
+                summary.Add("包含图片引用");
+            }
+
+            if (simplifiedNode.hasEffect)
+            {
+                summary.Add("需要下载为图片");
             }
 
             if (simplifiedNode.layout != null)
@@ -490,8 +725,12 @@ namespace UnityMcp.Tools
                 ["id"] = simplifiedNode.id,
                 ["name"] = simplifiedNode.name,
                 ["type"] = simplifiedNode.type,
-                ["size"] = simplifiedNode.sizeDelta != null ? $"{simplifiedNode.sizeDelta[0]:F0}x{simplifiedNode.sizeDelta[1]:F0}" : "0x0"
+                ["size"] = simplifiedNode.size != null ? $"{simplifiedNode.size[0]:F0}x{simplifiedNode.size[1]:F0}" : "0x0"
             };
+
+            // 添加Unity位置信息
+            if (simplifiedNode.unityPos != null)
+                keyInfo["position"] = $"[{simplifiedNode.unityPos[0]:F0},{simplifiedNode.unityPos[1]:F0}]";
 
             // 只添加非空的关键信息
             if (!string.IsNullOrEmpty(simplifiedNode.text))
@@ -500,11 +739,27 @@ namespace UnityMcp.Tools
             if (simplifiedNode.textStyle?.fontSize > 0)
                 keyInfo["fontSize"] = simplifiedNode.textStyle.fontSize;
 
-            if (simplifiedNode.backgroundColor?.hex != null)
+            // 优先使用fills信息，回退到backgroundColor
+            if (simplifiedNode.fills != null && simplifiedNode.fills.Count > 0)
+            {
+                var visibleFills = simplifiedNode.fills.Where(f => f.visible).ToList();
+                if (visibleFills.Count > 0)
+                {
+                    keyInfo["fillsCount"] = visibleFills.Count;
+                    var firstFill = visibleFills.First();
+                    keyInfo["fillType"] = firstFill.type;
+                    if (firstFill.color?.hex != null)
+                        keyInfo["bgColor"] = firstFill.color.hex;
+                }
+            }
+            else if (simplifiedNode.backgroundColor?.hex != null)
                 keyInfo["bgColor"] = simplifiedNode.backgroundColor.hex;
 
             if (simplifiedNode.hasImage)
                 keyInfo["hasImage"] = true;
+
+            if (simplifiedNode.hasEffect)
+                keyInfo["hasEffect"] = true;
 
             if (simplifiedNode.layout?.layoutMode != null)
                 keyInfo["layout"] = simplifiedNode.layout.layoutMode;
@@ -519,8 +774,9 @@ namespace UnityMcp.Tools
                     name = child.name,
                     type = child.type,
                     text = child.text,
-                    hasImage = child.hasImage
-                }).Where(child => !string.IsNullOrEmpty(child.text) || child.hasImage).ToList();
+                    hasImage = child.hasImage,
+                    hasEffect = child.hasEffect
+                }).Where(child => !string.IsNullOrEmpty(child.text) || child.hasImage || child.hasEffect).ToList();
             }
 
             if (simplifiedNode.components?.Count > 0)
@@ -545,8 +801,8 @@ namespace UnityMcp.Tools
             parts.Add($"{simplifiedNode.name}({simplifiedNode.type})");
 
             // 尺寸（只在重要时显示）
-            if (simplifiedNode.sizeDelta != null && (simplifiedNode.sizeDelta[0] > 100 || simplifiedNode.sizeDelta[1] > 100))
-                parts.Add($"{simplifiedNode.sizeDelta[0]:F0}x{simplifiedNode.sizeDelta[1]:F0}");
+            if (simplifiedNode.size != null && (simplifiedNode.size[0] > 100 || simplifiedNode.size[1] > 100))
+                parts.Add($"{simplifiedNode.size[0]:F0}x{simplifiedNode.size[1]:F0}");
 
             // 文本内容
             if (!string.IsNullOrEmpty(simplifiedNode.text))
@@ -560,16 +816,45 @@ namespace UnityMcp.Tools
                     parts.Add($"{simplifiedNode.textStyle.fontSize:F0}px");
             }
 
-            // 颜色（只显示主要颜色）
-            if (simplifiedNode.backgroundColor?.hex != null &&
-                simplifiedNode.backgroundColor.hex != "#FFFFFF" &&
-                simplifiedNode.backgroundColor.hex != "#000000")
+            // 颜色（优先使用fills信息，只显示主要颜色）
+            string primaryColor = null;
+            if (simplifiedNode.fills != null && simplifiedNode.fills.Count > 0)
             {
-                parts.Add(simplifiedNode.backgroundColor.hex);
+                var firstVisibleFill = simplifiedNode.fills.FirstOrDefault(f => f.visible);
+                if (firstVisibleFill != null)
+                {
+                    switch (firstVisibleFill.type)
+                    {
+                        case "SOLID":
+                            primaryColor = firstVisibleFill.color?.hex;
+                            break;
+                        case "GRADIENT_LINEAR":
+                            parts.Add("🌈");
+                            break;
+                        case "GRADIENT_RADIAL":
+                            parts.Add("⭕");
+                            break;
+                        case "IMAGE":
+                            parts.Add("🖼️");
+                            break;
+                    }
+                }
+            }
+            else if (simplifiedNode.backgroundColor?.hex != null)
+            {
+                primaryColor = simplifiedNode.backgroundColor.hex;
+            }
+
+            if (primaryColor != null &&
+                primaryColor != "#FFFFFF" &&
+                primaryColor != "#000000")
+            {
+                parts.Add(primaryColor);
             }
 
             // 特殊标记
             if (simplifiedNode.hasImage) parts.Add("📷");
+            if (simplifiedNode.hasEffect) parts.Add("🎨");
             if (simplifiedNode.layout?.layoutMode == "HORIZONTAL") parts.Add("→");
             if (simplifiedNode.layout?.layoutMode == "VERTICAL") parts.Add("↓");
 
@@ -594,7 +879,7 @@ namespace UnityMcp.Tools
                 if (kvp.Value.children != null)
                 {
                     var importantChildren = kvp.Value.children
-                        .Where(child => !string.IsNullOrEmpty(child.text) || child.hasImage); // 显示所有重要子节点
+                        .Where(child => !string.IsNullOrEmpty(child.text) || child.hasImage || child.hasEffect); // 显示所有重要子节点
 
                     foreach (var child in importantChildren)
                     {
@@ -607,269 +892,53 @@ namespace UnityMcp.Tools
             return string.Join("\n", result);
         }
 
-        #region UGUI锚点转换
+        #region 布局信息处理
 
         /// <summary>
-        /// 将Figma节点转换为UGUI锚点信息
+        /// 获取节点的简化布局参数字符串（用于MCP调用）
         /// </summary>
-        /// <param name="figmaNode">原始Figma节点</param>
         /// <param name="node">简化节点</param>
-        /// <param name="parentNode">父节点</param>
-        public static void ConvertToUGUIAnchors(JToken figmaNode, SimplifiedNode node, SimplifiedNode parentNode = null)
+        /// <returns>布局参数</returns>
+        public static string GetLayoutParams(SimplifiedNode node)
         {
-            if (figmaNode == null || node == null)
-                return;
+            if (node?.size == null) return "";
+            var parts = new List<string>();
 
-            // 从Figma节点提取位置和尺寸
-            var absoluteBoundingBox = figmaNode["absoluteBoundingBox"];
-            if (absoluteBoundingBox == null)
-                return;
+            if (node.unityPos != null)
+                parts.Add($"\"anchored_pos\": [{node.unityPos[0]:F2}, {node.unityPos[1]:F2}]");
 
-            float nodeWidth = (float)Math.Round(absoluteBoundingBox["width"]?.ToObject<float>() ?? 0, 2);
-            float nodeHeight = (float)Math.Round(absoluteBoundingBox["height"]?.ToObject<float>() ?? 0, 2);
-            float nodeX = (float)Math.Round(absoluteBoundingBox["x"]?.ToObject<float>() ?? 0, 2);
-            float nodeY = (float)Math.Round(absoluteBoundingBox["y"]?.ToObject<float>() ?? 0, 2);
+            if (node.size != null)
+                parts.Add($"\"size_delta\": [{node.size[0]:F2}, {node.size[1]:F2}]");
 
-            // 父节点信息（从UGUI信息推断，如果没有则使用当前节点作为默认）
-            float parentWidth = nodeWidth;
-            float parentHeight = nodeHeight;
-            float parentX = 0;
-            float parentY = 0;
-
-            if (parentNode?.sizeDelta != null)
-            {
-                parentWidth = parentNode.sizeDelta[0];
-                parentHeight = parentNode.sizeDelta[1];
-                // 父节点的世界位置需要从其锚点信息计算，这里简化处理
-                parentX = parentNode.anchoredPos?[0] ?? 0;
-                parentY = parentNode.anchoredPos?[1] ?? 0;
-            }
-
-            // 计算相对于父节点的位置
-            float relativeX = nodeX - parentX;
-            float relativeY = nodeY - parentY;
-
-            // 设置sizeDelta（实际尺寸）
-            node.sizeDelta = new float[] { nodeWidth, nodeHeight };
-
-            // 直接从Figma节点提取约束信息
-            var constraintsToken = figmaNode["constraints"];
-            ConstraintInfo constraints = null;
-            if (constraintsToken != null && constraintsToken.Type == JTokenType.Object)
-            {
-                constraints = new ConstraintInfo
-                {
-                    horizontal = constraintsToken["horizontal"]?.ToString(),
-                    vertical = constraintsToken["vertical"]?.ToString()
-                };
-            }
-
-            if (constraints != null)
-            {
-                CalculateAnchorsFromConstraints(constraints, relativeX, relativeY, nodeWidth, nodeHeight,
-                    parentWidth, parentHeight, node);
-            }
-            else
-            {
-                // 默认锚点计算（基于位置推断）
-                CalculateDefaultAnchors(relativeX, relativeY, nodeWidth, nodeHeight,
-                    parentWidth, parentHeight, node);
-            }
-
-            // 设置默认轴心点
-            node.pivot = new float[] { 0.5f, 0.5f };
+            return "{" + string.Join(", ", parts) + "}";
         }
 
         /// <summary>
-        /// 根据约束信息计算锚点
+        /// 生成MCP布局调用代码（Unity坐标系）
         /// </summary>
-        private static void CalculateAnchorsFromConstraints(ConstraintInfo constraints,
-            float relativeX, float relativeY, float nodeWidth, float nodeHeight,
-            float parentWidth, float parentHeight, SimplifiedNode node)
+        /// <param name="node">简化节点</param>
+        /// <param name="parentPath">父节点路径</param>
+        /// <returns>MCP调用代码</returns>
+        public static string GenerateMCPLayoutCall(SimplifiedNode node, string parentPath = "")
         {
-            // 水平锚点计算
-            switch (constraints.horizontal)
-            {
-                case "LEFT":
-                    node.anchorMin = new float[] { 0, node.anchorMin?[1] ?? 0.5f };
-                    node.anchorMax = new float[] { 0, node.anchorMax?[1] ?? 0.5f };
-                    node.anchoredPos = new float[] { relativeX + nodeWidth * 0.5f, node.anchoredPos?[1] ?? 0 };
-                    break;
+            if (node?.size == null) return "";
 
-                case "RIGHT":
-                    node.anchorMin = new float[] { 1, node.anchorMin?[1] ?? 0.5f };
-                    node.anchorMax = new float[] { 1, node.anchorMax?[1] ?? 0.5f };
-                    node.anchoredPos = new float[] { relativeX + nodeWidth * 0.5f - parentWidth, node.anchoredPos?[1] ?? 0 };
-                    node.sizeDelta = new float[] { nodeWidth, node.sizeDelta?[1] ?? nodeHeight };
-                    break;
+            string nodePath = string.IsNullOrEmpty(parentPath) ? node.name : $"{parentPath}/{node.name}";
 
-                case "CENTER":
-                    node.anchorMin = new float[] { 0.5f, node.anchorMin?[1] ?? 0.5f };
-                    node.anchorMax = new float[] { 0.5f, node.anchorMax?[1] ?? 0.5f };
-                    node.anchoredPos = new float[] { relativeX + nodeWidth * 0.5f - parentWidth * 0.5f, node.anchoredPos?[1] ?? 0 };
-                    node.sizeDelta = new float[] { nodeWidth, node.sizeDelta?[1] ?? nodeHeight };
-                    break;
+            // 生成Unity UGUI布局调用
+            var parts = new List<string>();
+            parts.Add($"path=\"{nodePath}\"");
+            parts.Add("action=\"layout_anchor\"");
+            parts.Add("anchor_min=[0, 0]");
+            parts.Add("anchor_max=[0, 0]");
 
-                case "LEFT_RIGHT":
-                case "SCALE":
-                    node.anchorMin = new float[] { 0, node.anchorMin?[1] ?? 0.5f };
-                    node.anchorMax = new float[] { 1, node.anchorMax?[1] ?? 0.5f };
-                    // offsetMin和offsetMax已移除
-                    node.sizeDelta = new float[] { 0, node.sizeDelta?[1] ?? nodeHeight };
-                    break;
+            if (node.unityPos != null)
+                parts.Add($"anchored_pos=[{node.unityPos[0]:F2}, {node.unityPos[1]:F2}]");
 
-                default:
-                    // 默认居中
-                    node.anchorMin = new float[] { 0.5f, node.anchorMin?[1] ?? 0.5f };
-                    node.anchorMax = new float[] { 0.5f, node.anchorMax?[1] ?? 0.5f };
-                    node.anchoredPos = new float[] { relativeX + nodeWidth * 0.5f - parentWidth * 0.5f, node.anchoredPos?[1] ?? 0 };
-                    node.sizeDelta = new float[] { nodeWidth, node.sizeDelta?[1] ?? nodeHeight };
-                    break;
-            }
+            if (node.size != null)
+                parts.Add($"size_delta=[{node.size[0]:F2}, {node.size[1]:F2}]");
 
-            // 垂直锚点计算（Unity坐标系Y轴向上，Figma向下）
-            switch (constraints.vertical)
-            {
-                case "TOP":
-                    node.anchorMin = new float[] { node.anchorMin?[0] ?? 0.5f, 1 };
-                    node.anchorMax = new float[] { node.anchorMax?[0] ?? 0.5f, 1 };
-                    node.anchoredPos = new float[] { node.anchoredPos?[0] ?? 0, -relativeY - nodeHeight * 0.5f };
-                    node.sizeDelta = new float[] { node.sizeDelta?[0] ?? nodeWidth, nodeHeight };
-                    break;
-
-                case "BOTTOM":
-                    node.anchorMin = new float[] { node.anchorMin?[0] ?? 0.5f, 0 };
-                    node.anchorMax = new float[] { node.anchorMax?[0] ?? 0.5f, 0 };
-                    node.anchoredPos = new float[] { node.anchoredPos?[0] ?? 0, -relativeY - nodeHeight * 0.5f + parentHeight };
-                    node.sizeDelta = new float[] { node.sizeDelta?[0] ?? nodeWidth, nodeHeight };
-                    break;
-
-                case "CENTER":
-                    node.anchorMin = new float[] { node.anchorMin?[0] ?? 0.5f, 0.5f };
-                    node.anchorMax = new float[] { node.anchorMax?[0] ?? 0.5f, 0.5f };
-                    node.anchoredPos = new float[] { node.anchoredPos?[0] ?? 0, -relativeY - nodeHeight * 0.5f + parentHeight * 0.5f };
-                    node.sizeDelta = new float[] { node.sizeDelta?[0] ?? nodeWidth, nodeHeight };
-                    break;
-
-                case "TOP_BOTTOM":
-                case "SCALE":
-                    node.anchorMin = new float[] { node.anchorMin?[0] ?? 0.5f, 0 };
-                    node.anchorMax = new float[] { node.anchorMax?[0] ?? 0.5f, 1 };
-                    // offsetMin和offsetMax已移除
-                    node.sizeDelta = new float[] { node.sizeDelta?[0] ?? nodeWidth, 0 };
-                    break;
-
-                default:
-                    // 默认居中
-                    node.anchorMin = new float[] { node.anchorMin?[0] ?? 0.5f, 0.5f };
-                    node.anchorMax = new float[] { node.anchorMax?[0] ?? 0.5f, 0.5f };
-                    node.anchoredPos = new float[] { node.anchoredPos?[0] ?? 0, -relativeY - nodeHeight * 0.5f + parentHeight * 0.5f };
-                    node.sizeDelta = new float[] { node.sizeDelta?[0] ?? nodeWidth, nodeHeight };
-                    break;
-            }
-
-            // 设置默认轴心点
-            node.pivot = new float[] { 0.5f, 0.5f };
-
-            // 偏移值计算已移除，因为offsetMin和offsetMax是冗余的
-        }
-
-        /// <summary>
-        /// 计算默认锚点（当没有约束信息时）
-        /// </summary>
-        private static void CalculateDefaultAnchors(float relativeX, float relativeY, float nodeWidth, float nodeHeight,
-            float parentWidth, float parentHeight, SimplifiedNode node)
-        {
-            // 基于位置推断锚点类型
-            float centerX = relativeX + nodeWidth * 0.5f;
-            float centerY = relativeY + nodeHeight * 0.5f;
-
-            // 计算相对位置比例
-            float xRatio = centerX / parentWidth;
-            float yRatio = centerY / parentHeight;
-
-            // 判断水平锚点
-            if (xRatio < 0.25f)
-            {
-                // 靠左
-                node.anchorMin = new float[] { 0, 0.5f };
-                node.anchorMax = new float[] { 0, 0.5f };
-                node.anchoredPos = new float[] { centerX, 0 };
-            }
-            else if (xRatio > 0.75f)
-            {
-                // 靠右
-                node.anchorMin = new float[] { 1, 0.5f };
-                node.anchorMax = new float[] { 1, 0.5f };
-                node.anchoredPos = new float[] { centerX - parentWidth, 0 };
-            }
-            else
-            {
-                // 居中
-                node.anchorMin = new float[] { 0.5f, 0.5f };
-                node.anchorMax = new float[] { 0.5f, 0.5f };
-                node.anchoredPos = new float[] { centerX - parentWidth * 0.5f, 0 };
-            }
-
-            // 判断垂直锚点（转换坐标系）
-            if (yRatio < 0.25f)
-            {
-                // 靠上（Unity坐标系）
-                node.anchorMin[1] = 1;
-                node.anchorMax[1] = 1;
-                node.anchoredPos[1] = -centerY;
-            }
-            else if (yRatio > 0.75f)
-            {
-                // 靠下（Unity坐标系）
-                node.anchorMin[1] = 0;
-                node.anchorMax[1] = 0;
-                node.anchoredPos[1] = parentHeight - centerY;
-            }
-            else
-            {
-                // 居中
-                node.anchorMin[1] = 0.5f;
-                node.anchorMax[1] = 0.5f;
-                node.anchoredPos[1] = parentHeight * 0.5f - centerY;
-            }
-
-            node.sizeDelta = new float[] { nodeWidth, nodeHeight };
-            node.pivot = new float[] { 0.5f, 0.5f };
-
-            // CalculateOffsets方法已移除
-        }
-
-
-        /// <summary>
-        /// 批量转换节点为UGUI锚点信息
-        /// </summary>
-        /// <param name="rootNode">根节点</param>
-        public static void ConvertAllToUGUI(SimplifiedNode rootNode)
-        {
-            if (rootNode == null) return;
-
-            // 为根节点设置默认UGUI信息
-            if (rootNode.sizeDelta == null)
-            {
-                rootNode.anchorMin = new float[] { 0.5f, 0.5f };
-                rootNode.anchorMax = new float[] { 0.5f, 0.5f };
-                rootNode.anchoredPos = new float[] { 0, 0 };
-                rootNode.sizeDelta = new float[] { 100, 100 };
-                rootNode.pivot = new float[] { 0.5f, 0.5f };
-            }
-
-            // 递归处理子节点
-            ConvertChildrenToUGUI(rootNode);
-        }
-
-        /// <summary>
-        /// 递归转换子节点（这个方法已经不再使用，因为转换逻辑已经整合到SimplifyNode中）
-        /// </summary>
-        private static void ConvertChildrenToUGUI(SimplifiedNode parentNode)
-        {
-            // 这个方法保留是为了向后兼容，但实际上UGUI转换已经在SimplifyNode过程中完成
-            // 不需要额外的递归处理
+            return $"ugui_layout({string.Join(", ", parts)})";
         }
 
         #endregion
@@ -884,9 +953,7 @@ namespace UnityMcp.Tools
             if (node == null) return false;
 
             string nodeType = node["type"]?.ToString();
-            bool visible = node["visible"]?.ToObject<bool?>() ?? true;
-
-            if (!visible) return false;
+            // 不需要检查visible，因为不可见的节点已经在外层被过滤掉了
 
             // 1. 包含图片引用的节点
             if (HasImageRef(node))
@@ -1045,74 +1112,10 @@ namespace UnityMcp.Tools
             return false;
         }
 
-        /// <summary>
-        /// 转换为UGUI后清理不必要的数据
-        /// </summary>
-        /// <param name="rootNode">根节点</param>
-        private static void CleanupAfterUGUIConversion(SimplifiedNode rootNode)
-        {
-            if (rootNode == null) return;
-
-            // 由于我们已经移除了position、size和transform字段，
-            // 这里主要是为了保持方法的完整性，实际上不需要做太多清理
-
-            // 递归处理子节点
-            if (rootNode.children != null)
-            {
-                foreach (var child in rootNode.children)
-                {
-                    CleanupAfterUGUIConversion(child);
-                }
-            }
-        }
 
         #endregion
 
         #region 使用示例和工具方法
-
-        /// <summary>
-        /// 获取节点的UGUI布局参数字符串（用于MCP调用）
-        /// </summary>
-        /// <param name="node">简化节点</param>
-        /// <returns>UGUI布局参数</returns>
-        public static string GetUGUILayoutParams(SimplifiedNode node)
-        {
-            if (node?.sizeDelta == null) return "";
-            var parts = new List<string>();
-
-            if (node.anchoredPos != null)
-                parts.Add($"\"anchored_pos\": [{node.anchoredPos[0]:F2}, {node.anchoredPos[1]:F2}]");
-
-            if (node.sizeDelta != null)
-                parts.Add($"\"size_delta\": [{node.sizeDelta[0]:F2}, {node.sizeDelta[1]:F2}]");
-
-            if (node.anchorMin != null)
-                parts.Add($"\"anchor_min\": [{node.anchorMin[0]:F2}, {node.anchorMin[1]:F2}]");
-
-            if (node.anchorMax != null)
-                parts.Add($"\"anchor_max\": [{node.anchorMax[0]:F2}, {node.anchorMax[1]:F2}]");
-
-            if (node.pivot != null)
-                parts.Add($"\"pivot\": [{node.pivot[0]:F2}, {node.pivot[1]:F2}]");
-
-            return "{" + string.Join(", ", parts) + "}";
-        }
-
-        /// <summary>
-        /// 生成MCP布局调用代码
-        /// </summary>
-        /// <param name="node">简化节点</param>
-        /// <param name="parentPath">父节点路径</param>
-        /// <returns>MCP调用代码</returns>
-        public static string GenerateMCPLayoutCall(SimplifiedNode node, string parentPath = "")
-        {
-            if (node?.sizeDelta == null) return "";
-
-            string nodePath = string.IsNullOrEmpty(parentPath) ? node.name : $"{parentPath}/{node.name}";
-            string layoutParams = GetUGUILayoutParams(node);
-
-            return $"ugui_layout(path=\"{nodePath}\", action=\"do_layout\", {layoutParams.Trim('{', '}')})";
-        }
 
         /// <summary>
         /// 批量生成所有节点的MCP布局调用代码
@@ -1147,7 +1150,7 @@ namespace UnityMcp.Tools
         }
 
         /// <summary>
-        /// 生成完整的MCP批量调用代码
+        /// 生成完整的MCP批量调用代码（Unity坐标系）
         /// </summary>
         /// <param name="rootNode">根节点</param>
         /// <returns>完整的functions_call代码</returns>
@@ -1156,9 +1159,70 @@ namespace UnityMcp.Tools
             var calls = GenerateAllMCPLayoutCalls(rootNode);
             if (calls.Count == 0) return "";
 
-            var funcCalls = calls.Select(call => $"{{\"func\": \"ugui_layout\", \"args\": {{{call.Substring(call.IndexOf('(') + 1).TrimEnd(')')}}}}}");
+            var funcCalls = calls.Select(call =>
+            {
+                // 提取参数部分
+                var argsStart = call.IndexOf('(') + 1;
+                var argsEnd = call.LastIndexOf(')');
+                var args = call.Substring(argsStart, argsEnd - argsStart);
+
+                return $"{{\"func\": \"ugui_layout\", \"args\": {{{args}}}}}";
+            });
 
             return $"functions_call(funcs=[{string.Join(", ", funcCalls)}])";
+        }
+
+        #endregion
+
+        #region 调试和测试方法
+
+        /// <summary>
+        /// 生成fills信息的详细描述（用于调试）
+        /// </summary>
+        /// <param name="simplifiedNode">简化节点</param>
+        /// <returns>fills详细信息</returns>
+        public static string GetFillsDebugInfo(SimplifiedNode simplifiedNode)
+        {
+            if (simplifiedNode?.fills == null || simplifiedNode.fills.Count == 0)
+                return "无填充信息";
+
+            var info = new List<string>();
+            for (int i = 0; i < simplifiedNode.fills.Count; i++)
+            {
+                var fill = simplifiedNode.fills[i];
+                var fillDesc = $"Fill[{i}]: {fill.type}";
+
+                if (!fill.visible)
+                    fillDesc += " (隐藏)";
+
+                if (fill.opacity < 1.0f)
+                    fillDesc += $" 透明度:{fill.opacity:P0}";
+
+                switch (fill.type)
+                {
+                    case "SOLID":
+                        if (fill.color != null)
+                            fillDesc += $" 颜色:{fill.color.hex}";
+                        break;
+                    case "IMAGE":
+                        if (!string.IsNullOrEmpty(fill.imageRef))
+                            fillDesc += $" 图片:{fill.imageRef}";
+                        break;
+                    case "GRADIENT_LINEAR":
+                    case "GRADIENT_RADIAL":
+                    case "GRADIENT_ANGULAR":
+                        if (fill.gradient?.gradientStops != null)
+                            fillDesc += $" 渐变停止点:{fill.gradient.gradientStops.Count}个";
+                        break;
+                }
+
+                if (!string.IsNullOrEmpty(fill.blendMode) && fill.blendMode != "NORMAL")
+                    fillDesc += $" 混合:{fill.blendMode}";
+
+                info.Add(fillDesc);
+            }
+
+            return string.Join("\n", info);
         }
 
         #endregion

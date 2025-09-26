@@ -21,11 +21,11 @@ namespace UnityMCP.Tools
     /// 支持的操作：
     /// - download_image: 智能下载单张图片
     /// - fetch_nodes: 拉取节点数据并保存为JSON文件
-    /// - download_images: 批量智能下载图片（支持从本地JSON文件读取）
+    /// - download_images: 按需下载指定节点图片（必须提供node_id参数）
     /// 
     /// 本地JSON文件支持：
-    /// download_images操作现在支持通过local_json_path参数从FetchNodes保存的JSON文件中读取节点数据，
-    /// 无需重新访问Figma API即可进行批量图片下载。
+    /// download_images操作支持通过local_json_path参数从FetchNodes保存的JSON文件中读取节点数据，
+    /// 无需重新访问Figma API即可进行指定节点的图片下载。
     /// 
     /// 索引功能：
     /// 图片下载完成后自动生成node ID到文件名的索引映射，包含：
@@ -47,9 +47,9 @@ namespace UnityMCP.Tools
         {
             return new[]
             {
-                new MethodKey("action", "操作类型: download_image(智能下载单张图片), fetch_nodes(拉取节点数据), download_images(批量智能下载图片，支持从本地JSON文件读取)", false),
+                new MethodKey("action", "操作类型: download_image(智能下载单张图片), fetch_nodes(拉取节点数据), download_images(按需下载指定节点图片)", false),
                 new MethodKey("file_key", "Figma文件Key", true),
-                new MethodKey("node_id", "节点ID，多个用逗号分隔（可选，不提供时智能扫描整个页面）", true),
+                new MethodKey("node_id", "节点ID，多个用逗号分隔（download_images操作时为必需参数）", true),
                 new MethodKey("save_path", "保存路径，默认为由ProjectSettings → MCP → Figma中的img_save_to配置", true),
                 new MethodKey("image_format", "图片格式: png, jpg, svg, pdf，默认为png", true),
                 new MethodKey("image_scale", "图片缩放比例，默认为1", true),
@@ -155,11 +155,11 @@ namespace UnityMCP.Tools
         }
 
         /// <summary>
-        /// 批量智能下载图片功能 - 自动识别并下载所有需要的图片
+        /// 批量下载指定节点图片功能 - 按需下载指定的节点图片
         /// 
         /// 使用方式：
-        /// 1. 在线下载：提供file_key和可选的node_id，直接从Figma API获取数据并下载
-        /// 2. 本地JSON下载：提供file_key和local_json_path，从之前FetchNodes保存的JSON文件中读取节点数据
+        /// 1. 在线下载：提供file_key和必需的node_id（多个用逗号分隔），直接从Figma API下载指定节点
+        /// 2. 本地JSON下载：提供file_key、node_id和local_json_path，从本地JSON文件中读取指定节点数据并下载
         /// 
         /// 本地JSON文件格式支持：
         /// - FetchNodes保存的完整JSON格式（包含nodes字段）
@@ -169,53 +169,67 @@ namespace UnityMCP.Tools
         private object DownloadNodeImages(StateTreeContext ctx)
         {
             string fileKey = ctx["file_key"]?.ToString();
-            string rootNodeId = ctx["node_id"]?.ToString(); // 可选参数
+            string nodeIds = ctx["node_id"]?.ToString(); // 必需参数
             string localJsonPath = ctx["local_json_path"]?.ToString(); // 本地JSON文件路径
             string token = GetFigmaToken();
             string savePath = ctx["save_path"]?.ToString() ?? GetFigmaAssetsPath();
             string imageFormat = ctx["image_format"]?.ToString() ?? "png";
             float imageScale = float.Parse(ctx["image_scale"]?.ToString() ?? "2");
 
-            // 如果提供了本地JSON文件路径，则使用本地数据
-            if (!string.IsNullOrEmpty(localJsonPath))
-            {
-                if (string.IsNullOrEmpty(fileKey))
-                    return Response.Error("使用本地JSON文件时，file_key仍然是必需的参数（用于下载图片）");
-
-                if (string.IsNullOrEmpty(token))
-                    return Response.Error("Figma访问令牌未配置，请在Project Settings → MCP → Figma中配置");
-
-                Debug.Log($"[FigmaManage] 启动本地JSON文件批量智能下载: {localJsonPath}");
-                return ctx.AsyncReturn(SmartDownloadFromLocalJsonCoroutine(fileKey, localJsonPath, token, savePath, imageFormat, imageScale));
-            }
-
-            // 原有的在线下载逻辑
             if (string.IsNullOrEmpty(fileKey))
                 return Response.Error("file_key是必需的参数");
+
+            if (string.IsNullOrEmpty(nodeIds))
+                return Response.Error("node_id是必需的参数，多个节点ID用逗号分隔");
 
             if (string.IsNullOrEmpty(token))
                 return Response.Error("Figma访问令牌未配置，请在Project Settings → MCP → Figma中配置");
 
+            // 解析节点ID列表
+            var nodeIdList = nodeIds.Split(',').Select(id => id.Trim()).Where(id => !string.IsNullOrEmpty(id)).ToList();
+            if (nodeIdList.Count == 0)
+                return Response.Error("未提供有效的节点ID");
+
             try
             {
-                if (!string.IsNullOrEmpty(rootNodeId))
+                // 如果提供了本地JSON文件路径，则使用本地数据
+                if (!string.IsNullOrEmpty(localJsonPath))
                 {
-                    Debug.Log($"[FigmaManage] 启动指定节点批量智能下载: 根节点 {rootNodeId}");
+                    Debug.Log($"[FigmaManage] 启动本地JSON文件指定节点下载: {localJsonPath}, 节点: {string.Join(", ", nodeIdList)}");
+                    return ctx.AsyncReturn(DownloadSpecificNodesFromLocalJsonCoroutine(fileKey, nodeIdList, localJsonPath, token, savePath, imageFormat, imageScale));
                 }
                 else
                 {
-                    Debug.Log($"[FigmaManage] 启动全文件批量智能下载: 文件 {fileKey}");
+                    Debug.Log($"[FigmaManage] 启动指定节点下载: {string.Join(", ", nodeIdList)}");
+                    return ctx.AsyncReturn(DownloadImagesCoroutine(fileKey, nodeIdList, token, savePath, imageFormat, imageScale, "SpecifiedNodes"));
                 }
-                return ctx.AsyncReturn(SmartDownloadCoroutine(fileKey, rootNodeId, token, savePath, imageFormat, imageScale));
             }
             catch (Exception ex)
             {
-                return Response.Error($"批量智能下载失败: {ex.Message}");
+                return Response.Error($"指定节点下载失败: {ex.Message}");
             }
         }
 
 
         #region 协程实现
+
+        /// <summary>
+        /// 从本地JSON文件下载指定节点协程 - 从本地JSON文件中读取指定节点数据并下载图片
+        /// </summary>
+        private IEnumerator DownloadSpecificNodesFromLocalJsonCoroutine(string fileKey, List<string> nodeIds, string localJsonPath, string token, string savePath, string imageFormat, float imageScale)
+        {
+            // 检查本地JSON文件是否存在
+            if (!File.Exists(localJsonPath))
+            {
+                yield return Response.Error($"本地JSON文件不存在: {localJsonPath}");
+                yield break;
+            }
+
+            Debug.Log($"[FigmaManage] 从本地JSON文件下载指定节点: {string.Join(", ", nodeIds)}");
+
+            // 直接使用指定的节点ID列表进行下载，不需要扫描
+            yield return DownloadImagesCoroutine(fileKey, nodeIds, token, savePath, imageFormat, imageScale, "LocalJsonSpecificNodes");
+        }
 
         /// <summary>
         /// 从本地JSON文件智能下载协程 - 从FetchNodes保存的JSON文件中读取节点数据并下载图片
@@ -798,9 +812,10 @@ namespace UnityMCP.Tools
 
                         // 保存原始数据和简化数据
                         string assetsPath = GetFigmaAssetsPath();
-                        string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                        string originalPath = Path.Combine(assetsPath, $"original_nodes_{fileKey}_{timestamp}.json");
-                        string simplifiedPath = Path.Combine(assetsPath, $"simplified_nodes_{fileKey}_{timestamp}.json");
+                        // 用 nodeIds 拼接并将不能作路径的特殊符号转换为下划线
+                        string nodeIdsJoined = string.Join("_", nodeIds).Replace(Path.DirectorySeparatorChar, '_').Replace(Path.AltDirectorySeparatorChar, '_').Replace(":", "_").Replace("*", "_").Replace("?", "_").Replace("\"", "_").Replace("<", "_").Replace(">", "_").Replace("|", "_");
+                        string originalPath = Path.Combine(assetsPath, $"original_nodes_{fileKey}_{nodeIdsJoined}.json");
+                        string simplifiedPath = Path.Combine(assetsPath, $"simplified_nodes_{fileKey}_{nodeIdsJoined}.json");
                         Directory.CreateDirectory(Path.GetDirectoryName(simplifiedPath));
                         File.WriteAllText(originalPath, JsonConvert.SerializeObject(nodes, Formatting.None));
                         string simplifiedJson = FigmaDataSimplifier.ToCompactJson(simplifiedNodes.Values.FirstOrDefault(), false);

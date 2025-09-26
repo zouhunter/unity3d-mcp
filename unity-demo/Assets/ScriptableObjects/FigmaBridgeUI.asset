@@ -1,0 +1,95 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5e1012b4cffbb64cb70209e789e9b08, type: 3}
+  m_Name: FigmaBridgeUI
+  m_EditorClassIdentifier: 
+  link_url: https://www.figma.com/design/nNqnxEyfSWdhPpiRLijSCh/Figma-Unity-Bridge-Example--Community-?node-id=2-2&t=XryePhFx53IPmFpD-4
+  optimize_rule_path: 
+  img_save_to: Assets/Pics/FigmaBridge
+  prototype_pic: 
+  image_scale: 1
+  descriptions: "- \u8FD8\u539F\u6309\u626D\n- \u7981\u6B62\u751F\u6210\u4EE3\u7801\u5230\u5DE5\u7A0B"
+  modify_records:
+  - "[2025-09-26 13:22:01] \u57FA\u4E8EMCP\u5DE5\u5177\u6210\u529F\u6784\u5EFAFigmaBridge
+    UI\u754C\u9762\uFF0C\u5305\u542BStartScreen\u6839\u5BB9\u5668\u3001TopBar\u6807\u9898\u680F\u3001Dock\u5E95\u90E8\u6309\u94AE\u680F\u3001SpeechBubble\u5BF9\u8BDD\u6846\u548CAvatarRender\u5934\u50CF\u533A\u57DF\u3002\u6240\u6709\u7EC4\u4EF6\u6309\u7167Figma\u8BBE\u8BA1\u89C4\u8303\u8FDB\u884C\u4E86\u7CBE\u786E\u5B9A\u4F4D\u548C\u5E03\u5C40\u8BBE\u7F6E\uFF0C\u4F7F\u7528TextMeshPro\u7EC4\u4EF6\u652F\u6301\u9AD8\u8D28\u91CF\u6587\u672C\u6E32\u67D3\u3002"
+  - "[2025-09-26 13:34:21] \u5B8C\u6210UI\u5E03\u5C40\u8C03\u6574\u548C\u56FE\u7247\u8D44\u6E90\u52A0\u8F7D\u3002\u4FEE\u6539\u4E86DownloadNodeImages\u65B9\u6CD5\uFF0C\u73B0\u5728\u5FC5\u987B\u4F20\u9012node_id\u53C2\u6570\u8FDB\u884C\u6309\u9700\u4E0B\u8F7D\u3002\u6210\u529F\u4E0B\u8F7D\u4E86TopBar\u3001Dock\u3001SpeechBubble\u3001AvatarRender\u7B494\u4E2A\u8282\u70B9\u7684\u56FE\u7247\u8D44\u6E90\uFF0C\u5E76\u8BBE\u7F6E\u4E86\u7EC4\u4EF6\u7684\u989C\u8272\u548C\u6587\u672C\u6837\u5F0F\u3002\u6240\u6709UI\u7EC4\u4EF6\u73B0\u5728\u5177\u6709\u6B63\u786E\u7684\u5E03\u5C40\u3001\u989C\u8272\u548C\u5185\u5BB9\u663E\u793A\u3002"
+  - '[2025-09-26 14:02:30] UI modification'
+  - '[2025-09-26 14:03:50] UI modification'
+  - '[2025-09-26 17:50:58] UI modification'
+  node_names:
+  - id: 2:2
+    name: StartScreen
+    originName: StartScreen
+  - id: 3:1279
+    name: TopBar
+    originName: TopBar
+  - id: I3:1279;2:7
+    name: FigmaUnityBridgeTitle
+    originName: Figma Unity Bridge
+  - id: 3:1233
+    name: Dock
+    originName: Dock
+  - id: 3:1260
+    name: SpeechBubble
+    originName: SpeechBubble
+  - id: I3:1260;3:1258
+    name: TypewriterText
+    originName: TypewriterText
+  - id: 3:1176
+    name: AvatarRender
+    originName: AvatarRender
+  - id: I3:1233;2:20
+    name: ComponentsButton
+    originName: DefaultButton
+  - id: I3:1233;2:25
+    name: ShapesButton
+    originName: DefaultButton
+  - id: I3:1233;2:29
+    name: FontsButton
+    originName: DefaultButton
+  - id: I3:1233;2:33
+    name: PrototypeButton
+    originName: DefaultButton
+  - id: I3:1233;2:37
+    name: CodeButton
+    originName: DefaultButton
+  - id: I3:1279;3:1271
+    name: FigmaLogo
+    originName: 
+  node_sprites:
+  - id: I3:1279;3:1271
+    fileName: Assets/Pics/FigmaBridge/FigmaLogo_6325d155.png
+    sprite: {fileID: 21300000, guid: 5a4ac7d0992259241954398d792f6fc4, type: 3}
+  - id: I3:1233;2:20
+    fileName: Assets/Pics/FigmaBridge/DefaultButton_8d0059b8.png
+    sprite: {fileID: 21300000, guid: 8a270942c2b3aa34982d5609acc2eb0b, type: 3}
+  - id: I3:1233;2:25
+    fileName: Assets/Pics/FigmaBridge/DefaultButton_966f4529.png
+    sprite: {fileID: 21300000, guid: 8cab63814b79d5549a022cc70a6be1f7, type: 3}
+  - id: I3:1233;2:29
+    fileName: Assets/Pics/FigmaBridge/DefaultButton_f755aa07.png
+    sprite: {fileID: 21300000, guid: ab2a79fb219735f4bb6179d235cc42f1, type: 3}
+  - id: I3:1233;2:33
+    fileName: Assets/Pics/FigmaBridge/DefaultButton_f09e7c78.png
+    sprite: {fileID: 21300000, guid: f3f7ff64e1b286e46a2983e94671ccf1, type: 3}
+  - id: I3:1233;2:37
+    fileName: Assets/Pics/FigmaBridge/DefaultButton_fa52a588.png
+    sprite: {fileID: 21300000, guid: e34f1ac3b8cb0074ba96350dc1487571, type: 3}
+  - id: 3:1176
+    fileName: Assets/Pics/FigmaBridge/AvatarRender_cdfd969c.png
+    sprite: {fileID: 21300000, guid: c0f65142a2c38584cb6c848c69ba0e0f, type: 3}
+  - id: I3:1260;3:1256
+    fileName: Assets/Pics/FigmaBridge/SpeechBubbleBackground_7f0039bc.png
+    sprite: {fileID: 21300000, guid: 16c73e50ea90158498405af8788d6162, type: 3}
+  - id: 2:2
+    fileName: 2_2_c40cde7b.png
+    sprite: {fileID: 21300000, guid: d000b91ccb4903f4bb84f24c8192dfd9, type: 3}

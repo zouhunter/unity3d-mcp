@@ -164,6 +164,14 @@ namespace UnityMcp.Tools
         {
             if (recordList == null)
             {
+                // 确保默认启用分组
+                if (!McpExecuteRecordObject.instance.useGrouping)
+                {
+                    McpExecuteRecordObject.instance.useGrouping = true;
+                    McpExecuteRecordObject.instance.InitializeDefaultGroup();
+                    McpExecuteRecordObject.instance.saveRecords();
+                }
+
                 // 根据分组模式获取记录
                 var records = McpExecuteRecordObject.instance.GetCurrentGroupRecords();
                 recordList = new ReorderableList(records, typeof(McpExecuteRecordObject.McpExecuteRecord), false, true, false, true);
@@ -173,43 +181,39 @@ namespace UnityMcp.Tools
                     var records = McpExecuteRecordObject.instance.GetCurrentGroupRecords();
                     int successCount = records.Where(r => r.success).Count();
                     int errorCount = records.Count - successCount;
+                    var recordObject = McpExecuteRecordObject.instance;
 
-                    // 左侧：启用分组切换
-                    Rect toggleRect = new Rect(rect.x, rect.y, 80, rect.height);
-                    EditorGUI.BeginChangeCheck();
-                    bool newUseGrouping = EditorGUI.Toggle(toggleRect, "启用分组", McpExecuteRecordObject.instance.useGrouping);
-                    if (EditorGUI.EndChangeCheck())
+                    // 分组下拉框直接作为标题
+                    var groups = recordObject.recordGroups;
+                    if (groups.Count == 0)
                     {
-                        McpExecuteRecordObject.instance.useGrouping = newUseGrouping;
-                        if (newUseGrouping)
-                        {
-                            McpExecuteRecordObject.instance.InitializeDefaultGroup();
-                        }
-                        McpExecuteRecordObject.instance.saveRecords();
-
-                        // 重新初始化记录列表
-                        recordList = null;
-                        EditorApplication.delayCall += () =>
-                        {
-                            InitializeRecordList();
-                            Repaint();
-                        };
-                    }
-
-                    // 右侧：标题文本
-                    Rect labelRect = new Rect(rect.x + 85, rect.y, rect.width - 85, rect.height);
-                    string headerText;
-                    if (McpExecuteRecordObject.instance.useGrouping)
-                    {
-                        string groupName = GetCurrentGroupDisplayName();
-                        headerText = $"{groupName} ({records.Count}个 | ●{successCount} ×{errorCount})";
+                        EditorGUI.LabelField(rect, "暂无分组");
                     }
                     else
                     {
-                        headerText = $"执行记录 ({records.Count}个 | ●{successCount} ×{errorCount})";
-                    }
+                        // 构建分组选项（包含统计信息）
+                        string[] groupNames = groups.Select(g =>
+                        {
+                            string stats = recordObject.GetGroupStatistics(g.id);
+                            return $"{g.name} ({stats})";
+                        }).ToArray();
 
-                    EditorGUI.LabelField(labelRect, headerText);
+                        int currentIndex = groups.FindIndex(g => g.id == recordObject.currentGroupId);
+                        if (currentIndex == -1) currentIndex = 0;
+
+                        EditorGUI.BeginChangeCheck();
+                        int newIndex = EditorGUI.Popup(rect, currentIndex, groupNames, EditorStyles.boldLabel);
+                        if (EditorGUI.EndChangeCheck() && newIndex >= 0 && newIndex < groups.Count)
+                        {
+                            recordObject.SwitchToGroup(groups[newIndex].id);
+                            recordList = null;
+                            EditorApplication.delayCall += () =>
+                            {
+                                InitializeRecordList();
+                                Repaint();
+                            };
+                        }
+                    }
                 };
 
                 recordList.drawElementCallback = (Rect rect, int index, bool isActive, bool isFocused) =>
@@ -313,15 +317,6 @@ namespace UnityMcp.Tools
 
         private void DrawSplitView(float headerHeight)
         {
-            // 先绘制标题在顶部居中
-            Rect titleRect = new Rect(0, 0, position.width, headerHeight);
-            GUI.BeginGroup(titleRect);
-            GUILayout.BeginArea(new Rect(0, 0, titleRect.width, titleRect.height));
-            GUILayout.Space(8); // 顶部间距
-            GUILayout.Label("Unity MCP Debug Client", headerStyle);
-            GUILayout.EndArea();
-            GUI.EndGroup();
-
             Rect windowRect = new Rect(0, headerHeight, position.width, position.height - headerHeight);
             float leftWidth = windowRect.width * splitterPos;
             float rightWidth = windowRect.width * (1 - splitterPos) - SplitterWidth;
@@ -336,7 +331,7 @@ namespace UnityMcp.Tools
 
             // 右侧区域 - 原有功能
             Rect rightRect = new Rect(splitterRect.xMax, windowRect.y, rightWidth, windowRect.height);
-            DrawRightPanel(rightRect);
+            DrawRightPanel(headerHeight, rightRect);
         }
 
         private void DrawLeftPanel(Rect rect)
@@ -351,6 +346,7 @@ namespace UnityMcp.Tools
             GUILayout.BeginArea(new Rect(0, 0, buttonRect.width, buttonRect.height));
 
             GUILayout.BeginHorizontal();
+
             if (GUILayout.Button("刷新", GUILayout.Width(50)))
             {
                 recordList = null;
@@ -358,12 +354,9 @@ namespace UnityMcp.Tools
                 Repaint();
             }
 
-            string clearButtonText = McpExecuteRecordObject.instance.useGrouping ? "清空当前分组" : "清空记录";
-            if (GUILayout.Button(clearButtonText, GUILayout.Width(100)))
+            if (GUILayout.Button("清空", GUILayout.Width(60)))
             {
-                string confirmMessage = McpExecuteRecordObject.instance.useGrouping
-                    ? $"确定要清空当前分组 '{GetCurrentGroupDisplayName()}' 的所有记录吗？"
-                    : "确定要清空所有执行记录吗？";
+                string confirmMessage = $"确定要清空当前分组 '{GetCurrentGroupDisplayName()}' 的所有记录吗？";
 
                 if (EditorUtility.DisplayDialog("确认清空", confirmMessage, "确定", "取消"))
                 {
@@ -375,12 +368,9 @@ namespace UnityMcp.Tools
                 }
             }
 
-            if (McpExecuteRecordObject.instance.useGrouping)
+            if (GUILayout.Button(showGroupManager ? "隐藏" : "管理", GUILayout.Width(60)))
             {
-                if (GUILayout.Button(showGroupManager ? "隐藏分组" : "管理分组", GUILayout.Width(80)))
-                {
-                    showGroupManager = !showGroupManager;
-                }
+                showGroupManager = !showGroupManager;
             }
 
             GUILayout.EndHorizontal();
@@ -388,31 +378,18 @@ namespace UnityMcp.Tools
             GUI.EndGroup();
             currentY += 30;
 
-            // 分组相关UI
-            if (McpExecuteRecordObject.instance.useGrouping)
+
+            // 分组管理区域
+            if (showGroupManager)
             {
-                // 分组选择区域
-                float groupSelectionHeight = CalculateGroupSelectionHeight();
-                Rect groupSelectionRect = new Rect(padding, currentY, rect.width - padding * 2, groupSelectionHeight);
-                GUI.BeginGroup(groupSelectionRect);
-                GUILayout.BeginArea(new Rect(0, 0, groupSelectionRect.width, groupSelectionRect.height));
-                DrawGroupSelection(groupSelectionRect.width);
+                float groupManagerHeight = CalculateGroupManagerHeight();
+                Rect groupManagerRect = new Rect(padding, currentY, rect.width - padding * 2, groupManagerHeight);
+                GUI.BeginGroup(groupManagerRect);
+                GUILayout.BeginArea(new Rect(0, 0, groupManagerRect.width, groupManagerRect.height));
+                DrawGroupManager(groupManagerRect.width);
                 GUILayout.EndArea();
                 GUI.EndGroup();
-                currentY += groupSelectionHeight + padding;
-
-                // 分组管理区域
-                if (showGroupManager)
-                {
-                    float groupManagerHeight = CalculateGroupManagerHeight();
-                    Rect groupManagerRect = new Rect(padding, currentY, rect.width - padding * 2, groupManagerHeight);
-                    GUI.BeginGroup(groupManagerRect);
-                    GUILayout.BeginArea(new Rect(0, 0, groupManagerRect.width, groupManagerRect.height));
-                    DrawGroupManager(groupManagerRect.width);
-                    GUILayout.EndArea();
-                    GUI.EndGroup();
-                    currentY += groupManagerHeight + padding;
-                }
+                currentY += groupManagerHeight + padding;
             }
 
             // 记录列表区域
@@ -439,8 +416,18 @@ namespace UnityMcp.Tools
             }
         }
 
-        private void DrawRightPanel(Rect rect)
+        private void DrawRightPanel(float headerHeight, Rect rect)
         {
+            // 先绘制标题在顶部居中
+            Rect titleRect = new Rect(rect.x, 0, position.width, headerHeight);
+            GUI.BeginGroup(titleRect);
+            GUILayout.BeginArea(new Rect(0, 0, titleRect.width, titleRect.height));
+            GUILayout.Space(8); // 顶部间距
+            GUILayout.Label("Unity MCP Debug Client", headerStyle);
+            GUILayout.EndArea();
+            GUI.EndGroup();
+
+
             GUILayout.BeginArea(rect);
 
             // 使用垂直布局组来控制整体宽度
@@ -1832,62 +1819,6 @@ namespace UnityMcp.Tools
         }
 
         #region 分组管理UI
-
-
-        /// <summary>
-        /// 绘制分组选择界面
-        /// </summary>
-        private void DrawGroupSelection(float width)
-        {
-            var recordObject = McpExecuteRecordObject.instance;
-
-            GUILayout.BeginVertical(EditorStyles.helpBox);
-            GUILayout.Label("分组选择", EditorStyles.boldLabel);
-
-            var groups = recordObject.recordGroups;
-            if (groups.Count == 0)
-            {
-                GUILayout.Label("暂无分组", EditorStyles.centeredGreyMiniLabel);
-            }
-            else
-            {
-                // 分组下拉框
-                string[] groupNames = groups.Select(g => $"{g.name} ({recordObject.GetGroupStatistics(g.id)})").ToArray();
-                int currentIndex = groups.FindIndex(g => g.id == recordObject.currentGroupId);
-                if (currentIndex == -1) currentIndex = 0;
-
-                EditorGUI.BeginChangeCheck();
-                int newIndex = EditorGUILayout.Popup(currentIndex, groupNames);
-                if (EditorGUI.EndChangeCheck() && newIndex >= 0 && newIndex < groups.Count)
-                {
-                    recordObject.SwitchToGroup(groups[newIndex].id);
-                    recordList = null;
-                    InitializeRecordList();
-                }
-            }
-
-            GUILayout.EndVertical();
-        }
-
-        /// <summary>
-        /// 计算分组选择区域的高度
-        /// </summary>
-        private float CalculateGroupSelectionHeight()
-        {
-            var recordObject = McpExecuteRecordObject.instance;
-            float baseHeight = 45; // 基本高度（标题 + padding）
-
-            if (recordObject.recordGroups.Count == 0)
-            {
-                baseHeight += 20; // "暂无分组"文本高度
-            }
-            else
-            {
-                baseHeight += 25; // 下拉框高度
-            }
-
-            return baseHeight;
-        }
 
         /// <summary>
         /// 绘制分组管理界面

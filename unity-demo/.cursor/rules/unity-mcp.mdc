@@ -2641,7 +2641,7 @@ function_call(
 主要参数（放入 `args`）
 - `action` (string, 必需): 操作类型，支持 `download_image`、`fetch_nodes`、`download_images`
 - `file_key` (string, 必需): Figma文件Key（从Figma URL中提取）
-- `node_id` (string, 可选): 节点ID，多个节点用逗号分隔（download_image必需，download_images可选）
+- `node_id` (string): 节点ID，多个节点用逗号分隔（download_image和download_images必需，fetch_nodes必需）
 - `save_path` (string, 可选): 保存路径，默认为 "Assets/FigmaAssets"
 - `image_format` (string, 可选): 图片格式，支持 png、jpg、svg、pdf，默认为png
 - `image_scale` (float, 可选): 图片缩放比例，默认为1
@@ -2651,7 +2651,7 @@ function_call(
 支持的操作 (action)
 - `download_image` - 智能下载单张图片资源
 - `fetch_nodes` - 拉取指定节点的详细数据并保存为JSON文件
-- `download_images` - 批量智能下载图片（自动识别并下载所有图片资源，支持从本地JSON文件读取）
+- `download_images` - 按需下载指定节点图片（必须提供node_id参数，多个节点用逗号分隔）
 
 示例：下载单张图片
 ```python
@@ -2693,14 +2693,14 @@ function_call(
 )
 ```
 
-示例：批量智能下载图片
+示例：按需下载指定节点图片
 ```python
 function_call(
   func="figma_manage",
   args={
     "action": "download_images",
     "file_key": "NOthutkClw7kcJbVLfKHC3",
-    "node_id": "2-506",
+    "node_id": "2-506,3-1279,3-1233",
     "save_path": "Assets/UI/Images",
     "image_format": "png",
     "image_scale": 2.0
@@ -2708,27 +2708,14 @@ function_call(
 )
 ```
 
-示例：智能扫描整个文件批量下载
+示例：从本地JSON文件下载指定节点
 ```python
 function_call(
   func="figma_manage",
   args={
     "action": "download_images",
     "file_key": "NOthutkClw7kcJbVLfKHC3",
-    "save_path": "Assets/UI/Images",
-    "image_format": "png",
-    "image_scale": 2.0
-  }
-)
-```
-
-示例：从本地JSON文件批量下载（新功能）
-```python
-function_call(
-  func="figma_manage",
-  args={
-    "action": "download_images",
-    "file_key": "NOthutkClw7kcJbVLfKHC3",
+    "node_id": "2-506,3-1279,3-1233",
     "local_json_path": "Assets/FigmaAssets/simplified_nodes_NOthutkClw7kcJbVLfKHC3_20241225_143022.json",
     "save_path": "Assets/UI/Images",
     "image_format": "png",

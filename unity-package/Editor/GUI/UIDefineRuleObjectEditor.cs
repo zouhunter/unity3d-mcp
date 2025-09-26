@@ -2,8 +2,12 @@ using UnityEngine;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityMCP.Model;
+using UnityMCP.Tools;
+using System.Collections;
+using UnityMcp.Tools;
+using Newtonsoft.Json.Linq;
 
-namespace UnityMCP.Editor
+namespace UnityMCP.Tools
 {
     /// <summary>
     /// UIDefineRuleObject的自定义Inspector，使用ReorderableList绘制node_names和node_sprites
@@ -156,6 +160,13 @@ namespace UnityMCP.Editor
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
+
+            // 发送到Cursor按钮
+            EditorGUILayout.Space();
+            if (GUILayout.Button("📤 Send UI Rule to Cursor", GUILayout.Height(35)))
+            {
+                SendUIRuleToCursor();
+            }
 
             // 绘制基本属性
             EditorGUILayout.Space();
@@ -380,6 +391,164 @@ namespace UnityMCP.Editor
                 modifyRecordsProp.ClearArray();
                 serializedObject.ApplyModifiedProperties();
                 Debug.Log("[UIDefineRuleObjectEditor] Modification records cleared.");
+            }
+        }
+
+        /// <summary>
+        /// 发送UI规则到Cursor
+        /// </summary>
+        private void SendUIRuleToCursor()
+        {
+            var targetObject = target as UIDefineRuleObject;
+            if (targetObject == null)
+            {
+                EditorUtility.DisplayDialog("Error", "Cannot find UIDefineRuleObject.", "OK");
+                return;
+            }
+
+            string uiName = targetObject.name;
+            if (string.IsNullOrEmpty(uiName))
+            {
+                EditorUtility.DisplayDialog("Error", "UI name is empty. Please set a name for this rule object.", "OK");
+                return;
+            }
+
+            Debug.Log($"[UIDefineRuleObjectEditor] Starting to send UI rule '{uiName}' to Cursor...");
+
+            // 直接调用获取UI规则并发送
+            try
+            {
+                GetUIRuleAndSendToCursorSync(uiName);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[UIDefineRuleObjectEditor] Error sending UI rule to Cursor: {e.Message}");
+                EditorUtility.DisplayDialog("Error", $"Error sending UI rule to Cursor: {e.Message}", "OK");
+            }
+        }
+
+        /// <summary>
+        /// 获取UI规则并发送到Cursor（同步方法）
+        /// </summary>
+        private void GetUIRuleAndSendToCursorSync(string uiName)
+        {
+            Debug.Log($"[UIDefineRuleObjectEditor] Getting UI rule for '{uiName}'...");
+
+            // 创建UIRuleManage实例
+            var uiRuleManage = new UIRuleManage();
+
+            // 创建参数
+            var args = new Newtonsoft.Json.Linq.JObject();
+            args["action"] = "get_rule";
+            args["name"] = uiName;
+
+            // 调用get_rule方法
+            object result = null;
+            bool completed = false;
+            System.Exception error = null;
+
+            // 使用StateTreeContext调用ExecuteMethod
+            var context = new UnityMcp.Tools.StateTreeContext(args);
+            bool resultReceived = false;
+
+            // 注册完成回调
+            context.RegistComplete((res) =>
+            {
+                result = res;
+                resultReceived = true;
+            });
+
+            try
+            {
+                uiRuleManage.ExecuteMethod(context);
+                context.RegistComplete(x =>
+                {
+                    // 如果立即有结果，直接使用
+                    if (x != null)
+                    {
+                        result = x;
+                        completed = true;
+                        SendToCursor(JObject.FromObject(result).ToString(), uiName);
+                    }
+                    else
+                    {
+                        if (!resultReceived)
+                        {
+                            Debug.LogError("[UIDefineRuleObjectEditor] ExecuteMethod timeout");
+                            EditorUtility.DisplayDialog("Error", "ExecuteMethod timeout", "OK");
+                            return;
+                        }
+
+                        completed = true;
+                    }
+                });
+
+            }
+            catch (System.Exception e)
+            {
+                error = e;
+            }
+
+            if (error != null)
+            {
+                Debug.LogError($"[UIDefineRuleObjectEditor] Error getting UI rule: {error.Message}");
+                EditorUtility.DisplayDialog("Error", $"Error getting UI rule: {error.Message}", "OK");
+                return;
+            }
+        }
+
+        private void SendToCursor(string result, string uiName)
+        {
+            // 对于同步调用，我们不处理协程结果，直接使用返回值
+            if (result == null)
+            {
+                Debug.LogError("[UIDefineRuleObjectEditor] Failed to get UI rule result");
+                EditorUtility.DisplayDialog("Error", "Failed to get UI rule result", "OK");
+                return;
+            }
+
+            // 解析结果并构建发送到Cursor的消息
+            string message = BuildCursorMessage(result, uiName);
+
+            if (string.IsNullOrEmpty(message))
+            {
+                Debug.LogError("[UIDefineRuleObjectEditor] Failed to build Cursor message");
+                EditorUtility.DisplayDialog("Error", "Failed to build message for Cursor", "OK");
+                return;
+            }
+
+            Debug.Log($"[UIDefineRuleObjectEditor] Sending UI rule to Cursor: {message.Length} characters");
+
+            // 发送到Cursor（自动发送）
+            CursorChatIntegration.SendToCursor(message, true);
+
+            Debug.Log($"[UIDefineRuleObjectEditor] Successfully sent UI rule '{uiName}' to Cursor");
+        }
+
+        /// <summary>
+        /// 构建发送到Cursor的消息
+        /// </summary>
+        private string BuildCursorMessage(object result, string uiName)
+        {
+            try
+            {
+                // 将结果转换为JSON字符串以便解析
+                string resultJson = Newtonsoft.Json.JsonConvert.SerializeObject(result, Newtonsoft.Json.Formatting.Indented);
+
+                var message = new System.Text.StringBuilder();
+                message.AppendLine($"# Unity UI规则信息 - {uiName}");
+                message.AppendLine();
+                message.AppendLine("以下是Unity项目中的UI制作规则和配置信息，请基于这些信息基于mcp实现UI界面开发：");
+                message.AppendLine();
+                message.AppendLine("```json");
+                message.AppendLine(resultJson);
+                message.AppendLine("```");
+                return message.ToString();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[UIDefineRuleObjectEditor] Error building Cursor message: {e.Message}");
+                return null;
             }
         }
     }

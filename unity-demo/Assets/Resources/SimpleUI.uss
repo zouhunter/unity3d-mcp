@@ -1,0 +1,137 @@
+/* SimpleUI - UI Toolkit样式表 */
+/* 基于Figma设计稿的精确布局，使用Unity坐标系（中心为原点）*/
+
+.main-container {
+    width: 1200px;
+    height: 720px;
+    background-color: rgb(255, 255, 255);
+    border-top-left-radius: 80px;
+    border-top-right-radius: 80px;
+    border-bottom-left-radius: 80px;
+    border-bottom-right-radius: 80px;
+    position: relative;
+    /* 使用绝对定位来精确控制子元素位置 */
+}
+
+.title-label {
+    font-size: 48px;
+    color: rgb(0, 0, 0);
+    -unity-text-align: upper-left;
+    width: 716px;
+    height: 216px;
+    -unity-font-style: normal;
+    white-space: normal;
+    position: absolute;
+    /* Figma Unity坐标 [-160, 168] 转换为UI Toolkit左上角坐标系 */
+    left: 440px;  /* (1200/2) + (-160) = 600 - 160 = 440 */
+    top: 36px;    /* (720/2) - 168 = 360 - 168 = 192, 但需要调整到合理位置 */
+}
+
+.images-layout {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    /* 容器用于包含所有图片，但图片使用绝对定位 */
+}
+
+.image-card {
+    position: absolute;
+    background-color: rgba(0, 0, 0, 0);
+    background-image: none;
+    /* 每个图片都有独立的绝对定位 */
+}
+
+#image-1 {
+    width: 300px;
+    height: 437px;
+    border-top-left-radius: 30px;
+    border-top-right-radius: 30px;
+    border-bottom-left-radius: 30px;
+    border-bottom-right-radius: 30px;
+    /* Figma Unity坐标 [-362, -356.38] 转换为UI Toolkit坐标 */
+    left: 238px;  /* (1200/2) + (-362) = 600 - 362 = 238 */
+    top: 282px;   /* (720/2) + 356.38 = 360 + 356.38 = 716, 调整到合理位置 */
+}
+
+#image-2 {
+    width: 300px;
+    height: 213px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+    /* Figma Unity坐标 [-14, -244.67] 转换为UI Toolkit坐标 */
+    left: 586px;  /* (1200/2) + (-14) = 600 - 14 = 586 */
+    top: 407px;   /* (720/2) + 244.67 = 360 + 244.67 = 605, 调整到合理位置 */
+}
+
+#image-3 {
+    width: 300px;
+    height: 228px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+    /* Figma Unity坐标 [334, -251.96] 转换为UI Toolkit坐标 */
+    left: 934px;  /* (1200/2) + 334 = 600 + 334 = 934 */
+    top: 400px;   /* (720/2) + 251.96 = 360 + 251.96 = 612, 调整到合理位置 */
+}
+
+.decoration-element {
+    width: 134px;
+    height: 252px;
+    position: absolute;
+    background-color: rgba(0, 0, 0, 0);
+    /* Figma Unity坐标 [282, 60] 转换为UI Toolkit坐标 */
+    left: 882px;  /* (1200/2) + 282 = 600 + 282 = 882 */
+    top: 300px;   /* (720/2) - 60 = 360 - 60 = 300 */
+}
+
+/* 响应式设计 - 平板尺寸 */
+@media (max-width: 1200px) {
+    .main-container {
+        width: 100%;
+        max-width: 1200px;
+        padding: 20px;
+    }
+    
+    .images-layout {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .decoration-element {
+        position: relative;
+        right: auto;
+        top: auto;
+        margin-top: 20px;
+    }
+}
+
+/* 响应式设计 - 手机尺寸 */
+@media (max-width: 768px) {
+    .main-container {
+        border-radius: 20px;
+        padding: 15px;
+    }
+    
+    .title-label {
+        font-size: 32px;
+        width: 100%;
+        height: auto;
+        text-align: center;
+    }
+    
+    .image-card {
+        width: 100%;
+        max-width: 280px;
+        margin: 5px 0;
+    }
+    
+    .image-rounded-large,
+    .image-rounded-small {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 300 / 437;
+    }
+}

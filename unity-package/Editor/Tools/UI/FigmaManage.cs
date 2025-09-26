@@ -21,7 +21,16 @@ namespace UnityMCP.Tools
     /// 支持的操作：
     /// - download_image: 智能下载单张图片
     /// - fetch_nodes: 拉取节点数据并保存为JSON文件
-    /// - download_images: 按需下载指定节点图片（必须提供node_id参数）
+    /// - download_images: 按需下载指定节点图片（必须提供nodes参数）
+    /// 
+    /// 统一的nodes参数：
+    /// 所有操作都使用nodes参数，支持两种格式：
+    /// 1. 逗号分隔的节点ID字符串：如"1:4,1:5,1:6"
+    /// 2. JSON格式的节点名称映射：如{"1:4":"image1","1:5":"image2","1:6":"image3"}
+    /// 
+    /// 优化的下载流程：
+    /// 当使用JSON格式的nodes参数时，将直接使用节点名称作为文件名，无需调用FetchNodes API获取节点数据，显著提高下载效率。
+    /// 当使用逗号分隔格式时，会自动调用FetchNodes获取节点名称（传统方式）。
     /// 
     /// 本地JSON文件支持：
     /// download_images操作支持通过local_json_path参数从FetchNodes保存的JSON文件中读取节点数据，
@@ -49,7 +58,7 @@ namespace UnityMCP.Tools
             {
                 new MethodKey("action", "操作类型: download_image(智能下载单张图片), fetch_nodes(拉取节点数据), download_images(按需下载指定节点图片)", false),
                 new MethodKey("file_key", "Figma文件Key", true),
-                new MethodKey("node_id", "节点ID，多个用逗号分隔（download_images操作时为必需参数）", true),
+                new MethodKey("nodes", "节点信息，支持两种格式：1) 逗号分隔的节点ID字符串，如\"1:4,1:5,1:6\" 2) JSON格式的节点名称映射，如\"{\\\"1:4\\\":\\\"image1\\\",\\\"1:5\\\":\\\"image2\\\"}\"", true),
                 new MethodKey("save_path", "保存路径，默认为由ProjectSettings → MCP → Figma中的img_save_to配置", true),
                 new MethodKey("image_format", "图片格式: png, jpg, svg, pdf，默认为png", true),
                 new MethodKey("image_scale", "图片缩放比例，默认为1", true),
@@ -78,7 +87,7 @@ namespace UnityMCP.Tools
         private object DownloadImages(StateTreeContext ctx)
         {
             string fileKey = ctx["file_key"]?.ToString();
-            string nodeIds = ctx["node_id"]?.ToString();
+            string nodesParam = ctx["nodes"]?.ToString();
             string token = GetFigmaToken();
             string savePath = ctx["save_path"]?.ToString() ?? GetFigmaAssetsPath();
             string imageFormat = ctx["image_format"]?.ToString() ?? "png";
@@ -87,11 +96,17 @@ namespace UnityMCP.Tools
             if (string.IsNullOrEmpty(fileKey))
                 return Response.Error("file_key是必需的参数");
 
-            if (string.IsNullOrEmpty(nodeIds))
-                return Response.Error("node_id是必需的参数");
+            if (string.IsNullOrEmpty(nodesParam))
+                return Response.Error("nodes是必需的参数");
 
             if (string.IsNullOrEmpty(token))
                 return Response.Error("Figma访问令牌未配置，请在Project Settings → MCP → Figma中配置");
+
+            // 解析nodes参数
+            if (!ParseNodesParameter(nodesParam, out List<string> nodeIds, out Dictionary<string, string> nodeNames))
+            {
+                return Response.Error("nodes参数格式无效，请提供逗号分隔的节点ID或JSON格式的节点映射");
+            }
 
             try
             {
@@ -103,7 +118,7 @@ namespace UnityMCP.Tools
                 }
 
                 // 只取第一个节点ID（单张图片下载）
-                var nodeId = nodeIds.Split(',').Select(id => id.Trim()).Where(id => !string.IsNullOrEmpty(id)).FirstOrDefault();
+                var nodeId = nodeIds.FirstOrDefault();
                 if (string.IsNullOrEmpty(nodeId))
                 {
                     return Response.Error("未提供有效的节点ID");
@@ -111,8 +126,17 @@ namespace UnityMCP.Tools
 
                 var nodeIdList = new List<string> { nodeId };
                 Debug.Log($"[FigmaManage] 启动单张图片智能下载: 节点{nodeId}");
-                // 使用ctx.AsyncReturn处理异步操作
-                return ctx.AsyncReturn(DownloadImagesCoroutine(fileKey, nodeIdList, token, savePath, imageFormat, imageScale, nodeId));
+
+                // 如果有节点名称映射，使用直接下载；否则使用传统方式
+                if (nodeNames != null)
+                {
+                    var singleNodeNames = new Dictionary<string, string> { { nodeId, nodeNames[nodeId] } };
+                    return ctx.AsyncReturn(DownloadImagesDirectCoroutine(fileKey, nodeIdList, token, savePath, imageFormat, imageScale, nodeId, singleNodeNames));
+                }
+                else
+                {
+                    return ctx.AsyncReturn(DownloadImagesCoroutine(fileKey, nodeIdList, token, savePath, imageFormat, imageScale, nodeId));
+                }
             }
             catch (Exception ex)
             {
@@ -127,26 +151,30 @@ namespace UnityMCP.Tools
         private object FetchNodes(StateTreeContext ctx)
         {
             string fileKey = ctx["file_key"]?.ToString();
-            string nodeIds = ctx["node_id"]?.ToString();
+            string nodesParam = ctx["nodes"]?.ToString();
             string token = GetFigmaToken();
             bool includeChildren = bool.Parse(ctx["include_children"]?.ToString() ?? "true");
 
             if (string.IsNullOrEmpty(fileKey))
                 return Response.Error("file_key是必需的参数");
 
-            if (string.IsNullOrEmpty(nodeIds))
-                return Response.Error("node_id是必需的参数");
+            if (string.IsNullOrEmpty(nodesParam))
+                return Response.Error("nodes是必需的参数");
 
             if (string.IsNullOrEmpty(token))
                 return Response.Error("Figma访问令牌未配置，请在Project Settings → MCP → Figma中配置");
 
+            // 解析nodes参数
+            if (!ParseNodesParameter(nodesParam, out List<string> nodeIds, out Dictionary<string, string> nodeNames))
+            {
+                return Response.Error("nodes参数格式无效，请提供逗号分隔的节点ID或JSON格式的节点映射");
+            }
+
             try
             {
-                var nodeIdList = nodeIds.Split(',').Select(id => id.Trim()).Where(id => !string.IsNullOrEmpty(id)).ToList();
-
-                Debug.Log($"[FigmaManage] 启动异步节点数据拉取: {nodeIdList.Count}个节点");
+                Debug.Log($"[FigmaManage] 启动异步节点数据拉取: {nodeIds.Count}个节点");
                 // 使用ctx.AsyncReturn处理异步操作
-                return ctx.AsyncReturn(FetchNodesCoroutine(fileKey, nodeIdList, token, includeChildren));
+                return ctx.AsyncReturn(FetchNodesCoroutine(fileKey, nodeIds, token, includeChildren));
             }
             catch (Exception ex)
             {
@@ -169,7 +197,7 @@ namespace UnityMCP.Tools
         private object DownloadNodeImages(StateTreeContext ctx)
         {
             string fileKey = ctx["file_key"]?.ToString();
-            string nodeIds = ctx["node_id"]?.ToString(); // 必需参数
+            string nodesParam = ctx["nodes"]?.ToString(); // 必需参数
             string localJsonPath = ctx["local_json_path"]?.ToString(); // 本地JSON文件路径
             string token = GetFigmaToken();
             string savePath = ctx["save_path"]?.ToString() ?? GetFigmaAssetsPath();
@@ -179,29 +207,30 @@ namespace UnityMCP.Tools
             if (string.IsNullOrEmpty(fileKey))
                 return Response.Error("file_key是必需的参数");
 
-            if (string.IsNullOrEmpty(nodeIds))
-                return Response.Error("node_id是必需的参数，多个节点ID用逗号分隔");
+            if (string.IsNullOrEmpty(nodesParam))
+                return Response.Error("nodes是必需的参数");
 
             if (string.IsNullOrEmpty(token))
                 return Response.Error("Figma访问令牌未配置，请在Project Settings → MCP → Figma中配置");
 
-            // 解析节点ID列表
-            var nodeIdList = nodeIds.Split(',').Select(id => id.Trim()).Where(id => !string.IsNullOrEmpty(id)).ToList();
-            if (nodeIdList.Count == 0)
-                return Response.Error("未提供有效的节点ID");
+            // 解析nodes参数
+            if (!ParseNodesParameter(nodesParam, out List<string> nodeIds, out Dictionary<string, string> nodeNames))
+            {
+                return Response.Error("nodes参数格式无效，请提供逗号分隔的节点ID或JSON格式的节点映射");
+            }
 
             try
             {
                 // 如果提供了本地JSON文件路径，则使用本地数据
                 if (!string.IsNullOrEmpty(localJsonPath))
                 {
-                    Debug.Log($"[FigmaManage] 启动本地JSON文件指定节点下载: {localJsonPath}, 节点: {string.Join(", ", nodeIdList)}");
-                    return ctx.AsyncReturn(DownloadSpecificNodesFromLocalJsonCoroutine(fileKey, nodeIdList, localJsonPath, token, savePath, imageFormat, imageScale));
+                    Debug.Log($"[FigmaManage] 启动本地JSON文件指定节点下载: {localJsonPath}, 节点: {string.Join(", ", nodeIds)}");
+                    return ctx.AsyncReturn(DownloadSpecificNodesFromLocalJsonCoroutine(fileKey, nodeIds, localJsonPath, token, savePath, imageFormat, imageScale, nodeNames));
                 }
                 else
                 {
-                    Debug.Log($"[FigmaManage] 启动指定节点下载: {string.Join(", ", nodeIdList)}");
-                    return ctx.AsyncReturn(DownloadImagesCoroutine(fileKey, nodeIdList, token, savePath, imageFormat, imageScale, "SpecifiedNodes"));
+                    Debug.Log($"[FigmaManage] 启动指定节点下载: {string.Join(", ", nodeIds)}");
+                    return ctx.AsyncReturn(DownloadImagesDirectCoroutine(fileKey, nodeIds, token, savePath, imageFormat, imageScale, "SpecifiedNodes", nodeNames));
                 }
             }
             catch (Exception ex)
@@ -214,9 +243,35 @@ namespace UnityMCP.Tools
         #region 协程实现
 
         /// <summary>
+        /// 直接下载图片协程 - 不获取节点数据，直接下载图片（使用提供的节点名称映射）
+        /// </summary>
+        private IEnumerator DownloadImagesDirectCoroutine(string fileKey, List<string> nodeIds, string token, string savePath, string imageFormat, float imageScale, string rootNodeName = "DirectDownload", Dictionary<string, string> nodeNamesDict = null)
+        {
+            Dictionary<string, string> imageLinks = null;
+
+            // 直接获取图片链接，不获取节点数据
+            yield return GetImageLinksCoroutine(fileKey, nodeIds, token, imageFormat, imageScale, (links) =>
+            {
+                imageLinks = links;
+            });
+
+            if (imageLinks == null || imageLinks.Count == 0)
+            {
+                yield return Response.Error("获取图片链接失败或没有找到图片");
+                yield break;
+            }
+
+            // 使用提供的节点名称映射或节点ID作为文件名
+            var nodeNames = nodeNamesDict ?? nodeIds.ToDictionary(id => id, id => id);
+
+            // 下载图片文件
+            yield return DownloadImageFilesCoroutine(imageLinks, nodeNames, savePath, imageFormat, fileKey, imageScale, rootNodeName);
+        }
+
+        /// <summary>
         /// 从本地JSON文件下载指定节点协程 - 从本地JSON文件中读取指定节点数据并下载图片
         /// </summary>
-        private IEnumerator DownloadSpecificNodesFromLocalJsonCoroutine(string fileKey, List<string> nodeIds, string localJsonPath, string token, string savePath, string imageFormat, float imageScale)
+        private IEnumerator DownloadSpecificNodesFromLocalJsonCoroutine(string fileKey, List<string> nodeIds, string localJsonPath, string token, string savePath, string imageFormat, float imageScale, Dictionary<string, string> nodeNamesDict = null)
         {
             // 检查本地JSON文件是否存在
             if (!File.Exists(localJsonPath))
@@ -227,8 +282,17 @@ namespace UnityMCP.Tools
 
             Debug.Log($"[FigmaManage] 从本地JSON文件下载指定节点: {string.Join(", ", nodeIds)}");
 
-            // 直接使用指定的节点ID列表进行下载，不需要扫描
-            yield return DownloadImagesCoroutine(fileKey, nodeIds, token, savePath, imageFormat, imageScale, "LocalJsonSpecificNodes");
+            // 如果提供了节点名称映射，直接使用；否则使用节点ID作为文件名
+            if (nodeNamesDict != null)
+            {
+                // 直接下载，使用提供的节点名称映射
+                yield return DownloadImagesDirectCoroutine(fileKey, nodeIds, token, savePath, imageFormat, imageScale, "LocalJsonSpecificNodes", nodeNamesDict);
+            }
+            else
+            {
+                // 使用原来的方式，先获取节点数据再下载
+                yield return DownloadImagesCoroutine(fileKey, nodeIds, token, savePath, imageFormat, imageScale, "LocalJsonSpecificNodes");
+            }
         }
 
         /// <summary>
@@ -463,31 +527,10 @@ namespace UnityMCP.Tools
         }
 
         /// <summary>
-        /// 下载图片协程
+        /// 下载图片文件协程 - 核心下载逻辑
         /// </summary>
-        private IEnumerator DownloadImagesCoroutine(string fileKey, List<string> nodeIds, string token, string savePath, string imageFormat, float imageScale, string rootNodeName = "UnknownNode")
+        private IEnumerator DownloadImageFilesCoroutine(Dictionary<string, string> imageLinks, Dictionary<string, string> nodeNames, string savePath, string imageFormat, string fileKey, float imageScale, string rootNodeName)
         {
-            Dictionary<string, string> imageLinks = null;
-            Dictionary<string, string> nodeNames = null;
-
-            // 首先获取节点信息（包含名称）
-            yield return FetchNodesCoroutine(fileKey, nodeIds, token, false, (nodes) =>
-            {
-                nodeNames = nodes;
-            });
-
-            // 然后获取图片链接
-            yield return GetImageLinksCoroutine(fileKey, nodeIds, token, imageFormat, imageScale, (links) =>
-            {
-                imageLinks = links;
-            });
-
-            if (imageLinks == null || imageLinks.Count == 0)
-            {
-                yield return Response.Error("获取图片链接失败或没有找到图片");
-                yield break;
-            }
-
             // 下载图片文件
             int downloadedCount = 0;
             int totalCount = imageLinks.Count;
@@ -509,7 +552,7 @@ namespace UnityMCP.Tools
 
                 string nodeId = kvp.Key;
                 string imageUrl = kvp.Value;
-                string nodeName = nodeNames?.ContainsKey(nodeId) == true ? nodeNames[nodeId] : "";
+                string nodeName = nodeNames?.ContainsKey(nodeId) == true ? nodeNames[nodeId] : nodeId;
 
                 if (string.IsNullOrEmpty(imageUrl))
                 {
@@ -554,9 +597,7 @@ namespace UnityMCP.Tools
 
                 if (imageRequest.result == UnityWebRequest.Result.Success)
                 {
-                    // 获取节点名称
-                    nodeName = nodeNames?.ContainsKey(nodeId) == true ? nodeNames[nodeId] : nodeId;
-                    string originalNodeName = nodeName; // 保存原始节点名称
+                    // 清理文件名中的无效字符
                     nodeName = SanitizeFileName(nodeName);
 
                     // 计算文件内容hash
@@ -634,7 +675,6 @@ namespace UnityMCP.Tools
             Debug.Log($"[FigmaManage] 图片下载完成，开始统一处理后续操作...");
             AssetDatabase.Refresh();
 
-
             // 统一保存索引信息到文件
             string indexFilePath = null;
             if (downloadedCount > 0)
@@ -643,18 +683,6 @@ namespace UnityMCP.Tools
                 indexFilePath = SaveIndexToFile(fileKey, nodeIndexMapping, savePath, imageScale, rootNodeName);
             }
 
-            string message = GetAutoConvertToSprite()
-                          ? $"图片下载并转换为Sprite完成，成功处理 {downloadedCount}/{totalCount} 个文件"
-                          : $"图片下载完成，成功下载 {downloadedCount}/{totalCount} 个文件";
-
-            yield return Response.Success(message, new
-            {
-                downloaded_count = downloadedCount,
-                total_count = totalCount,
-                save_path = savePath,
-                node_index_mapping = JObject.FromObject(nodeIndexMapping),
-                index_file_path = indexFilePath
-            });
             // 统一转换下载的图片为Sprite格式（根据配置决定）
             if (downloadedCount > 0 && GetAutoConvertToSprite())
             {
@@ -662,11 +690,66 @@ namespace UnityMCP.Tools
                 bool conversionCompleted = ConvertDownloadedImagesToSprites(downloadedFiles);
 
                 // 更新消息以反映转换状态
+                string message = GetAutoConvertToSprite()
+                              ? $"图片下载并转换为Sprite完成，成功处理 {downloadedCount}/{totalCount} 个文件"
+                              : $"图片下载完成，成功下载 {downloadedCount}/{totalCount} 个文件";
+
                 if (!conversionCompleted)
                 {
                     message = $"图片下载完成，但Sprite转换被取消。成功下载 {downloadedCount}/{totalCount} 个文件";
                 }
+
+                yield return Response.Success(message, new
+                {
+                    downloaded_count = downloadedCount,
+                    total_count = totalCount,
+                    save_path = savePath,
+                    node_index_mapping = JObject.FromObject(nodeIndexMapping),
+                    index_file_path = indexFilePath
+                });
             }
+            else
+            {
+                string message = $"图片下载完成，成功下载 {downloadedCount}/{totalCount} 个文件";
+                yield return Response.Success(message, new
+                {
+                    downloaded_count = downloadedCount,
+                    total_count = totalCount,
+                    save_path = savePath,
+                    node_index_mapping = JObject.FromObject(nodeIndexMapping),
+                    index_file_path = indexFilePath
+                });
+            }
+        }
+
+        /// <summary>
+        /// 下载图片协程
+        /// </summary>
+        private IEnumerator DownloadImagesCoroutine(string fileKey, List<string> nodeIds, string token, string savePath, string imageFormat, float imageScale, string rootNodeName = "UnknownNode")
+        {
+            Dictionary<string, string> imageLinks = null;
+            Dictionary<string, string> nodeNames = null;
+
+            // 首先获取节点信息（包含名称）
+            yield return FetchNodesCoroutine(fileKey, nodeIds, token, false, (nodes) =>
+            {
+                nodeNames = nodes;
+            });
+
+            // 然后获取图片链接
+            yield return GetImageLinksCoroutine(fileKey, nodeIds, token, imageFormat, imageScale, (links) =>
+            {
+                imageLinks = links;
+            });
+
+            if (imageLinks == null || imageLinks.Count == 0)
+            {
+                yield return Response.Error("获取图片链接失败或没有找到图片");
+                yield break;
+            }
+
+            // 使用新的下载文件协程
+            yield return DownloadImageFilesCoroutine(imageLinks, nodeNames, savePath, imageFormat, fileKey, imageScale, rootNodeName);
         }
 
         /// <summary>
@@ -860,6 +943,51 @@ namespace UnityMCP.Tools
         #endregion
 
         #region 辅助方法
+
+        /// <summary>
+        /// 解析nodes参数，支持两种格式：逗号分隔的ID字符串或JSON格式的名称映射
+        /// </summary>
+        /// <param name="nodesParam">nodes参数值</param>
+        /// <param name="nodeIds">输出：节点ID列表</param>
+        /// <param name="nodeNames">输出：节点名称映射（如果是JSON格式）</param>
+        /// <returns>是否解析成功</returns>
+        private bool ParseNodesParameter(string nodesParam, out List<string> nodeIds, out Dictionary<string, string> nodeNames)
+        {
+            nodeIds = new List<string>();
+            nodeNames = null;
+
+            if (string.IsNullOrEmpty(nodesParam))
+                return false;
+
+            // 尝试解析为JSON格式
+            if (nodesParam.Trim().StartsWith("{") && nodesParam.Trim().EndsWith("}"))
+            {
+                try
+                {
+                    nodeNames = JsonConvert.DeserializeObject<Dictionary<string, string>>(nodesParam);
+                    if (nodeNames != null && nodeNames.Count > 0)
+                    {
+                        nodeIds = nodeNames.Keys.ToList();
+                        Debug.Log($"[FigmaManage] 解析为JSON格式，包含 {nodeNames.Count} 个节点映射");
+                        return true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[FigmaManage] JSON格式解析失败: {ex.Message}，尝试作为逗号分隔的ID字符串处理");
+                }
+            }
+
+            // 解析为逗号分隔的ID字符串
+            nodeIds = nodesParam.Split(',').Select(id => id.Trim()).Where(id => !string.IsNullOrEmpty(id)).ToList();
+            if (nodeIds.Count > 0)
+            {
+                Debug.Log($"[FigmaManage] 解析为ID字符串格式，包含 {nodeIds.Count} 个节点ID");
+                return true;
+            }
+
+            return false;
+        }
 
         /// <summary>
         /// 将下载的图片转换为Sprite格式

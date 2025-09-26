@@ -39,8 +39,8 @@ namespace UnityMcp.Tools
             // 布局相关
             public LayoutInfo layout;        // 布局信息
 
-            // 简化的布局信息（支持Figma和Unity坐标系转换）
-            public float[] unityPos;         // Unity位置 [x, y] (Figma: 左上角原点, Unity: 屏幕中心原点)
+            // 简化的布局信息（使用Figma坐标系）
+            public float[] pos;              // 位置 [x, y] (Figma坐标系: 左上角原点)
             public float[] size;             // 控件尺寸 [width, height]
 
             public List<SimplifiedNode> children; // 子节点
@@ -124,25 +124,20 @@ namespace UnityMcp.Tools
 
 
         /// <summary>
-        /// 简化Figma节点数据，提取绝对位置和尺寸信息，并转换为Unity坐标系
+        /// 简化Figma节点数据，提取绝对位置和尺寸信息
         /// </summary>
         /// <param name="figmaNode">原始Figma节点数据</param>
         /// <param name="maxDepth">最大深度，默认无限制</param>
-        /// <param name="convertToUGUI">是否转换为Unity坐标系（屏幕中心原点，Y轴向上），默认true</param>
+        /// <param name="convertToUGUI">保留参数以兼容，现在始终使用Figma坐标系</param>
         /// <param name="cleanupRedundantData">保留参数以兼容</param>
-        /// <param name="canvasHeight">Canvas高度，用于Unity坐标系转换，默认720</param>
-        /// <param name="canvasWidth">Canvas宽度，用于Unity坐标系转换，默认1200</param>
+        /// <param name="canvasHeight">保留参数以兼容</param>
+        /// <param name="canvasWidth">保留参数以兼容</param>
         /// <returns>简化后的节点数据</returns>
         public static SimplifiedNode SimplifyNode(JToken figmaNode, int maxDepth = -1, bool convertToUGUI = true, bool cleanupRedundantData = true, float canvasHeight = 720f, float canvasWidth = 1200f)
         {
             var result = SimplifyNodeInternal(figmaNode, maxDepth, convertToUGUI, cleanupRedundantData, null, null, canvasHeight, canvasWidth);
 
-            // 将根节点坐标归零，并调整所有子节点坐标
-            if (result != null)
-            {
-                NormalizeCoordinates(result, convertToUGUI, canvasHeight, canvasWidth);
-            }
-
+            // 使用Figma坐标系，不需要坐标转换
             return result;
         }
 
@@ -167,7 +162,7 @@ namespace UnityMcp.Tools
                 // visible字段已移除，因为所有返回的节点都是可见的
             };
 
-            // 提取绝对位置和尺寸信息，并根据需要转换坐标系
+            // 提取绝对位置和尺寸信息（使用Figma坐标系）
             var absoluteBoundingBox = figmaNode["absoluteBoundingBox"];
             if (absoluteBoundingBox != null)
             {
@@ -176,29 +171,12 @@ namespace UnityMcp.Tools
                 float width = absoluteBoundingBox["width"]?.ToObject<float>() ?? 0;
                 float height = absoluteBoundingBox["height"]?.ToObject<float>() ?? 0;
 
-                if (convertToUGUI)
+                // 使用Figma原始坐标系（左上角原点）
+                simplified.pos = new float[]
                 {
-                    // 转换为Unity坐标系（屏幕中心原点，Y轴向上）
-                    // X坐标：左边距 + 半宽 - Canvas半宽（转换为以屏幕中心为原点的坐标）
-                    float unityX = figmaX + width / 2f - (canvasWidth / 2f);
-                    // Y坐标：Canvas高度 - Figma距离顶部 - 半高 - Canvas半高（转换为以屏幕中心为原点的坐标）
-                    float unityY = canvasHeight - figmaY - height / 2f - (canvasHeight / 2f);
-
-                    simplified.unityPos = new float[]
-                    {
-                        (float)Math.Round(unityX, 2),
-                        (float)Math.Round(unityY, 2)
-                    };
-                }
-                else
-                {
-                    // 保持Figma原始坐标系（左上角原点）
-                    simplified.unityPos = new float[]
-                    {
-                        (float)Math.Round(figmaX, 2),
-                        (float)Math.Round(figmaY, 2)
-                    };
-                }
+                    (float)Math.Round(figmaX, 2),
+                    (float)Math.Round(figmaY, 2)
+                };
 
                 simplified.size = new float[]
                 {
@@ -247,57 +225,6 @@ namespace UnityMcp.Tools
             return simplified;
         }
 
-        /// <summary>
-        /// 将根节点坐标归零，并相应调整所有子节点坐标
-        /// </summary>
-        /// <param name="rootNode">根节点</param>
-        /// <param name="convertToUGUI">是否已转换为Unity坐标系</param>
-        /// <param name="canvasHeight">Canvas高度</param>
-        /// <param name="canvasWidth">Canvas宽度</param>
-        private static void NormalizeCoordinates(SimplifiedNode rootNode, bool convertToUGUI, float canvasHeight, float canvasWidth)
-        {
-            if (rootNode?.unityPos == null) return;
-
-            if (convertToUGUI)
-            {
-                // Unity坐标系下，根节点坐标已经是正确的anchored_position
-                // 不需要归零，保持原始的Unity坐标
-                return;
-            }
-            else
-            {
-                // Figma坐标系下，将根节点坐标归零
-                float offsetX = rootNode.unityPos[0];
-                float offsetY = rootNode.unityPos[1];
-
-                // 递归调整所有节点的坐标
-                AdjustNodeCoordinates(rootNode, offsetX, offsetY);
-            }
-        }
-
-        /// <summary>
-        /// 递归调整节点及其子节点的坐标
-        /// </summary>
-        /// <param name="node">要调整的节点</param>
-        /// <param name="offsetX">X轴偏移量</param>
-        /// <param name="offsetY">Y轴偏移量</param>
-        private static void AdjustNodeCoordinates(SimplifiedNode node, float offsetX, float offsetY)
-        {
-            if (node?.unityPos == null) return;
-
-            // 调整当前节点坐标
-            node.unityPos[0] = (float)Math.Round(node.unityPos[0] - offsetX, 2);
-            node.unityPos[1] = (float)Math.Round(node.unityPos[1] - offsetY, 2);
-
-            // 递归调整子节点坐标
-            if (node.children != null)
-            {
-                foreach (var child in node.children)
-                {
-                    AdjustNodeCoordinates(child, offsetX, offsetY);
-                }
-            }
-        }
 
         /// <summary>
         /// 提取文本信息
@@ -610,12 +537,12 @@ namespace UnityMcp.Tools
             // 基本信息
             summary.Add($"节点: {simplifiedNode.name} ({simplifiedNode.type})");
 
-            // 显示尺寸和绝对位置信息
+            // 显示尺寸和位置信息
             if (simplifiedNode.size != null)
             {
                 summary.Add($"尺寸: {simplifiedNode.size[0]:F0}x{simplifiedNode.size[1]:F0}");
-                if (simplifiedNode.unityPos != null)
-                    summary.Add($"Unity位置: [{simplifiedNode.unityPos[0]:F0}, {simplifiedNode.unityPos[1]:F0}]");
+                if (simplifiedNode.pos != null)
+                    summary.Add($"位置: [{simplifiedNode.pos[0]:F0}, {simplifiedNode.pos[1]:F0}]");
             }
 
             if (!string.IsNullOrEmpty(simplifiedNode.text))
@@ -728,9 +655,9 @@ namespace UnityMcp.Tools
                 ["size"] = simplifiedNode.size != null ? $"{simplifiedNode.size[0]:F0}x{simplifiedNode.size[1]:F0}" : "0x0"
             };
 
-            // 添加Unity位置信息
-            if (simplifiedNode.unityPos != null)
-                keyInfo["position"] = $"[{simplifiedNode.unityPos[0]:F0},{simplifiedNode.unityPos[1]:F0}]";
+            // 添加位置信息
+            if (simplifiedNode.pos != null)
+                keyInfo["position"] = $"[{simplifiedNode.pos[0]:F0},{simplifiedNode.pos[1]:F0}]";
 
             // 只添加非空的关键信息
             if (!string.IsNullOrEmpty(simplifiedNode.text))
@@ -904,8 +831,8 @@ namespace UnityMcp.Tools
             if (node?.size == null) return "";
             var parts = new List<string>();
 
-            if (node.unityPos != null)
-                parts.Add($"\"anchored_pos\": [{node.unityPos[0]:F2}, {node.unityPos[1]:F2}]");
+            if (node.pos != null)
+                parts.Add($"\"pos\": [{node.pos[0]:F2}, {node.pos[1]:F2}]");
 
             if (node.size != null)
                 parts.Add($"\"size_delta\": [{node.size[0]:F2}, {node.size[1]:F2}]");
@@ -914,7 +841,7 @@ namespace UnityMcp.Tools
         }
 
         /// <summary>
-        /// 生成MCP布局调用代码（Unity坐标系）
+        /// 生成MCP布局调用代码（使用Figma坐标系）
         /// </summary>
         /// <param name="node">简化节点</param>
         /// <param name="parentPath">父节点路径</param>
@@ -925,15 +852,15 @@ namespace UnityMcp.Tools
 
             string nodePath = string.IsNullOrEmpty(parentPath) ? node.name : $"{parentPath}/{node.name}";
 
-            // 生成Unity UGUI布局调用
+            // 生成布局调用，使用Figma坐标系
             var parts = new List<string>();
             parts.Add($"path=\"{nodePath}\"");
             parts.Add("action=\"layout_anchor\"");
-            parts.Add("anchor_min=[0, 0]");
-            parts.Add("anchor_max=[0, 0]");
+            parts.Add("anchor_min=[0, 1]");  // 左上角锚点
+            parts.Add("anchor_max=[0, 1]");  // 左上角锚点
 
-            if (node.unityPos != null)
-                parts.Add($"anchored_pos=[{node.unityPos[0]:F2}, {node.unityPos[1]:F2}]");
+            if (node.pos != null)
+                parts.Add($"anchored_pos=[{node.pos[0]:F2}, {-node.pos[1]:F2}]");  // Y坐标取负值以适配Unity
 
             if (node.size != null)
                 parts.Add($"size_delta=[{node.size[0]:F2}, {node.size[1]:F2}]");
@@ -1150,7 +1077,7 @@ namespace UnityMcp.Tools
         }
 
         /// <summary>
-        /// 生成完整的MCP批量调用代码（Unity坐标系）
+        /// 生成完整的MCP批量调用代码（使用Figma坐标系）
         /// </summary>
         /// <param name="rootNode">根节点</param>
         /// <returns>完整的functions_call代码</returns>

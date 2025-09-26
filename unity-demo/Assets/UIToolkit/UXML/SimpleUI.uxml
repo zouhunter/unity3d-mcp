@@ -1,0 +1,11 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <ui:VisualElement name="root-container" class="main-container">
+        <ui:Label name="title-text" text="Check out the examples below. They&apos;re for you to hack up, replicate, and make your own." class="title-label" />
+        <ui:VisualElement name="images-container" class="images-layout">
+            <ui:VisualElement name="image-1" class="image-card" />
+            <ui:VisualElement name="image-2" class="image-card" />
+            <ui:VisualElement name="image-3" class="image-card" />
+        </ui:VisualElement>
+        <ui:VisualElement name="vector-decoration" class="SimpleUI" />
+    </ui:VisualElement>
+</ui:UXML>

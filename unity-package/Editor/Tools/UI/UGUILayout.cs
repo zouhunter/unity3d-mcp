@@ -17,18 +17,18 @@ namespace UnityMcp.Tools
     /// 使用方式：
     /// - do_layout: 执行综合布局修改 (可同时设置多个属性)
     /// - get_layout: 获取RectTransform属性 (获取所有属性信息)
-    /// - layout_anchor: 单独设置锚点 (anchor_min, anchor_max, anchor_preset)
-    /// - layout_sizedelta: 单独设置尺寸 (size_delta)
-    /// - layout_position: 单独设置位置 (anchored_pos, local_position)
-    /// - layout_pivot: 单独设置轴心点 (pivot)
-    /// - layout_scale: 单独设置缩放 (local_scale)
-    /// - layout_rotation: 单独设置旋转 (local_rotation)
-    /// - layout_sibling: 单独设置层级索引 (sibling_index)
+    /// 
+    /// 特殊参数：
+    /// - anchor_self: 当为true时，锚点预设将基于元素当前位置而不是父容器的预设位置
+    ///   * stretch_all + anchor_self = tattoo功能（等同于UGUIUtil.AnchorsToCorners）
+    ///   * top_center + anchor_self = 将锚点设置到元素自己的顶部中心位置
+    ///   * 其他预设 + anchor_self = 将锚点设置到元素自身对应的位置
     /// 
     /// 例如：
-    /// action="layout_anchor", anchor_preset="middle_center"
-    /// action="layout_sizedelta", size_delta=[100, 50]
-    /// action="layout_sibling", sibling_index=2
+    /// action="do_layout", anchor_min=[0,1], anchor_max=[0,1], anchored_pos=[100, -50], size_delta=[200, 100]
+    /// action="do_layout", anchor_preset="stretch_all", anchor_self=true  // tattoo效果
+    /// action="do_layout", anchor_preset="top_center", anchor_self=true   // 钉在元素顶部中心
+    /// action="get_layout"
     /// 
     /// 对应方法名: edit_recttransform
     /// </summary>
@@ -47,7 +47,7 @@ namespace UnityMcp.Tools
                 new MethodKey("path", "Object Hierarchy path", false),
                 
                 // 操作参数
-                new MethodKey("action", "Operation type: do_layout(综合布局), get_layout(获取属性), layout_anchor(锚点), layout_sizedelta(尺寸), layout_position(位置), layout_pivot(轴心), layout_scale(缩放), layout_rotation(旋转), layout_sibling(层级)", true),
+                new MethodKey("action", "Operation type: do_layout(综合布局), get_layout(获取属性)", true),
                 
                 // RectTransform基本属性
                 new MethodKey("anchored_pos", "Anchor position [x, y]", true),
@@ -56,6 +56,8 @@ namespace UnityMcp.Tools
                 new MethodKey("anchor_max", "Maximum anchor [x, y]", true),
                       // 预设锚点类型
                 new MethodKey("anchor_preset", "Anchor preset: top_left, top_center, top_right, middle_left, middle_center, middle_right, bottom_left, bottom_center, bottom_right, stretch_horizontal, stretch_vertical, stretch_all", true),
+                new MethodKey("anchor_self", "When true, anchor preset will be based on element's current position rather than parent's preset position (default: false)", true),
+                new MethodKey("preserve_visual_position", "Whether to preserve visual position when changing anchor preset (default: true)", true),
                 new MethodKey("pivot", "Pivot point [x, y]", true),
                 
                 // Transform继承属性
@@ -86,14 +88,6 @@ namespace UnityMcp.Tools
                 .Key("action")
                     .Leaf("do_layout", (Func<StateTreeContext, object>)HandleDoLayoutAction)
                     .Leaf("get_layout", (Func<StateTreeContext, object>)HandleGetLayoutAction)
-                    // 独立的布局操作
-                    .Leaf("layout_anchor", (Func<StateTreeContext, object>)HandleAnchorAction)
-                    .Leaf("layout_sizedelta", (Func<StateTreeContext, object>)HandleSizeDeltaAction)
-                    .Leaf("layout_position", (Func<StateTreeContext, object>)HandlePositionAction)
-                    .Leaf("layout_pivot", (Func<StateTreeContext, object>)HandlePivotAction)
-                    .Leaf("layout_scale", (Func<StateTreeContext, object>)HandleScaleAction)
-                    .Leaf("layout_rotation", (Func<StateTreeContext, object>)HandleRotationAction)
-                    .Leaf("layout_sibling", (Func<StateTreeContext, object>)HandleSiblingIndexAction)
                     .DefaultLeaf((Func<StateTreeContext, object>)HandleDefaultAction)
                 .Build();
         }
@@ -257,90 +251,342 @@ namespace UnityMcp.Tools
         #region RectTransform属性应用方法
 
         /// <summary>
-        /// 应用锚点预设
+        /// 应用锚点预设（保持视觉位置不变）
         /// </summary>
         private bool ApplyAnchorPreset(RectTransform rectTransform, StateTreeContext args)
         {
             if (args.TryGetValue("anchor_preset", out object presetObj) && presetObj != null)
             {
                 string preset = presetObj.ToString().ToLower();
-                Vector2 anchorMin, anchorMax, pivot;
+                Vector2 targetAnchorMin, targetAnchorMax, targetPivot;
 
                 switch (preset)
                 {
                     case "top_left":
-                        anchorMin = new Vector2(0, 1);
-                        anchorMax = new Vector2(0, 1);
-                        pivot = new Vector2(0, 1);
+                        targetAnchorMin = new Vector2(0, 1);
+                        targetAnchorMax = new Vector2(0, 1);
+                        targetPivot = new Vector2(0, 1);
                         break;
                     case "top_center":
-                        anchorMin = new Vector2(0.5f, 1);
-                        anchorMax = new Vector2(0.5f, 1);
-                        pivot = new Vector2(0.5f, 1);
+                        targetAnchorMin = new Vector2(0.5f, 1);
+                        targetAnchorMax = new Vector2(0.5f, 1);
+                        targetPivot = new Vector2(0.5f, 1);
                         break;
                     case "top_right":
-                        anchorMin = new Vector2(1, 1);
-                        anchorMax = new Vector2(1, 1);
-                        pivot = new Vector2(1, 1);
+                        targetAnchorMin = new Vector2(1, 1);
+                        targetAnchorMax = new Vector2(1, 1);
+                        targetPivot = new Vector2(1, 1);
                         break;
                     case "middle_left":
-                        anchorMin = new Vector2(0, 0.5f);
-                        anchorMax = new Vector2(0, 0.5f);
-                        pivot = new Vector2(0, 0.5f);
+                        targetAnchorMin = new Vector2(0, 0.5f);
+                        targetAnchorMax = new Vector2(0, 0.5f);
+                        targetPivot = new Vector2(0, 0.5f);
                         break;
                     case "middle_center":
-                        anchorMin = new Vector2(0.5f, 0.5f);
-                        anchorMax = new Vector2(0.5f, 0.5f);
-                        pivot = new Vector2(0.5f, 0.5f);
+                        targetAnchorMin = new Vector2(0.5f, 0.5f);
+                        targetAnchorMax = new Vector2(0.5f, 0.5f);
+                        targetPivot = new Vector2(0.5f, 0.5f);
                         break;
                     case "middle_right":
-                        anchorMin = new Vector2(1, 0.5f);
-                        anchorMax = new Vector2(1, 0.5f);
-                        pivot = new Vector2(1, 0.5f);
+                        targetAnchorMin = new Vector2(1, 0.5f);
+                        targetAnchorMax = new Vector2(1, 0.5f);
+                        targetPivot = new Vector2(1, 0.5f);
                         break;
                     case "bottom_left":
-                        anchorMin = new Vector2(0, 0);
-                        anchorMax = new Vector2(0, 0);
-                        pivot = new Vector2(0, 0);
+                        targetAnchorMin = new Vector2(0, 0);
+                        targetAnchorMax = new Vector2(0, 0);
+                        targetPivot = new Vector2(0, 0);
                         break;
                     case "bottom_center":
-                        anchorMin = new Vector2(0.5f, 0);
-                        anchorMax = new Vector2(0.5f, 0);
-                        pivot = new Vector2(0.5f, 0);
+                        targetAnchorMin = new Vector2(0.5f, 0);
+                        targetAnchorMax = new Vector2(0.5f, 0);
+                        targetPivot = new Vector2(0.5f, 0);
                         break;
                     case "bottom_right":
-                        anchorMin = new Vector2(1, 0);
-                        anchorMax = new Vector2(1, 0);
-                        pivot = new Vector2(1, 0);
+                        targetAnchorMin = new Vector2(1, 0);
+                        targetAnchorMax = new Vector2(1, 0);
+                        targetPivot = new Vector2(1, 0);
                         break;
                     case "stretch_horizontal":
-                        anchorMin = new Vector2(0, 0.5f);
-                        anchorMax = new Vector2(1, 0.5f);
-                        pivot = new Vector2(0.5f, 0.5f);
+                        targetAnchorMin = new Vector2(0, 0.5f);
+                        targetAnchorMax = new Vector2(1, 0.5f);
+                        targetPivot = new Vector2(0.5f, 0.5f);
                         break;
                     case "stretch_vertical":
-                        anchorMin = new Vector2(0.5f, 0);
-                        anchorMax = new Vector2(0.5f, 1);
-                        pivot = new Vector2(0.5f, 0.5f);
+                        targetAnchorMin = new Vector2(0.5f, 0);
+                        targetAnchorMax = new Vector2(0.5f, 1);
+                        targetPivot = new Vector2(0.5f, 0.5f);
                         break;
                     case "stretch_all":
-                        anchorMin = new Vector2(0, 0);
-                        anchorMax = new Vector2(1, 1);
-                        pivot = new Vector2(0.5f, 0.5f);
+                        targetAnchorMin = new Vector2(0, 0);
+                        targetAnchorMax = new Vector2(1, 1);
+                        targetPivot = new Vector2(0.5f, 0.5f);
                         break;
                     default:
                         return false;
                 }
 
-                if (rectTransform.anchorMin != anchorMin || rectTransform.anchorMax != anchorMax || rectTransform.pivot != pivot)
+                // 检查是否使用anchor_self模式
+                bool anchorSelf = false;
+                if (args.TryGetValue("anchor_self", out object anchorSelfObj))
                 {
-                    rectTransform.anchorMin = anchorMin;
-                    rectTransform.anchorMax = anchorMax;
-                    rectTransform.pivot = pivot;
+                    if (anchorSelfObj is bool anchorSelfBool)
+                        anchorSelf = anchorSelfBool;
+                    else if (bool.TryParse(anchorSelfObj?.ToString(), out bool parsedAnchorSelf))
+                        anchorSelf = parsedAnchorSelf;
+                }
+
+                // 如果使用anchor_self模式，基于元素当前位置重新计算锚点
+                if (anchorSelf)
+                {
+                    return ApplyAnchorSelfPreset(rectTransform, preset, args);
+                }
+
+                // 检查是否需要修改
+                if (rectTransform.anchorMin == targetAnchorMin &&
+                    rectTransform.anchorMax == targetAnchorMax &&
+                    rectTransform.pivot == targetPivot)
+                {
+                    return false; // 已经是目标锚点，无需修改
+                }
+
+                // 检查是否需要保持视觉位置
+                bool preserveVisualPosition = true; // 默认保持视觉位置
+                if (args.TryGetValue("preserve_visual_position", out object preserveObj))
+                {
+                    if (preserveObj is bool preserveBool)
+                        preserveVisualPosition = preserveBool;
+                    else if (bool.TryParse(preserveObj?.ToString(), out bool parsedPreserve))
+                        preserveVisualPosition = parsedPreserve;
+                }
+
+                // 应用锚点预设
+                if (preserveVisualPosition)
+                {
+                    return ApplyAnchorPresetWithVisualPositionPreserved(rectTransform, targetAnchorMin, targetAnchorMax, targetPivot);
+                }
+                else
+                {
+                    // 直接设置锚点，不保持视觉位置
+                    rectTransform.anchorMin = targetAnchorMin;
+                    rectTransform.anchorMax = targetAnchorMax;
+                    rectTransform.pivot = targetPivot;
                     return true;
                 }
             }
             return false;
+        }
+
+        /// <summary>
+        /// 应用锚点预设并保持视觉位置不变（参考UGUIUtil.AnchorsToCorners实现）
+        /// </summary>
+        private bool ApplyAnchorPresetWithVisualPositionPreserved(RectTransform rectTransform, Vector2 targetAnchorMin, Vector2 targetAnchorMax, Vector2 targetPivot)
+        {
+            // 获取父容器的RectTransform
+            RectTransform parentRect = rectTransform.parent as RectTransform;
+            if (parentRect == null)
+            {
+                // 如果没有父RectTransform，直接设置锚点
+                rectTransform.anchorMin = targetAnchorMin;
+                rectTransform.anchorMax = targetAnchorMax;
+                rectTransform.pivot = targetPivot;
+                return true;
+            }
+
+            // 保存当前的世界位置和尺寸
+            Vector3[] worldCorners = new Vector3[4];
+            rectTransform.GetWorldCorners(worldCorners);
+            Vector2 worldSize = new Vector2(
+                Vector3.Distance(worldCorners[0], worldCorners[3]),
+                Vector3.Distance(worldCorners[0], worldCorners[1])
+            );
+
+            // 计算当前在父容器中的相对位置（参考UGUIUtil.AnchorsToCorners的计算方式）
+            Vector2 currentOffsetMin = rectTransform.offsetMin;
+            Vector2 currentOffsetMax = rectTransform.offsetMax;
+            Vector2 currentAnchorMin = rectTransform.anchorMin;
+            Vector2 currentAnchorMax = rectTransform.anchorMax;
+
+            // 计算当前的实际锚点位置（包含offset的影响）
+            Vector2 actualAnchorMin = new Vector2(
+                currentAnchorMin.x + currentOffsetMin.x / parentRect.rect.width,
+                currentAnchorMin.y + currentOffsetMin.y / parentRect.rect.height
+            );
+            Vector2 actualAnchorMax = new Vector2(
+                currentAnchorMax.x + currentOffsetMax.x / parentRect.rect.width,
+                currentAnchorMax.y + currentOffsetMax.y / parentRect.rect.height
+            );
+
+            // 设置新的锚点和轴心点
+            rectTransform.anchorMin = targetAnchorMin;
+            rectTransform.anchorMax = targetAnchorMax;
+            rectTransform.pivot = targetPivot;
+
+            // 计算新锚点下需要的offset来保持相同的视觉位置
+            Vector2 newOffsetMin = new Vector2(
+                (actualAnchorMin.x - targetAnchorMin.x) * parentRect.rect.width,
+                (actualAnchorMin.y - targetAnchorMin.y) * parentRect.rect.height
+            );
+            Vector2 newOffsetMax = new Vector2(
+                (actualAnchorMax.x - targetAnchorMax.x) * parentRect.rect.width,
+                (actualAnchorMax.y - targetAnchorMax.y) * parentRect.rect.height
+            );
+
+            // 应用新的offset
+            rectTransform.offsetMin = newOffsetMin;
+            rectTransform.offsetMax = newOffsetMax;
+
+            return true;
+        }
+
+        /// <summary>
+        /// 应用基于自身位置的锚点预设（anchor_self=true时调用）
+        /// </summary>
+        private bool ApplyAnchorSelfPreset(RectTransform rectTransform, string preset, StateTreeContext args)
+        {
+            // 获取父容器的RectTransform
+            RectTransform parentRect = rectTransform.parent as RectTransform;
+            if (parentRect == null)
+            {
+                Debug.LogWarning("[UGUILayout] Anchor self preset requires a parent RectTransform, skipping.");
+                return false;
+            }
+
+            // 获取元素当前在父容器中的世界位置
+            Vector3[] worldCorners = new Vector3[4];
+            rectTransform.GetWorldCorners(worldCorners);
+
+            Vector3[] parentWorldCorners = new Vector3[4];
+            parentRect.GetWorldCorners(parentWorldCorners);
+
+            // 计算元素在父容器中的相对位置（0-1范围）
+            Vector3 elementBottomLeft = worldCorners[0];
+            Vector3 elementTopRight = worldCorners[2];
+            Vector3 elementCenter = (elementBottomLeft + elementTopRight) * 0.5f;
+
+            Vector3 parentBottomLeft = parentWorldCorners[0];
+            Vector3 parentTopRight = parentWorldCorners[2];
+
+            Vector2 elementCenterRel = new Vector2(
+                (elementCenter.x - parentBottomLeft.x) / (parentTopRight.x - parentBottomLeft.x),
+                (elementCenter.y - parentBottomLeft.y) / (parentTopRight.y - parentBottomLeft.y)
+            );
+
+            Vector2 elementBottomLeftRel = new Vector2(
+                (elementBottomLeft.x - parentBottomLeft.x) / (parentTopRight.x - parentBottomLeft.x),
+                (elementBottomLeft.y - parentBottomLeft.y) / (parentTopRight.y - parentBottomLeft.y)
+            );
+
+            Vector2 elementTopRightRel = new Vector2(
+                (elementTopRight.x - parentBottomLeft.x) / (parentTopRight.x - parentBottomLeft.x),
+                (elementTopRight.y - parentBottomLeft.y) / (parentTopRight.y - parentBottomLeft.y)
+            );
+
+            // 限制在0-1范围内
+            elementCenterRel.x = Mathf.Clamp01(elementCenterRel.x);
+            elementCenterRel.y = Mathf.Clamp01(elementCenterRel.y);
+            elementBottomLeftRel.x = Mathf.Clamp01(elementBottomLeftRel.x);
+            elementBottomLeftRel.y = Mathf.Clamp01(elementBottomLeftRel.y);
+            elementTopRightRel.x = Mathf.Clamp01(elementTopRightRel.x);
+            elementTopRightRel.y = Mathf.Clamp01(elementTopRightRel.y);
+
+            Vector2 newAnchorMin, newAnchorMax, newPivot;
+
+            // 根据预设类型基于元素自身位置计算锚点
+            switch (preset)
+            {
+                case "top_left":
+                    newAnchorMin = new Vector2(elementBottomLeftRel.x, elementTopRightRel.y);
+                    newAnchorMax = new Vector2(elementBottomLeftRel.x, elementTopRightRel.y);
+                    newPivot = new Vector2(0, 1);
+                    break;
+                case "top_center":
+                    newAnchorMin = new Vector2(elementCenterRel.x, elementTopRightRel.y);
+                    newAnchorMax = new Vector2(elementCenterRel.x, elementTopRightRel.y);
+                    newPivot = new Vector2(0.5f, 1);
+                    break;
+                case "top_right":
+                    newAnchorMin = new Vector2(elementTopRightRel.x, elementTopRightRel.y);
+                    newAnchorMax = new Vector2(elementTopRightRel.x, elementTopRightRel.y);
+                    newPivot = new Vector2(1, 1);
+                    break;
+                case "middle_left":
+                    newAnchorMin = new Vector2(elementBottomLeftRel.x, elementCenterRel.y);
+                    newAnchorMax = new Vector2(elementBottomLeftRel.x, elementCenterRel.y);
+                    newPivot = new Vector2(0, 0.5f);
+                    break;
+                case "middle_center":
+                    newAnchorMin = elementCenterRel;
+                    newAnchorMax = elementCenterRel;
+                    newPivot = new Vector2(0.5f, 0.5f);
+                    break;
+                case "middle_right":
+                    newAnchorMin = new Vector2(elementTopRightRel.x, elementCenterRel.y);
+                    newAnchorMax = new Vector2(elementTopRightRel.x, elementCenterRel.y);
+                    newPivot = new Vector2(1, 0.5f);
+                    break;
+                case "bottom_left":
+                    newAnchorMin = elementBottomLeftRel;
+                    newAnchorMax = elementBottomLeftRel;
+                    newPivot = new Vector2(0, 0);
+                    break;
+                case "bottom_center":
+                    newAnchorMin = new Vector2(elementCenterRel.x, elementBottomLeftRel.y);
+                    newAnchorMax = new Vector2(elementCenterRel.x, elementBottomLeftRel.y);
+                    newPivot = new Vector2(0.5f, 0);
+                    break;
+                case "bottom_right":
+                    newAnchorMin = new Vector2(elementTopRightRel.x, elementBottomLeftRel.y);
+                    newAnchorMax = new Vector2(elementTopRightRel.x, elementBottomLeftRel.y);
+                    newPivot = new Vector2(1, 0);
+                    break;
+                case "stretch_horizontal":
+                    newAnchorMin = new Vector2(elementBottomLeftRel.x, elementCenterRel.y);
+                    newAnchorMax = new Vector2(elementTopRightRel.x, elementCenterRel.y);
+                    newPivot = new Vector2(0.5f, 0.5f);
+                    break;
+                case "stretch_vertical":
+                    newAnchorMin = new Vector2(elementCenterRel.x, elementBottomLeftRel.y);
+                    newAnchorMax = new Vector2(elementCenterRel.x, elementTopRightRel.y);
+                    newPivot = new Vector2(0.5f, 0.5f);
+                    break;
+                case "stretch_all":
+                    // stretch_all + anchor_self = tattoo功能（AnchorsToCorners）
+                    newAnchorMin = new Vector2(
+                        rectTransform.anchorMin.x + rectTransform.offsetMin.x / parentRect.rect.width,
+                        rectTransform.anchorMin.y + rectTransform.offsetMin.y / parentRect.rect.height
+                    );
+                    newAnchorMax = new Vector2(
+                        rectTransform.anchorMax.x + rectTransform.offsetMax.x / parentRect.rect.width,
+                        rectTransform.anchorMax.y + rectTransform.offsetMax.y / parentRect.rect.height
+                    );
+                    newPivot = new Vector2(0.5f, 0.5f);
+                    break;
+                default:
+                    return false;
+            }
+
+            // 检查是否需要修改（避免不必要的更新）
+            if (Vector2.Distance(rectTransform.anchorMin, newAnchorMin) < 0.001f &&
+                Vector2.Distance(rectTransform.anchorMax, newAnchorMax) < 0.001f &&
+                Vector2.Distance(rectTransform.pivot, newPivot) < 0.001f &&
+                Vector2.Distance(rectTransform.offsetMin, Vector2.zero) < 0.001f &&
+                Vector2.Distance(rectTransform.offsetMax, Vector2.zero) < 0.001f)
+            {
+                return false; // 已经是目标状态，无需修改
+            }
+
+            // 应用新的锚点
+            rectTransform.anchorMin = newAnchorMin;
+            rectTransform.anchorMax = newAnchorMax;
+            rectTransform.pivot = newPivot;
+
+            // 重置偏移量为零（anchor_self的核心特征）
+            rectTransform.offsetMin = Vector2.zero;
+            rectTransform.offsetMax = Vector2.zero;
+
+            Debug.Log($"[UGUILayout] Applied anchor_self preset '{preset}' to '{rectTransform.name}': anchors [{newAnchorMin.x:F3},{newAnchorMin.y:F3}] to [{newAnchorMax.x:F3},{newAnchorMax.y:F3}]");
+            return true;
         }
 
         /// <summary>
@@ -507,172 +753,6 @@ namespace UnityMcp.Tools
 
         #endregion
 
-        #region 独立Action处理方法
-
-        /// <summary>
-        /// 处理锚点设置操作
-        /// </summary>
-        private object HandleAnchorAction(StateTreeContext args)
-        {
-            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
-            if (targets.Length == 0)
-            {
-                return Response.Error("No target GameObjects found in execution context.");
-            }
-
-            return ApplySingleProperty(targets, args, (rectTransform, context) =>
-            {
-                bool modified = false;
-                modified |= ApplyAnchorMin(rectTransform, context);
-                modified |= ApplyAnchorMax(rectTransform, context);
-                modified |= ApplyAnchorPreset(rectTransform, context);
-                return modified;
-            }, "anchor settings");
-        }
-
-        /// <summary>
-        /// 处理尺寸设置操作
-        /// </summary>
-        private object HandleSizeDeltaAction(StateTreeContext args)
-        {
-            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
-            if (targets.Length == 0)
-            {
-                return Response.Error("No target GameObjects found in execution context.");
-            }
-
-            return ApplySingleProperty(targets, args, (rectTransform, context) =>
-                ApplySizeDelta(rectTransform, context), "size delta");
-        }
-
-        /// <summary>
-        /// 处理位置设置操作
-        /// </summary>
-        private object HandlePositionAction(StateTreeContext args)
-        {
-            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
-            if (targets.Length == 0)
-            {
-                return Response.Error("No target GameObjects found in execution context.");
-            }
-
-            return ApplySingleProperty(targets, args, (rectTransform, context) =>
-            {
-                bool modified = false;
-                modified |= ApplyAnchoredPosition(rectTransform, context);
-                modified |= ApplyLocalPosition(rectTransform, context);
-                return modified;
-            }, "position");
-        }
-
-        /// <summary>
-        /// 处理轴心点设置操作
-        /// </summary>
-        private object HandlePivotAction(StateTreeContext args)
-        {
-            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
-            if (targets.Length == 0)
-            {
-                return Response.Error("No target GameObjects found in execution context.");
-            }
-
-            return ApplySingleProperty(targets, args, (rectTransform, context) =>
-                ApplyPivot(rectTransform, context), "pivot");
-        }
-
-        /// <summary>
-        /// 处理缩放设置操作
-        /// </summary>
-        private object HandleScaleAction(StateTreeContext args)
-        {
-            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
-            if (targets.Length == 0)
-            {
-                return Response.Error("No target GameObjects found in execution context.");
-            }
-
-            return ApplySingleProperty(targets, args, (rectTransform, context) =>
-                ApplyLocalScale(rectTransform, context), "scale");
-        }
-
-        /// <summary>
-        /// 处理旋转设置操作
-        /// </summary>
-        private object HandleRotationAction(StateTreeContext args)
-        {
-            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
-            if (targets.Length == 0)
-            {
-                return Response.Error("No target GameObjects found in execution context.");
-            }
-
-            return ApplySingleProperty(targets, args, (rectTransform, context) =>
-                ApplyLocalRotation(rectTransform, context), "rotation");
-        }
-
-        /// <summary>
-        /// 处理层级索引设置操作
-        /// </summary>
-        private object HandleSiblingIndexAction(StateTreeContext args)
-        {
-            GameObject[] targets = GetTargetsBasedOnSelectMany(args);
-            if (targets.Length == 0)
-            {
-                return Response.Error("No target GameObjects found in execution context.");
-            }
-
-            return ApplySingleProperty(targets, args, (rectTransform, context) =>
-                ApplySetSiblingIndex(rectTransform, context), "sibling index");
-        }
-
-        /// <summary>
-        /// 应用单个属性的通用方法
-        /// </summary>
-        private object ApplySingleProperty(GameObject[] targets, StateTreeContext args,
-            Func<RectTransform, StateTreeContext, bool> applyFunc, string operationName)
-        {
-            var results = new List<Dictionary<string, object>>();
-            var errors = new List<string>();
-            int successCount = 0;
-
-            foreach (GameObject targetGo in targets)
-            {
-                if (targetGo == null) continue;
-
-                try
-                {
-                    RectTransform rectTransform = targetGo.GetComponent<RectTransform>();
-                    if (rectTransform == null)
-                    {
-                        errors.Add($"[{targetGo.name}] No RectTransform component found");
-                        continue;
-                    }
-
-                    Undo.RecordObject(rectTransform, $"Set {operationName}");
-
-                    bool modified = applyFunc(rectTransform, args);
-
-                    if (modified)
-                    {
-                        EditorUtility.SetDirty(rectTransform);
-                        successCount++;
-                        results.Add(GetRectTransformData(rectTransform));
-                    }
-                    else
-                    {
-                        errors.Add($"[{targetGo.name}] No modifications applied");
-                    }
-                }
-                catch (Exception e)
-                {
-                    errors.Add($"[{targetGo.name}] Error: {e.Message}");
-                }
-            }
-
-            return CreateBatchOperationResponse($"set {operationName}", successCount, targets.Length, results, errors);
-        }
-
-        #endregion
 
 
 

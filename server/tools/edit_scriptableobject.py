@@ -6,7 +6,7 @@ ScriptableObject管理工具
 from typing import Dict, Any, Optional, List
 from pydantic import Field
 from mcp.server.fastmcp import FastMCP, Context
-from unity_connection import get_unity_connection
+from .call_up import get_common_call_response
 
 
 def register_edit_scriptableobject_tools(mcp: FastMCP):
@@ -96,7 +96,7 @@ def register_edit_scriptableobject_tools(mcp: FastMCP):
         )
     ) -> Dict[str, Any]:
         """
-        ScriptableObject管理工具
+        ScriptableObject管理工具（二级工具）
         
         支持的操作:
         - create: 创建ScriptableObject
@@ -108,50 +108,4 @@ def register_edit_scriptableobject_tools(mcp: FastMCP):
         - move: 移动/重命名ScriptableObject
         - rename: 移动/重命名ScriptableObject（与move相同）
         """
-        try:
-            unity_conn = get_unity_connection()
-            
-            # 构建命令参数
-            cmd = {
-                "action": action,
-                "path": path
-            }
-            
-            # 添加可选参数
-            optional_params = {
-                "script_type": script_type,
-                "properties": properties,
-                "destination": destination,
-                "query": query,
-                "recursive": recursive,
-                "force": force,
-                "create_folder": create_folder,
-                "backup": backup,
-                "validate_properties": validate_properties,
-                "apply_immediately": apply_immediately,
-                "mark_dirty": mark_dirty,
-                "save_assets": save_assets,
-                "refresh_assets": refresh_assets
-            }
-            
-            for key, value in optional_params.items():
-                if value is not None:
-                    cmd[key] = value
-            
-            # 发送命令到Unity
-            result = unity_conn.send_command_with_retry("edit_scriptableobject", cmd)
-            
-            return {
-                "success": True,
-                "message": f"ScriptableObject operation '{action}' completed successfully",
-                "data": result.get("data", {}),
-                "error": None
-            }
-            
-        except Exception as e:
-            return {
-                "success": False,
-                "message": f"ScriptableObject operation '{action}' failed",
-                "data": {},
-                "error": str(e)
-            }
+        return get_common_call_response("edit_scriptableobject")

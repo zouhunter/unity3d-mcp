@@ -1,5 +1,11 @@
 """
-批量函数调用工具，包含单个和批量Unity函数调用功能。
+Unity MCP 核心调用工具，包含单个和批量Unity函数调用功能。
+
+⚠️ 重要说明：
+- 所有MCP函数调用（除single_call和batch_call外）都必须通过此文件中的函数调用
+- 不能直接调用hierarchy_create、edit_gameobject、manage_editor等函数
+- 必须使用single_call进行单个函数调用，或使用batch_call进行批量调用
+- 这是Unity MCP系统的核心调用入口，所有其他工具函数都通过这里转发到Unity
 """
 import json
 from typing import Annotated, List, Dict, Any, Literal
@@ -7,39 +13,57 @@ from pydantic import Field
 from mcp.server.fastmcp import FastMCP, Context
 from unity_connection import get_unity_connection
 
-def register_extra_tools(mcp: FastMCP):
-    @mcp.tool("extra_call")
-    def extra_call(
+# 公共的错误提示文本
+def get_common_call_response(func_name: str) -> dict:
+    """
+    获取公共的错误响应格式
+    
+    Args:
+        func_name: 函数名称
+        
+    Returns:
+        标准的错误响应字典
+    """
+    return {
+        "success": False,
+        "error": "请使用 single_call(func='{func_name}', args={{...}}) 来调用此函数".format(func_name=func_name),
+        "data": None
+    }
+
+def register_call_tools(mcp: FastMCP):
+    @mcp.tool("single_call")
+    def single_call(
         ctx: Context,
         func: Annotated[str, Field(
             title="Unity函数名称",
-            description="要调用的Unity函数名称，支持的函数包括: gameplay(游戏控制), hierarchy_create(创建GameObject), manage_editor(编辑器管理), project_search(项目搜索), edit_gameobject(编辑对象), console_read(控制台读取), python_runner(Python执行)",
-            examples=["gameplay", "hierarchy_create", "manage_editor", "project_search"]
+            description="要调用的Unity函数名称。⚠️ 重要：所有MCP函数调用（除single_call和batch_call外）都必须通过此函数调用",
+            examples=["hierarchy_create", "edit_gameobject", "manage_editor", "gameplay", "console_write"]
         )],
         args: Annotated[Dict[str, Any], Field(
             title="函数参数",
-            description="传递给Unity函数的参数字典，格式依据具体函数而定",
+            description="传递给Unity函数的参数字典。参数格式必须严格按照目标函数的定义，所有参数都通过此args字典传递",
             default_factory=dict,
             examples=[
-                {"action": "screenshot", "format": "PNG"},
-                {"from": "primitive", "primitive_type": "Cube", "name": "MyCube"},
-                {"action": "play"},
-                {"search_target": "script", "query": "Player"}
+                {"source": "primitive", "name": "Cube", "primitive_type": "Cube"},
+                {"path": "Player", "action": "add_component", "component_type": "Rigidbody"},
+                {"action": "play"}
             ]
         )] = {}
     ) -> Dict[str, Any]:
-        """单个函数调用工具，可以调用Unity-MCP系统中的指定函数。
-
-        支持所有已注册的Unity工具函数，提供统一的调用接口。
-        常用操作包括游戏控制、对象创建、编辑器管理等。
-
-        Returns:
-            包含函数调用结果的字典：
-            {
-                "success": bool,     # 调用是否成功
-                "result": Any,       # 函数返回的结果数据
-                "error": str|None    # 错误信息（如果有的话）
-            }
+        """单个函数调用工具，用于调用所有Unity MCP函数。（一级工具）
+        
+        ⚠️ 重要说明：
+        - 所有MCP函数调用（除single_call和batch_call外）都必须通过此函数调用
+        - 不能直接调用hierarchy_create、edit_gameobject等函数，必须通过single_call
+        - func参数指定要调用的函数名，args参数传递该函数所需的所有参数
+        
+        支持的函数包括但不限于：
+        - hierarchy_create: 创建GameObject
+        - edit_gameobject: 编辑GameObject
+        - manage_editor: 编辑器管理
+        - gameplay: 游戏玩法控制
+        - console_write: 控制台输出
+        - 以及其他所有MCP工具函数
         """
         
         try:
@@ -76,7 +100,7 @@ def register_extra_tools(mcp: FastMCP):
             }
             
             # 使用带重试机制的命令发送
-            result = bridge.send_command_with_retry("extra_call", params, max_retries=2)
+            result = bridge.send_command_with_retry("single_call", params, max_retries=2)
             
             # 确保返回结果包含success标志
             if isinstance(result, dict):
@@ -107,17 +131,17 @@ def register_extra_tools(mcp: FastMCP):
                 "result": None
             }
 
-    @mcp.tool("extra_batch_calls")
-    def extra_batch_calls(
+    @mcp.tool("batch_call")
+    def batch_call(
         ctx: Context,
         funcs: Annotated[List[Dict[str, Any]], Field(
             title="函数调用列表",
-            description="要批量执行的Unity函数调用列表，按顺序执行。每个元素必须包含func和args字段",
+            description="要批量执行的Unity函数调用列表，按顺序执行。⚠️ 重要：每个元素必须包含func和args字段，func指定要调用的MCP函数名，args传递该函数的所有参数",
             min_length=1,
             max_length=50,
             examples=[
                 [
-                    {"func": "hierarchy_create", "args": {"from": "primitive", "primitive_type": "Cube", "name": "Enemy"}},
+                    {"func": "hierarchy_create", "args": {"source": "primitive", "primitive_type": "Cube", "name": "Enemy"}},
                     {"func": "edit_gameobject", "args": {"path": "Enemy", "action": "add_component", "component_type": "Rigidbody"}}
                 ],
                 [
@@ -128,23 +152,19 @@ def register_extra_tools(mcp: FastMCP):
             ]
         )]
     ) -> Dict[str, Any]:
-        """批量函数调用工具，可以按顺序调用Unity中的多个函数并收集所有返回值。
+        """批量函数调用工具，可以按顺序调用Unity中的多个MCP函数并收集所有返回值。（一级工具）
+        
+        ⚠️ 重要说明：
+        - 所有MCP函数调用（除single_call和batch_call外）都必须通过此函数调用
+        - 每个函数调用元素必须包含func（函数名）和args（参数字典）字段
+        - 函数名必须是有效的MCP函数名，如hierarchy_create、edit_gameobject等
+        - 参数格式必须严格按照目标函数的定义
 
         支持事务性操作和批量处理，常用场景：
         - 创建并配置GameObject：创建 → 设置属性 → 添加组件
         - 场景管理：播放 → 截图 → 停止
         - 批量创建：创建多个不同类型的GameObject
-
-        Returns:
-            包含所有函数调用结果的详细统计字典：
-            {
-                "success": bool,           # 整体批量操作是否成功
-                "results": [Any, ...],     # 每个函数调用的返回结果数组
-                "errors": [str|None, ...], # 每个函数调用的错误信息数组
-                "total_calls": int,        # 总调用次数
-                "successful_calls": int,   # 成功调用次数
-                "failed_calls": int        # 失败调用次数
-            }
+        - UI创建：创建Canvas → 创建UI元素 → 设置布局
         """
         
         # 获取Unity连接实例
@@ -196,12 +216,12 @@ def register_extra_tools(mcp: FastMCP):
             
             # 准备发送给Unity的参数，保持架构一致性
             params = {
-                "func": "extra_batch_calls",
+                "func": "batch_call",
                 "args": funcs
             }
             
             # 使用带重试机制的命令发送到Unity的functions_call处理器
-            result = bridge.send_command_with_retry("extra_batch_calls", params, max_retries=1)
+            result = bridge.send_command_with_retry("batch_call", params, max_retries=1)
             
             # Unity的functions_call处理器返回的结果已经是完整的格式，直接返回data部分
             if isinstance(result, dict) and "data" in result:

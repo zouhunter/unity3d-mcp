@@ -6,7 +6,7 @@
 from typing import Dict, Any, Optional, List
 from pydantic import Field
 from mcp.server.fastmcp import FastMCP, Context
-from unity_connection import get_unity_connection
+from .call_up import get_common_call_response
 
 
 def register_edit_prefab_tools(mcp: FastMCP):
@@ -134,73 +134,9 @@ def register_edit_prefab_tools(mcp: FastMCP):
         )
     ) -> Dict[str, Any]:
         """
-        预制体管理工具
+        预制体管理工具，支持操作: 
         
-        支持的操作:
-        - create: 创建预制体
-        - modify: 修改预制体
-        - duplicate: 复制预制体
-        - get_info: 获取预制体信息
-        - search: 搜索预制体
-        - instantiate: 实例化预制体
-        - unpack: 解包预制体
-        - pack: 打包预制体
-        - create_variant: 创建预制体变体
-        - connect_to_prefab: 连接到预制体
-        - apply_changes: 应用预制体更改
-        - revert_changes: 还原预制体更改
-        - break_connection: 断开预制体连接
+        create(创建), modify(修改), duplicate(复制), get_info(获取信息), search(搜索), instantiate(实例化), unpack(解包), pack(打包), create_variant(创建变体), connect_to_prefab(连接), apply_changes(应用更改), revert_changes(还原更改), break_connection(断开连接)
         """
-        try:
-            unity_conn = get_unity_connection()
-            
-            # 构建命令参数
-            cmd = {
-                "action": action,
-                "path": path
-            }
-            
-            # 添加可选参数
-            optional_params = {
-                "source_object": source_object,
-                "destination": destination,
-                "query": query,
-                "recursive": recursive,
-                "force": force,
-                "prefab_variant": prefab_variant,
-                "unpack_mode": unpack_mode,
-                "pack_mode": pack_mode,
-                "connect_to_prefab": connect_to_prefab,
-                "apply_prefab_changes": apply_prefab_changes,
-                "revert_prefab_changes": revert_prefab_changes,
-                "break_prefab_connection": break_prefab_connection,
-                "prefab_type": prefab_type,
-                "parent_prefab": parent_prefab,
-                "scene_path": scene_path,
-                "position": position,
-                "rotation": rotation,
-                "scale": scale,
-                "parent_path": parent_path
-            }
-            
-            for key, value in optional_params.items():
-                if value is not None:
-                    cmd[key] = value
-            
-            # 发送命令到Unity
-            result = unity_conn.send_command_with_retry("edit_prefab", cmd)
-            
-            return {
-                "success": True,
-                "message": f"Prefab operation '{action}' completed successfully",
-                "data": result.get("data", {}),
-                "error": None
-            }
-            
-        except Exception as e:
-            return {
-                "success": False,
-                "message": f"Prefab operation '{action}' failed",
-                "data": {},
-                "error": str(e)
-            }
+
+        return get_common_call_response("edit_prefab")

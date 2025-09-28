@@ -12,9 +12,9 @@ namespace UnityMcp.Tools
     /// Handles batch function calls from MCP server.
     /// Executes multiple function calls sequentially and collects all results.
     /// </summary>
-    public class ExtraBatchCalls : McpTool
+    public class BatchCall : McpTool
     {
-        public override string ToolName => "extra_batch_calls";
+        public override string ToolName => "batch_call";
 
         /// <summary>
         /// Main handler for batch function calls.

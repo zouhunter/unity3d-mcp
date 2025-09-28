@@ -6,7 +6,7 @@ Unity资产管理工具
 from typing import Dict, Any, Optional, List
 from pydantic import Field
 from mcp.server.fastmcp import FastMCP, Context
-from unity_connection import get_unity_connection
+from .call_up import get_common_call_response
 
 
 def register_edit_asset_tools(mcp: FastMCP):
@@ -50,7 +50,7 @@ def register_edit_asset_tools(mcp: FastMCP):
         )
     ) -> Dict[str, Any]:
         """
-        Unity资产管理工具
+        Unity资产管理工具（二级工具）
         
         支持的操作:
         - import: 重新导入资产
@@ -62,38 +62,8 @@ def register_edit_asset_tools(mcp: FastMCP):
         - get_info: 获取资产信息
         - create_folder: 创建文件夹
         """
-        try:
-            unity_conn = get_unity_connection()
-            
-            # 构建命令参数
-            cmd = {
-                "action": action,
-                "path": path
-            }
-            
-            if properties is not None:
-                cmd["properties"] = properties
-            if destination is not None:
-                cmd["destination"] = destination
-            if query is not None:
-                cmd["query"] = query
-            if force is not None:
-                cmd["force"] = force
-            
-            # 发送命令到Unity
-            result = unity_conn.send_command_with_retry("edit_asset", cmd)
-            
-            return {
-                "success": True,
-                "message": f"Asset operation '{action}' completed successfully",
-                "data": result.get("data", {}),
-                "error": None
-            }
-            
-        except Exception as e:
-            return {
-                "success": False,
-                "message": f"Asset operation '{action}' failed",
-                "data": {},
-                "error": str(e)
-            }
+        # ⚠️ 重要提示：此函数仅用于提供参数说明和文档
+        # 实际调用请使用 single_call 函数
+        # 示例：single_call(func="edit_asset", args={...})
+
+        return get_common_call_response("edit_asset")

@@ -1,11 +1,10 @@
 """
 Unity GameObject编辑工具，包含GameObject的创建、修改、组件管理等功能。
 """
-import json
 from typing import Annotated, Dict, Any, Optional, List
 from pydantic import Field
 from mcp.server.fastmcp import FastMCP, Context
-from unity_connection import get_unity_connection
+from .call_up import get_common_call_response
 
 
 def register_edit_gameobject_tools(mcp: FastMCP):
@@ -95,7 +94,7 @@ def register_edit_gameobject_tools(mcp: FastMCP):
             examples=[0, 1, 2, 4]
         )] = None
     ) -> Dict[str, Any]:
-        """Unity GameObject编辑工具，用于创建、修改和管理GameObject。
+        """Unity GameObject编辑工具，用于创建、修改和管理GameObject。（二级工具）
 
         支持多种GameObject操作，适用于：
         - 对象创建：创建新的GameObject
@@ -103,165 +102,10 @@ def register_edit_gameobject_tools(mcp: FastMCP):
         - 组件管理：添加、移除和获取组件
         - 层次结构：设置父子关系
         - 变换操作：设置位置、旋转、缩放
-
-        Returns:
-            包含GameObject操作结果的字典：
-            {
-                "success": bool,        # 操作是否成功
-                "message": str,         # 操作结果描述
-                "data": Any,           # GameObject相关数据
-                "error": str|None      # 错误信息（如果有的话）
-            }
         """
         
-        try:
-            # 验证操作类型
-            valid_actions = ["create", "modify", "get_components", "add_component", "remove_component", "set_parent"]
-            if action not in valid_actions:
-                return {
-                    "success": False,
-                    "error": f"无效的操作类型: '{action}'。支持的操作: {valid_actions}",
-                    "data": None
-                }
-            
-            # 验证目标参数：必须提供path或instance_id之一（除了create操作）
-            if action != "create":
-                if not path and instance_id is None:
-                    return {
-                        "success": False,
-                        "error": "必须提供path或instance_id参数之一",
-                        "data": None
-                    }
-            
-            # 验证创建操作参数
-            if action == "create":
-                if not name:
-                    return {
-                        "success": False,
-                        "error": "create操作需要提供name参数",
-                        "data": None
-                    }
-            
-            # 验证组件操作参数
-            if action in ["add_component", "remove_component"]:
-                if not component_type:
-                    return {
-                        "success": False,
-                        "error": f"操作'{action}'需要提供component_type参数",
-                        "data": None
-                    }
-            
-            # 验证父对象设置参数
-            if action == "set_parent":
-                if not parent_id and not parent_path:
-                    return {
-                        "success": False,
-                        "error": "set_parent操作需要提供parent_id或parent_path参数",
-                        "data": None
-                    }
-            
-            # 验证位置参数
-            if position and len(position) != 3:
-                return {
-                    "success": False,
-                    "error": "position参数必须是包含3个元素的数组 [x, y, z]",
-                    "data": None
-                }
-            
-            # 验证旋转参数
-            if rotation and len(rotation) != 3:
-                return {
-                    "success": False,
-                    "error": "rotation参数必须是包含3个元素的数组 [x, y, z]",
-                    "data": None
-                }
-            
-            # 验证缩放参数
-            if scale and len(scale) != 3:
-                return {
-                    "success": False,
-                    "error": "scale参数必须是包含3个元素的数组 [x, y, z]",
-                    "data": None
-                }
-            
-            # 获取Unity连接实例
-            bridge = get_unity_connection()
-            
-            if bridge is None:
-                return {
-                    "success": False,
-                    "error": "无法获取Unity连接",
-                    "data": None
-                }
-            
-            # 准备发送给Unity的参数
-            params = {"action": action}
-            
-            # 添加目标参数
-            if path:
-                params["path"] = path
-            if instance_id is not None:
-                params["instance_id"] = instance_id
-            
-            # 添加基本属性参数
-            if name:
-                params["name"] = name
-            if tag:
-                params["tag"] = tag
-            if layer is not None:
-                params["layer"] = layer
-            if active is not None:
-                params["active"] = active
-            if static_flags is not None:
-                params["static_flags"] = static_flags
-            
-            # 添加父对象参数
-            if parent_id is not None:
-                params["parent_id"] = parent_id
-            if parent_path:
-                params["parent_path"] = parent_path
-            
-            # 添加变换参数
-            if position:
-                params["position"] = position
-            if rotation:
-                params["rotation"] = rotation
-            if scale:
-                params["scale"] = scale
-            
-            # 添加组件参数
-            if component_type:
-                params["component_type"] = component_type
-            
-            # 使用带重试机制的命令发送
-            result = bridge.send_command_with_retry("edit_gameobject", params, max_retries=2)
-            
-            # 确保返回结果包含success标志
-            if isinstance(result, dict):
-                return result
-            else:
-                return {
-                    "success": True,
-                    "message": f"GameObject操作'{action}'执行完成",
-                    "data": result,
-                    "error": None
-                }
-                
-        except json.JSONDecodeError as e:
-            return {
-                "success": False,
-                "error": f"参数序列化失败: {str(e)}",
-                "data": None
-            }
-        except ConnectionError as e:
-            return {
-                "success": False,
-                "error": f"Unity连接错误: {str(e)}",
-                "data": None
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"GameObject编辑失败: {str(e)}",
-                "data": None
-            }
+        # ⚠️ 重要提示：此函数仅用于提供参数说明和文档
+        # 实际调用请使用 single_call 函数
+        # 示例：single_call(func="edit_gameobject", args={"path": "Player", "action": "modify"})
+        
+        return get_common_call_response("edit_gameobject")

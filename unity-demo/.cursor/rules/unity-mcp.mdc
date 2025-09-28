@@ -10,8 +10,8 @@ alwaysApply: false
 ## 📋 目录索引
 
 ### 🔧 核心工具 (FacadeTools)
-- [extra_call](#extra_call---单次函数调用工具) - 单次函数调用
-- [extra_batch_calls](#extra_batch_calls---批量函数调用工具) - 批量函数调用
+- [single_call](#single_call---单次函数调用工具) - 单次函数调用
+- [batch_call](#batch_call---批量函数调用工具) - 批量函数调用
 
 ### 🧩 功能模块 (MethodTools)
 **🛠️ 调试工具**
@@ -27,19 +27,19 @@ alwaysApply: false
 ```
 
 **FacadeTools** (2个)
-- `extra_call` - 单次方法调用
-- `extra_batch_calls` - 批量方法调用
+- `single_call` - 单次方法调用
+- `batch_call` - 批量方法调用
 
 **MethodTools** (1+个)  
 专门的功能方法，仅通过FacadeTools调用，参数通过`args`字典传递。
-
-> ⚠️ **重要提醒**: 除`extra_call`和`extra_batch_calls`外，其余均为方法名，不能直接被MCP调用。
+- `gm_command` - GM指令执行工具
+> ⚠️ **重要提醒**: 需要`single_call`和`batch_call`来参数化调用MethodTools。
 
 ---
 
 ## 🔧 FacadeTools
 
-### extra_call - 单次函数调用工具
+### single_call - 单次函数调用工具
 **功能**: 调用一次 Unity MCP 方法。
 
 参数
@@ -58,14 +58,14 @@ alwaysApply: false
 
 示例：创建一个 Cube
 ```python
-extra_call(
+single_call(
   func="gm_command",
   args={"action": "go_home_scene"}
 )
 ```
 
 ---
-### extra_batch_calls - 批量函数调用工具
+### batch_call - 批量函数调用工具
 **功能**: 按顺序执行多个 Unity MCP 方法调用并收集所有返回值。
 
 参数
@@ -95,8 +95,8 @@ extra_call(
 
 ## 🧩 MethodTools
 > 通过 FacadeTools： 调用以下方法：
-> - 单次：使用 `extra_call`，设置 `func` 为方法名，`args` 为方法参数字典。
-> - 批量：使用 `extra_batch_calls`，把多条 `{func, args}` 放入 `extra_calls`。
+> - 单次：使用 `single_call`，设置 `func` 为方法名，`args` 为方法参数字典。
+> - 批量：使用 `batch_call`，把多条 `{func, args}` 放入 `single_calls`。
 
 ### gm_command - GM指令执行工具
 **功能**: 执行游戏管理员(GM)相关指令，用于游戏开发和调试。
@@ -109,7 +109,7 @@ extra_call(
 
 示例：执行默认GM指令
 ```python
-extra_call(
+single_call(
   func="gm_command",
   args={"action": "default"}
 )

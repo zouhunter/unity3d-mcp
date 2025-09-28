@@ -910,10 +910,10 @@ namespace UnityMcp.Tools
             JObject inputObj = JObject.Parse(jsonString);
 
             // 检查是否为批量调用
-            if (inputObj.ContainsKey("func") && inputObj["func"].ToString() == "extra_batch_calls")
+            if (inputObj.ContainsKey("func") && inputObj["func"].ToString() == "batch_call")
             {
                 // 批量函数调用
-                var functionsCall = new ExtraBatchCalls();
+                var functionsCall = new BatchCall();
                 object callResult = null;
                 bool callbackExecuted = false;
                 functionsCall.HandleCommand(inputObj, (result) =>
@@ -935,7 +935,7 @@ namespace UnityMcp.Tools
             else if (inputObj.ContainsKey("func"))
             {
                 // 单个函数调用
-                var functionCall = new ExtraCall();
+                var functionCall = new SingleCall();
                 object callResult = null;
                 bool callbackExecuted = false;
 

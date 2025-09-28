@@ -1,9 +1,12 @@
-from .extra import register_extra_tools
+from .call_up import register_call_tools
 from .console import register_console_tools
 from .run_code import register_run_code_tools
-from .hierarchy import register_hierarchy_tools
-from .project import register_project_tools
-from .res_edit import register_res_edit_tools
+from .hierarchy_create import register_hierarchy_create_tools
+from .hierarchy_search import register_hierarchy_search_tools
+from .project_search import register_project_search_tools
+from .project_operate import register_project_operate_tools
+from .edit_material import register_edit_material_tools
+from .edit_mesh import register_edit_mesh_tools
 from .gameplay import register_gameplay_tools
 from .manage_editor import register_manage_editor_tools
 from .manage_package import register_manage_package_tools
@@ -22,17 +25,19 @@ from .edit_texture import register_edit_texture_tools
 from .ui_rule_manage import register_ui_rule_manage_tools
 from .edit_scriptableobject import register_edit_scriptableobject_tools
 from .edit_shader import register_edit_shader_tools
-from .gm_command import register_gm_command_tools
 
 def register_all_tools(mcp):
     """Register all refactored tools with the MCP server."""
     print("Registering Unity MCP Server refactored tools...")
-    register_extra_tools(mcp)
+    register_call_tools(mcp)
     register_console_tools(mcp)
     register_run_code_tools(mcp)
-    register_hierarchy_tools(mcp)
-    register_project_tools(mcp)
-    register_res_edit_tools(mcp)
+    register_hierarchy_create_tools(mcp)
+    register_hierarchy_search_tools(mcp)
+    register_project_search_tools(mcp)
+    register_project_operate_tools(mcp)
+    register_edit_material_tools(mcp)
+    register_edit_mesh_tools(mcp)
     register_gameplay_tools(mcp)
     register_manage_editor_tools(mcp)
     register_manage_package_tools(mcp)
@@ -51,5 +56,4 @@ def register_all_tools(mcp):
     register_ui_rule_manage_tools(mcp)
     register_edit_scriptableobject_tools(mcp)
     register_edit_shader_tools(mcp)
-    register_gm_command_tools(mcp)
     print("Unity MCP Server tool registration complete.")

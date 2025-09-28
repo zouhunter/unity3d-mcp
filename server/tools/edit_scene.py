@@ -6,7 +6,7 @@
 from typing import Dict, Any, Optional
 from pydantic import Field
 from mcp.server.fastmcp import FastMCP, Context
-from unity_connection import get_unity_connection
+from .call_up import get_common_call_response
 
 
 def register_edit_scene_tools(mcp: FastMCP):
@@ -39,7 +39,7 @@ def register_edit_scene_tools(mcp: FastMCP):
         )
     ) -> Dict[str, Any]:
         """
-        场景管理工具
+        场景管理工具（二级工具）
         
         支持的操作:
         - load: 加载场景
@@ -47,31 +47,4 @@ def register_edit_scene_tools(mcp: FastMCP):
         - create: 创建场景
         - get_hierarchy: 获取场景层级
         """
-        try:
-            unity_conn = get_unity_connection()
-            
-            # 构建命令参数
-            cmd = {
-                "action": action,
-                "name": name,
-                "path": path,
-                "build_index": build_index
-            }
-            
-            # 发送命令到Unity
-            result = unity_conn.send_command_with_retry("edit_scene", cmd)
-            
-            return {
-                "success": True,
-                "message": f"Scene operation '{action}' completed successfully",
-                "data": result.get("data", {}),
-                "error": None
-            }
-            
-        except Exception as e:
-            return {
-                "success": False,
-                "message": f"Scene operation '{action}' failed",
-                "data": {},
-                "error": str(e)
-            }
+        return get_common_call_response("edit_scene")

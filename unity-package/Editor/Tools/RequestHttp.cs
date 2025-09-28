@@ -453,11 +453,12 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 处理HTTP响应
         /// </summary>
-        private object ProcessHttpResponse(UnityWebRequest request)
+        private object ProcessHttpResponse(UnityWebRequest request, string filePath = null)
         {
             bool isSuccess = request.result == UnityWebRequest.Result.Success;
             long responseCode = request.responseCode;
             string responseText = request.downloadHandler?.text ?? "";
+            byte[] responseData = request.downloadHandler?.data;
 
             // 获取响应头
             var responseHeaders = new Dictionary<string, string>();
@@ -469,22 +470,29 @@ namespace UnityMcp.Tools
                 }
             }
 
-            // 尝试解析JSON响应
-            object responseData = null;
-            try
+            // 判断是否为文件数据或大型内容
+            bool isFileData = IsFileData(responseHeaders, responseData);
+            bool isLargeContent = responseData != null && responseData.Length > 1024 * 1024; // 1MB阈值
+
+            // 尝试解析JSON响应（仅对非文件数据且非大型内容）
+            object parsedData = null;
+            if (!isFileData && !isLargeContent)
             {
-                if (!string.IsNullOrEmpty(responseText) && responseText.Trim().StartsWith("{") || responseText.Trim().StartsWith("["))
+                try
                 {
-                    responseData = JToken.Parse(responseText);
+                    if (!string.IsNullOrEmpty(responseText) && (responseText.Trim().StartsWith("{") || responseText.Trim().StartsWith("[")))
+                    {
+                        parsedData = JToken.Parse(responseText);
+                    }
+                    else
+                    {
+                        parsedData = responseText;
+                    }
                 }
-                else
+                catch
                 {
-                    responseData = responseText;
+                    parsedData = responseText;
                 }
-            }
-            catch
-            {
-                responseData = responseText;
             }
 
             var result = new
@@ -492,21 +500,102 @@ namespace UnityMcp.Tools
                 success = isSuccess,
                 status_code = responseCode,
                 headers = responseHeaders,
-                data = responseData,
-                raw_text = responseText,
+                data = isFileData || isLargeContent ? null : parsedData, // 文件数据或大型内容不返回data
+                raw_text = isFileData || isLargeContent ? null : responseText, // 文件数据或大型内容不返回raw_text
                 error = isSuccess ? null : request.error,
                 url = request.url,
-                method = request.method
+                method = request.method,
+                content_type = GetContentType(responseHeaders),
+                content_length = responseData?.Length ?? 0,
+                is_file_data = isFileData,
+                is_large_content = isLargeContent,
+                file_path = isFileData ? filePath : null, // 如果是文件数据，返回文件路径
+                file_name = isFileData && !string.IsNullOrEmpty(filePath) ? System.IO.Path.GetFileName(filePath) : null
             };
 
             if (isSuccess)
             {
-                return Response.Success($"HTTP request successful (status code: {responseCode})", result);
+                string message = isFileData ?
+                    $"文件下载成功 (status code: {responseCode})" :
+                    $"HTTP request successful (status code: {responseCode})";
+                return Response.Success(message, result);
             }
             else
             {
                 return Response.Error($"HTTP request failed (status code: {responseCode}): {request.error}", result);
             }
+        }
+
+        /// <summary>
+        /// 判断是否为文件数据
+        /// </summary>
+        private bool IsFileData(Dictionary<string, string> headers, byte[] data)
+        {
+            // 检查Content-Type是否为文件类型
+            if (headers.TryGetValue("Content-Type", out string contentType))
+            {
+                string lowerContentType = contentType.ToLower();
+
+                // 图片文件
+                if (lowerContentType.StartsWith("image/"))
+                    return true;
+
+                // 视频文件
+                if (lowerContentType.StartsWith("video/"))
+                    return true;
+
+                // 音频文件
+                if (lowerContentType.StartsWith("audio/"))
+                    return true;
+
+                // 文档文件
+                if (lowerContentType.Contains("application/pdf") ||
+                    lowerContentType.Contains("application/msword") ||
+                    lowerContentType.Contains("application/vnd.ms-excel") ||
+                    lowerContentType.Contains("application/zip") ||
+                    lowerContentType.Contains("application/x-rar") ||
+                    lowerContentType.Contains("application/octet-stream"))
+                    return true;
+
+                // 字体文件
+                if (lowerContentType.Contains("font/") || lowerContentType.Contains("application/font"))
+                    return true;
+            }
+
+            // 检查Content-Disposition头
+            if (headers.TryGetValue("Content-Disposition", out string contentDisposition))
+            {
+                if (contentDisposition.ToLower().Contains("attachment") ||
+                    contentDisposition.ToLower().Contains("filename"))
+                    return true;
+            }
+
+            // 如果数据不为空且没有明确的文本Content-Type，可能是二进制文件
+            if (data != null && data.Length > 0)
+            {
+                if (!headers.TryGetValue("Content-Type", out string ct) ||
+                    (!ct.ToLower().Contains("text/") &&
+                     !ct.ToLower().Contains("application/json") &&
+                     !ct.ToLower().Contains("application/xml")))
+                {
+                    // 检查是否为二进制数据（包含null字节）
+                    for (int i = 0; i < Math.Min(data.Length, 1024); i++)
+                    {
+                        if (data[i] == 0)
+                            return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 获取内容类型
+        /// </summary>
+        private string GetContentType(Dictionary<string, string> headers)
+        {
+            return headers.TryGetValue("Content-Type", out string contentType) ? contentType : "unknown";
         }
 
         /// <summary>
@@ -614,18 +703,9 @@ namespace UnityMcp.Tools
 
                         LogInfo($"[RequestHttp] 协程下载成功: {Path.GetFileName(fullSavePath)}");
 
-                        // 成功回调
-                        callback?.Invoke(Response.Success(
-                            $"文件下载成功: {Path.GetFileName(fullSavePath)}",
-                            new
-                            {
-                                url = url,
-                                save_path = fullSavePath,
-                                file_size = request.downloadHandler.data.Length,
-                                content_type = request.GetResponseHeader("Content-Type"),
-                                elapsed_time = Time.realtimeSinceStartup - startTime
-                            }
-                        ));
+                        // 成功回调 - 使用ProcessHttpResponse获得一致的文件路径返回
+                        var response = ProcessHttpResponse(request, fullSavePath);
+                        callback?.Invoke(response);
                     }
                     catch (Exception e)
                     {
@@ -858,16 +938,8 @@ namespace UnityMcp.Tools
                             AssetDatabase.ImportAsset(relativePath);
                         }
 
-                        return Response.Success(
-                            $"文件下载成功: {Path.GetFileName(fullSavePath)}",
-                            new
-                            {
-                                url = url,
-                                save_path = fullSavePath,
-                                file_size = request.downloadHandler.data.Length,
-                                content_type = request.GetResponseHeader("Content-Type")
-                            }
-                        );
+                        // 使用ProcessHttpResponse获得一致的文件路径返回
+                        return ProcessHttpResponse(request, fullSavePath);
                     }
                     else
                     {

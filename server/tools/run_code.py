@@ -1,11 +1,10 @@
 """
 Unity代码运行工具，包含Python代码执行和C#代码编译执行功能。
 """
-import json
 from typing import Annotated, Dict, Any, Optional
 from pydantic import Field
 from mcp.server.fastmcp import FastMCP, Context
-from unity_connection import get_unity_connection
+from .call_up import get_common_call_response
 
 
 def register_run_code_tools(mcp: FastMCP):
@@ -60,128 +59,15 @@ def register_run_code_tools(mcp: FastMCP):
         - 图像处理：使用OpenCV、PIL等库处理图像
         - 机器学习：运行TensorFlow、PyTorch等模型
 
-        Returns:
-            包含Python执行结果的字典：
-            {
-                "success": bool,        # 执行是否成功
-                "message": str,         # 操作结果描述
-                "data": Any,           # 执行结果数据
-                "error": str|None,     # 错误信息（如果有的话）
-                "output": str,         # 标准输出内容
-                "stderr": str          # 错误输出内容
-            }
+        
         """
         
-        try:
-            # 验证操作类型
-            valid_actions = ["execute", "validate", "install_package"]
-            if action not in valid_actions:
-                return {
-                    "success": False,
-                    "error": f"无效的操作类型: '{action}'。支持的操作: {valid_actions}",
-                    "data": None
-                }
-            
-            # 验证代码执行和验证参数
-            if action in ["execute", "validate"]:
-                if not code:
-                    return {
-                        "success": False,
-                        "error": f"操作'{action}'需要提供code参数",
-                        "data": None
-                    }
-                
-                if not isinstance(code, str):
-                    return {
-                        "success": False,
-                        "error": "code参数必须是字符串类型",
-                        "data": None
-                    }
-            
-            # 验证包安装参数
-            if action == "install_package":
-                if not package_name:
-                    return {
-                        "success": False,
-                        "error": "install_package操作需要提供package_name参数",
-                        "data": None
-                    }
-                
-                if not isinstance(package_name, str):
-                    return {
-                        "success": False,
-                        "error": "package_name参数必须是字符串类型",
-                        "data": None
-                    }
-            
-            # 验证超时参数
-            if timeout and (timeout < 1 or timeout > 300):
-                return {
-                    "success": False,
-                    "error": "超时时间必须在1-300秒之间",
-                    "data": None
-                }
-            
-            # 获取Unity连接实例
-            bridge = get_unity_connection()
-            
-            if bridge is None:
-                return {
-                    "success": False,
-                    "error": "无法获取Unity连接",
-                    "data": None
-                }
-            
-            # 准备发送给Unity的参数
-            params = {"action": action}
-            
-            # 添加代码参数
-            if code:
-                params["code"] = code
-            
-            # 添加包安装参数
-            if package_name:
-                params["package_name"] = package_name
-            if version:
-                params["version"] = version
-            
-            # 添加执行配置参数
-            if timeout:
-                params["timeout"] = timeout
-            params["cleanup"] = cleanup
-            
-            # 使用带重试机制的命令发送
-            result = bridge.send_command_with_retry("python_runner", params, max_retries=2)
-            
-            # 确保返回结果包含success标志
-            if isinstance(result, dict):
-                return result
-            else:
-                return {
-                    "success": True,
-                    "message": f"Python {action} 操作执行完成",
-                    "data": result,
-                    "error": None
-                }
-                
-        except json.JSONDecodeError as e:
-            return {
-                "success": False,
-                "error": f"参数序列化失败: {str(e)}",
-                "data": None
-            }
-        except ConnectionError as e:
-            return {
-                "success": False,
-                "error": f"Unity连接错误: {str(e)}",
-                "data": None
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"Python代码执行失败: {str(e)}",
-                "data": None
-            }
+        # ⚠️ 重要提示：此函数仅用于提供参数说明和文档
+        # 实际调用请使用 single_call 函数
+        # 示例：single_call(func="python_runner", args={"action": "execute", "code": "print('Hello')"})
+        
+        return get_common_call_response("python_runner")
+
 
     @mcp.tool("code_runner")
     def code_runner(
@@ -220,112 +106,13 @@ def register_run_code_tools(mcp: FastMCP):
             examples=["UnityEngine.UI", "TMPro", "Cinemachine"]
         )] = None
     ) -> Dict[str, Any]:
-        """Unity C#代码运行工具，支持编译执行C#代码和语法验证。
+        """Unity C#代码运行工具，支持编译执行C#代码和语法验证。（二级工具）
 
         提供完整的Unity API访问权限，适用于：
         - 快速原型：测试Unity API调用
         - 脚本验证：验证C#代码语法正确性
         - 自动化操作：执行复杂的Unity对象操作
         - 调试工具：运行调试和分析代码
-
-        Returns:
-            包含C#执行结果的字典：
-            {
-                "success": bool,        # 执行是否成功
-                "message": str,         # 操作结果描述
-                "data": Any,           # 执行结果数据
-                "error": str|None,     # 错误信息（如果有的话）
-                "compilation_output": str, # 编译输出信息
-                "runtime_output": str   # 运行时输出信息
-            }
         """
         
-        try:
-            # 验证操作类型
-            valid_actions = ["execute", "validate"]
-            if action not in valid_actions:
-                return {
-                    "success": False,
-                    "error": f"无效的操作类型: '{action}'。支持的操作: {valid_actions}",
-                    "data": None
-                }
-            
-            # 验证代码参数
-            if not code:
-                return {
-                    "success": False,
-                    "error": "code参数不能为空",
-                    "data": None
-                }
-            
-            if not isinstance(code, str):
-                return {
-                    "success": False,
-                    "error": "code参数必须是字符串类型",
-                    "data": None
-                }
-            
-            # 验证超时参数
-            if timeout and (timeout < 1 or timeout > 120):
-                return {
-                    "success": False,
-                    "error": "超时时间必须在1-120秒之间",
-                    "data": None
-                }
-            
-            # 获取Unity连接实例
-            bridge = get_unity_connection()
-            
-            if bridge is None:
-                return {
-                    "success": False,
-                    "error": "无法获取Unity连接",
-                    "data": None
-                }
-            
-            # 准备发送给Unity的参数
-            params = {
-                "action": action,
-                "code": code
-            }
-            
-            # 添加可选参数
-            if using_statements:
-                params["using_statements"] = using_statements
-            if timeout:
-                params["timeout"] = timeout
-            if assembly_references:
-                params["assembly_references"] = assembly_references
-            
-            # 使用带重试机制的命令发送
-            result = bridge.send_command_with_retry("code_runner", params, max_retries=2)
-            
-            # 确保返回结果包含success标志
-            if isinstance(result, dict):
-                return result
-            else:
-                return {
-                    "success": True,
-                    "message": f"C# {action} 操作执行完成",
-                    "data": result,
-                    "error": None
-                }
-                
-        except json.JSONDecodeError as e:
-            return {
-                "success": False,
-                "error": f"参数序列化失败: {str(e)}",
-                "data": None
-            }
-        except ConnectionError as e:
-            return {
-                "success": False,
-                "error": f"Unity连接错误: {str(e)}",
-                "data": None
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"C#代码执行失败: {str(e)}",
-                "data": None
-            }
+        return get_common_call_response("code_runner")

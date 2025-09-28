@@ -663,13 +663,13 @@ namespace UnityMcp
                         // 根据命令类型决定记录方式
                         string cmdName;
                         string argsString;
-                        if (command.type == "extra_call")
+                        if (command.type == "single_call")
                         {
                             // function_call: 记录具体的func和args
-                            cmdName = "extra_call." + paramsObject["func"]?.ToString() ?? "Unknown";
+                            cmdName = "single_call." + paramsObject["func"]?.ToString() ?? "Unknown";
                             argsString = paramsObject.ToString();
                         }
-                        else if (command.type == "extra_batch_calls")
+                        else if (command.type == "batch_call")
                         {
                             // functions_call: 记录command类型和funcs数组
                             // 解析funcs数组，拼接所有func字段
@@ -687,16 +687,16 @@ namespace UnityMcp
                                 }
                                 if (funcNames.Count > 2)
                                 {
-                                    cmdName = $"extra_batch_calls.[{string.Join(",", funcNames.Take(2))}...]";
+                                    cmdName = $"batch_call.[{string.Join(",", funcNames.Take(2))}...]";
                                 }
                                 else
                                 {
-                                    cmdName = $"extra_batch_calls.[{string.Join(",", funcNames)}]";
+                                    cmdName = $"batch_call.[{string.Join(",", funcNames)}]";
                                 }
                             }
                             else
                             {
-                                cmdName = "extra_batch_calls.[*]";
+                                cmdName = "batch_call.[*]";
                             }
                             argsString = paramsObject.ToString();
                         }

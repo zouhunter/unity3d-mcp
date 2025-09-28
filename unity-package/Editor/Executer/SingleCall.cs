@@ -18,9 +18,9 @@ namespace UnityMcp.Tools
     /// Handles single function calls from MCP server.
     /// Routes function calls to appropriate tool classes via reflection and name matching.
     /// </summary>
-    public class ExtraCall : McpTool
+    public class SingleCall : McpTool
     {
-        public override string ToolName => "extra_call";
+        public override string ToolName => "single_call";
 
         /// <summary>
         /// Main handler for function calls (同步版本).
@@ -82,11 +82,5 @@ namespace UnityMcp.Tools
                 callback(Response.Error($"Error executing function '{functionName}->{argsJson}': {e.Message}"));
             }
         }
-
-
-
-
-
-
     }
 }

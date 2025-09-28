@@ -591,7 +591,7 @@ class ImageEditorDownloader:
                     print("🎉 任务已完成!")
                     
                     # 如果状态中有最新的下载URL，使用它
-                    final_download_url = self.extract_response_url(status_data)
+                    final_download_url = self.callct_response_url(status_data)
                     if final_download_url:
                         print(f"📥 从状态数据中找到下载URL: {final_download_url}")
                         return {"download_url": final_download_url, "status_data": status_data, "response_data": response_data}
@@ -655,8 +655,8 @@ class ImageEditorDownloader:
         
         # 第二步：提取请求信息
         print("\n🔍 步骤2: 提取请求信息")
-        request_id = self.extract_request_id(response_data)
-        initial_response_url = self.extract_response_url(response_data)
+        request_id = self.callct_request_id(response_data)
+        initial_response_url = self.callct_response_url(response_data)
         
         print(f"请求ID: {request_id if request_id else '未找到'}")
         print(f"初始响应URL: {initial_response_url if initial_response_url else '未找到'}")
@@ -709,7 +709,7 @@ class ImageEditorDownloader:
             if isinstance(final_result, dict):
                 status = final_result.get('status', '').lower()
                 if status in ['completed', 'success', 'done']:
-                    download_url = self.extract_response_url(final_result)
+                    download_url = self.callct_response_url(final_result)
                     if download_url:
                         print(f"✅ 从最终状态中提取下载URL: {download_url}")
                     elif initial_response_url:
@@ -779,7 +779,7 @@ def main():
         print(f"\n📊 当前任务状态: {status}")
         
         # 检查是否有响应URL可以并行访问
-        response_url = downloader.extract_response_url(status_result)
+        response_url = downloader.callct_response_url(status_result)
         
         if response_url:
             print(f"📥 找到响应URL: {response_url}")
@@ -800,7 +800,7 @@ def main():
         
         # 如果任务已完成，尝试下载
         if status.lower() in ['completed', 'success', 'done']:
-            final_download_url = downloader.extract_response_url(status_result)
+            final_download_url = downloader.callct_response_url(status_result)
             if final_download_url:
                 print(f"\n📥 找到下载链接: {final_download_url}")
                 download_success = downloader.download_image(final_download_url, "parallel_check_image.png")
@@ -846,7 +846,7 @@ def query_specific_task():
             if final_status:
                 final_state = final_status.get('status', 'unknown')
                 if final_state.lower() in ['completed', 'success', 'done']:
-                    download_url = downloader.extract_response_url(final_status)
+                    download_url = downloader.callct_response_url(final_status)
                     if download_url:
                         success = downloader.download_image(download_url, "polled_task_image.png")
                         if success:
@@ -854,7 +854,7 @@ def query_specific_task():
                         else:
                             print("❌ 轮询完成但下载失败")
         elif status.lower() in ['completed', 'success', 'done']:
-            download_url = downloader.extract_response_url(status_data)
+            download_url = downloader.callct_response_url(status_data)
             if download_url:
                 success = downloader.download_image(download_url, "completed_task_image.png")
                 if success:
@@ -877,7 +877,7 @@ def demo_parallel_monitoring():
     status_data = downloader.check_task_status(request_id)
     
     if status_data:
-        response_url = downloader.extract_response_url(status_data)
+        response_url = downloader.callct_response_url(status_data)
         
         if response_url:
             print(f"\n第二步：开始并行监控...")

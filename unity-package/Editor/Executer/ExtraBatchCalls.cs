@@ -12,9 +12,9 @@ namespace UnityMcp.Tools
     /// Handles batch function calls from MCP server.
     /// Executes multiple function calls sequentially and collects all results.
     /// </summary>
-    public class FunctionsCall : McpTool
+    public class ExtraBatchCalls : McpTool
     {
-        public override string ToolName => "functions_call";
+        public override string ToolName => "extra_batch_calls";
 
         /// <summary>
         /// Main handler for batch function calls.
@@ -50,7 +50,6 @@ namespace UnityMcp.Tools
                 Debug.Log($"[FunctionsCall] Executing {funcsArray.Count} function calls asynchronously");
 
             var results = new List<object>();
-            var errors = new List<string>();
             int totalCalls = funcsArray.Count;
             int successfulCalls = 0;
             int failedCalls = 0;
@@ -58,29 +57,28 @@ namespace UnityMcp.Tools
             try
             {
                 // 确保方法已注册
-                FunctionCall.EnsureMethodsRegisteredStatic();
+                MethodsCall.EnsureMethodsRegisteredStatic();
 
                 // 如果没有函数调用，直接返回
                 if (totalCalls == 0)
                 {
-                    var emptyResponse = CreateBatchResponse(true, results, errors, totalCalls, successfulCalls, failedCalls);
+                    var emptyResponse = CreateBatchResponse(true, results, totalCalls, successfulCalls, failedCalls);
                     callback(emptyResponse);
                     return;
                 }
 
-                // 初始化结果和错误列表
+                // 初始化结果列表
                 for (int i = 0; i < totalCalls; i++)
                 {
                     results.Add(null);
-                    errors.Add(null);
                 }
 
                 // 开始异步顺序执行
-                ExecuteFunctionAtIndex(funcsArray, 0, results, errors, totalCalls, callback);
+                ExecuteFunctionAtIndex(funcsArray, 0, results, totalCalls, callback);
             }
             catch (Exception e)
             {
-                callback(CreateBatchResponse(false, results, errors, totalCalls, 0, 1,
+                callback(CreateBatchResponse(false, results, totalCalls, 0, 1,
                     $"批量调用初始化过程中发生未预期错误: {e.Message}"));
                 return;
             }
@@ -89,25 +87,16 @@ namespace UnityMcp.Tools
         /// <summary>
         /// 异步顺序执行指定索引的函数，完成后递归执行下一个.
         /// </summary>
-        private void ExecuteFunctionAtIndex(JArray funcsArray, int currentIndex, List<object> results, List<string> errors,
+        private void ExecuteFunctionAtIndex(JArray funcsArray, int currentIndex, List<object> results,
             int totalCalls, Action<object> finalCallback)
         {
             // 如果所有函数都执行完毕，返回最终结果
             if (currentIndex >= totalCalls)
             {
-                int successfulCalls = 0;
+                int successfulCalls = totalCalls;
                 int failedCalls = 0;
 
-                // 统计成功和失败的调用数
-                for (int i = 0; i < totalCalls; i++)
-                {
-                    if (errors[i] == null)
-                        successfulCalls++;
-                    else
-                        failedCalls++;
-                }
-
-                var finalResponse = CreateBatchResponse(failedCalls == 0, results, errors, totalCalls, successfulCalls, failedCalls);
+                var finalResponse = CreateBatchResponse(true, results, totalCalls, successfulCalls, failedCalls);
                 finalCallback(finalResponse);
 
                 if (McpConnect.EnableLog)
@@ -123,13 +112,12 @@ namespace UnityMcp.Tools
                 if (!(funcCallToken is JObject funcCall))
                 {
                     string errorMsg = $"第{currentIndex + 1}个函数调用必须是对象类型";
-                    errors[currentIndex] = errorMsg;
                     results[currentIndex] = null;
 
                     if (McpConnect.EnableLog) Debug.LogError($"[FunctionsCall] {errorMsg}");
 
                     // 继续执行下一个函数
-                    ExecuteFunctionAtIndex(funcsArray, currentIndex + 1, results, errors, totalCalls, finalCallback);
+                    ExecuteFunctionAtIndex(funcsArray, currentIndex + 1, results, totalCalls, finalCallback);
                     return;
                 }
 
@@ -141,13 +129,12 @@ namespace UnityMcp.Tools
                 if (string.IsNullOrWhiteSpace(funcName))
                 {
                     string errorMsg = $"第{currentIndex + 1}个函数调用的func字段无效或为空";
-                    errors[currentIndex] = errorMsg;
                     results[currentIndex] = null;
 
                     if (McpConnect.EnableLog) Debug.LogError($"[FunctionsCall] {errorMsg}");
 
                     // 继续执行下一个函数
-                    ExecuteFunctionAtIndex(funcsArray, currentIndex + 1, results, errors, totalCalls, finalCallback);
+                    ExecuteFunctionAtIndex(funcsArray, currentIndex + 1, results, totalCalls, finalCallback);
                     return;
                 }
 
@@ -155,62 +142,56 @@ namespace UnityMcp.Tools
                 if (!(argsToken is JObject args))
                 {
                     string errorMsg = $"第{currentIndex + 1}个函数调用的args字段必须是对象类型";
-                    errors[currentIndex] = errorMsg;
                     results[currentIndex] = null;
 
                     if (McpConnect.EnableLog) Debug.LogError($"[FunctionsCall] {errorMsg}");
 
                     // 继续执行下一个函数
-                    ExecuteFunctionAtIndex(funcsArray, currentIndex + 1, results, errors, totalCalls, finalCallback);
+                    ExecuteFunctionAtIndex(funcsArray, currentIndex + 1, results, totalCalls, finalCallback);
                     return;
                 }
 
                 // 异步执行单个函数调用
-                ExecuteSingleFunctionAsync(funcName, args, (singleResult, singleError) =>
+                ExecuteSingleFunctionAsync(funcName, args, (singleResult) =>
                 {
                     // 保存当前函数的执行结果
                     results[currentIndex] = singleResult;
-                    errors[currentIndex] = singleError;
 
                     if (McpConnect.EnableLog)
                     {
-                        if (singleError == null)
-                            Debug.Log($"[FunctionsCall] Function {currentIndex + 1}/{totalCalls} ({funcName}) executed successfully");
-                        else
-                            Debug.LogError($"[FunctionsCall] Function {currentIndex + 1}/{totalCalls} ({funcName}) failed: {singleError}");
+                        Debug.Log($"[FunctionsCall] Function {currentIndex + 1}/{totalCalls} ({funcName}) executed");
                     }
 
                     // 继续执行下一个函数
-                    ExecuteFunctionAtIndex(funcsArray, currentIndex + 1, results, errors, totalCalls, finalCallback);
+                    ExecuteFunctionAtIndex(funcsArray, currentIndex + 1, results, totalCalls, finalCallback);
                 });
             }
             catch (Exception e)
             {
                 string errorMsg = $"第{currentIndex + 1}个函数调用失败: {e.Message}";
-                errors[currentIndex] = errorMsg;
                 results[currentIndex] = null;
 
                 if (McpConnect.EnableLog) Debug.LogError($"[FunctionsCall] {errorMsg}");
 
                 // 继续执行下一个函数
-                ExecuteFunctionAtIndex(funcsArray, currentIndex + 1, results, errors, totalCalls, finalCallback);
+                ExecuteFunctionAtIndex(funcsArray, currentIndex + 1, results, totalCalls, finalCallback);
             }
         }
 
         /// <summary>
         /// Executes a single function asynchronously with callback.
         /// </summary>
-        private void ExecuteSingleFunctionAsync(string functionName, JObject args, Action<object, string> callback)
+        private void ExecuteSingleFunctionAsync(string functionName, JObject args, Action<object> callback)
         {
             try
             {
                 // 查找对应的工具方法
-                var method = FunctionCall.GetRegisteredMethod(functionName);
+                var method = MethodsCall.GetRegisteredMethod(functionName);
                 if (method == null)
                 {
-                    var availableMethods = string.Join(", ", FunctionCall.GetRegisteredMethodNames());
-                    string errorMsg = $"Unknown method: '{functionName}'. Available methods: {availableMethods}";
-                    callback(null, errorMsg);
+                    var availableMethods = string.Join(", ", MethodsCall.GetRegisteredMethodNames());
+                    if (McpConnect.EnableLog) Debug.LogWarning($"Unknown method: '{functionName}'. Available methods: {availableMethods}");
+                    callback(null);
                     return;
                 }
 
@@ -223,14 +204,14 @@ namespace UnityMcp.Tools
                 {
                     try
                     {
-                        // 成功执行，调用回调并传递结果和null错误
-                        callback(result, null);
+                        // 成功执行，调用回调并传递结果
+                        callback(result);
                     }
                     catch (Exception e)
                     {
                         // 执行过程中出现异常
                         if (McpConnect.EnableLog) Debug.LogError($"[FunctionsCall] Exception in result callback for '{functionName}': {e}");
-                        callback(null, $"Result processing error: {e.Message}");
+                        callback(null);
                     }
                 });
             }
@@ -238,21 +219,20 @@ namespace UnityMcp.Tools
             {
                 // 方法查找或执行设置过程中的异常
                 if (McpConnect.EnableLog) Debug.LogError($"[FunctionsCall] Exception setting up execution for '{functionName}': {e}");
-                callback(null, $"Execution setup error: {e.Message}");
+                callback(null);
             }
         }
 
         /// <summary>
         /// Creates the batch response in the format expected by the Python layer.
         /// </summary>
-        private object CreateBatchResponse(bool success, List<object> results, List<string> errors,
+        private object CreateBatchResponse(bool success, List<object> results,
             int totalCalls, int successfulCalls, int failedCalls, string globalError = null)
         {
             var responseData = new Dictionary<string, object>
             {
                 ["success"] = success,
                 ["results"] = JArray.FromObject(results) ?? new JArray(),
-                ["errors"] = JArray.FromObject(errors) ?? new JArray(),
                 ["total_calls"] = totalCalls,
                 ["successful_calls"] = successfulCalls,
                 ["failed_calls"] = failedCalls
@@ -260,10 +240,7 @@ namespace UnityMcp.Tools
 
             if (!string.IsNullOrEmpty(globalError))
             {
-                // 如果有全局错误，将其添加到errors列表的开头
-                var errorList = new List<string> { globalError };
-                if (errors != null) errorList.AddRange(errors);
-                responseData["errors"] = errorList;
+                responseData["error"] = globalError;
             }
 
             // 返回包含data字段的Response格式，以便Python层可以提取data部分

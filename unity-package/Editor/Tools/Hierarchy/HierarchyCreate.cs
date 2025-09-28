@@ -28,7 +28,7 @@ namespace UnityMcp.Tools
             return new[]
             {
                 new MethodKey("name", "GameObject名称", false),
-                new MethodKey("from", "操作类型：menu, primitive, prefab", false),
+                new MethodKey("source", "操作类型：menu, primitive, prefab", false),
                 new MethodKey("tag", "GameObject标签", true),
                 new MethodKey("layer", "GameObject所在层", true),
                 new MethodKey("parent_id", "父对象唯一id", true),
@@ -47,7 +47,7 @@ namespace UnityMcp.Tools
         {
             return StateTreeBuilder
                 .Create()
-                .Key("from")
+                .Key("source")
                     .Leaf("menu", HandleCreateFromMenu)
                     .Branch("primitive")
                         .OptionalKey("primitive_type")
@@ -79,7 +79,7 @@ namespace UnityMcp.Tools
                 yield break;
             }
 
-            LogInfo($"[HierarchyCreate] Creating GameObject from menu: '{menuPath}'");
+            LogInfo($"[HierarchyCreate] Creating GameObject source menu: '{menuPath}'");
 
             if (!menuPath.StartsWith("GameObject"))
             {
@@ -189,7 +189,7 @@ namespace UnityMcp.Tools
                 return Response.Error("'prefab_path' parameter is required for prefab instantiation.");
             }
 
-            LogInfo($"[HierarchyCreate] Creating GameObject from prefab: '{prefabPath}'");
+            LogInfo($"[HierarchyCreate] Creating GameObject source prefab: '{prefabPath}'");
             return CreateGameObjectFromPrefab(args, prefabPath);
         }
 
@@ -206,7 +206,7 @@ namespace UnityMcp.Tools
                 LogInfo("[HierarchyCreate] No primitive_type specified, using default: Cube");
             }
 
-            LogInfo($"[HierarchyCreate] Creating GameObject from primitive: '{primitiveType}'");
+            LogInfo($"[HierarchyCreate] Creating GameObject source primitive: '{primitiveType}'");
             return CreateGameObjectFromPrimitive(args, primitiveType);
         }
 
@@ -308,7 +308,7 @@ namespace UnityMcp.Tools
 
                 // 注册撤销操作
                 Undo.RegisterCreatedObjectUndo(newGo, $"Instantiate Prefab '{prefabAsset.name}' as '{newGo.name}'");
-                LogInfo($"[HierarchyCreate] Instantiated prefab '{prefabAsset.name}' from path '{resolvedPath}' as '{newGo.name}'");
+                LogInfo($"[HierarchyCreate] Instantiated prefab '{prefabAsset.name}' source path '{resolvedPath}' as '{newGo.name}'");
 
                 return FinalizeGameObjectCreation(args, newGo, false);
             }

@@ -1,21 +1,43 @@
 """
-通用函数调用工具，用于调用Unity中的任意函数。
+批量函数调用工具，包含单个和批量Unity函数调用功能。
 """
-from typing import Dict, Any
-from mcp.server.fastmcp import FastMCP, Context
-from unity_connection import get_unity_connection
 import json
+from typing import List, Dict, Any
+from mcp.server.fastmcp import FastMCP, Context
+from mcp.types import ToolAnnotations
+from unity_connection import get_unity_connection
 
-def register_function_call_tools(mcp: FastMCP):
-    """注册通用函数调用工具到MCP服务器。"""
 
-    @mcp.tool()
-    def function_call(
+def register_batch_tools(mcp: FastMCP):
+    """注册批量函数调用工具到MCP服务器。"""
+
+    @mcp.tool(
+        name="batch.call",
+        description="单个函数调用工具，用于调用Unity-MCP系统中的任意函数。支持调用所有已注册的Unity工具函数，如gameplay、hierarchy_create等。",
+        annotations=ToolAnnotations(
+            parameters={
+                "func": {
+                    "type": "string",
+                    "description": "要调用的Unity函数名称",
+                    "examples": ["gameplay", "hierarchy_create", "manage_editor", "project_search"]
+                },
+                "args": {
+                    "type": "object",
+                    "description": "传递给函数的参数字典，格式依据具体函数而定",
+                    "examples": [
+                        {"action": "screenshot", "format": "PNG"},
+                        {"action": "create_object", "object_type": "Cube", "name": "MyCube"}
+                    ]
+                }
+            }
+        )
+    )
+    def batch_call(
         ctx: Context,
         func: str,
         args: Dict[str, Any] = {}
     ) -> Dict[str, Any]:
-        """通用函数调用工具，可以调用Unity中的任意函数。
+        """单个函数调用工具，可以调用Unity-MCP系统中的指定函数。
 
         Args:
             ctx: MCP上下文。
@@ -56,11 +78,11 @@ def register_function_call_tools(mcp: FastMCP):
             # 准备发送给Unity的参数
             params = {
                 "func": func,
-                "args": args  # 直接发送JSON字符串
+                "args": args
             }
             
             # 使用带重试机制的命令发送
-            result = bridge.send_command_with_retry("function_call", params, max_retries=2)
+            result = bridge.send_command_with_retry("batch", params, max_retries=2)
             
             # 确保返回结果包含success标志
             if isinstance(result, dict):
@@ -89,4 +111,4 @@ def register_function_call_tools(mcp: FastMCP):
                 "success": False,
                 "error": f"函数调用失败: {str(e)}",
                 "result": None
-            } 
+            }

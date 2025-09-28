@@ -62,7 +62,7 @@ register_all_tools(mcp)
 
 # Asset Creation Strategy
 
-@mcp.prompt()
+# @mcp.prompt()
 def function_args_strategy() -> str:
     """Guide for discovering and using Unity MCP tools effectively."""
     return (

@@ -99,7 +99,7 @@ namespace UnityMcp.Tools
         private GUIStyle codeStyle;
         private GUIStyle inputStyle;  // 专门用于输入框的样式
         private GUIStyle resultStyle;
-
+        private MethodsCall methodsCall = new MethodsCall();
         private void InitializeStyles()
         {
             if (headerStyle == null)
@@ -910,10 +910,10 @@ namespace UnityMcp.Tools
             JObject inputObj = JObject.Parse(jsonString);
 
             // 检查是否为批量调用
-            if (!inputObj.ContainsKey("func") && inputObj.ContainsKey("args") && inputObj["args"] is JArray)
+            if (inputObj.ContainsKey("func") && inputObj["func"].ToString() == "extra_batch_calls")
             {
                 // 批量函数调用
-                var functionsCall = new FunctionsCall();
+                var functionsCall = new ExtraBatchCalls();
                 object callResult = null;
                 bool callbackExecuted = false;
                 functionsCall.HandleCommand(inputObj, (result) =>
@@ -935,7 +935,7 @@ namespace UnityMcp.Tools
             else if (inputObj.ContainsKey("func"))
             {
                 // 单个函数调用
-                var functionCall = new FunctionCall();
+                var functionCall = new ExtraCall();
                 object callResult = null;
                 bool callbackExecuted = false;
 

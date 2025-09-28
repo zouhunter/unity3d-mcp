@@ -463,15 +463,15 @@ namespace UnityMcp.Windows
             EditorGUILayout.EndHorizontal();
 
             // 确保方法已注册
-            FunctionCall.EnsureMethodsRegisteredStatic();
-            var methodNames = FunctionCall.GetRegisteredMethodNames();
+            MethodsCall.EnsureMethodsRegisteredStatic();
+            var methodNames = MethodsCall.GetRegisteredMethodNames();
 
             // 按分组分类方法
             var methodsByGroup = new Dictionary<string, List<(string methodName, IToolMethod method, string assemblyName)>>();
 
             foreach (var methodName in methodNames)
             {
-                var method = FunctionCall.GetRegisteredMethod(methodName);
+                var method = MethodsCall.GetRegisteredMethod(methodName);
                 if (method == null) continue;
 
                 // 获取分组名称

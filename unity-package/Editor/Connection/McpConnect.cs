@@ -65,6 +65,8 @@ namespace UnityMcp
 
         // 缓存McpTool类型和实例，静态工具类型
         private static readonly Dictionary<string, McpTool> mcpToolInstanceCache = new();
+        //通用函数执行
+        private static MethodsCall methodsCall = new MethodsCall();
         // 在 UnityMcp 类中添加日志开关
         public static bool EnableLog = false;
 
@@ -660,26 +662,55 @@ namespace UnityMcp
 
                         // 根据命令类型决定记录方式
                         string cmdName;
-
-                        if (command.type == "function_call")
+                        string argsString;
+                        if (command.type == "extra_call")
                         {
                             // function_call: 记录具体的func和args
-                            cmdName = "function_call." + paramsObject["func"]?.ToString() ?? "Unknown";
+                            cmdName = "extra_call." + paramsObject["func"]?.ToString() ?? "Unknown";
+                            argsString = paramsObject.ToString();
                         }
-                        else if (command.type == "functions_call")
+                        else if (command.type == "extra_batch_calls")
                         {
                             // functions_call: 记录command类型和funcs数组
-                            cmdName = "functions_call.*";
+                            // 解析funcs数组，拼接所有func字段
+                            var funcsArray = paramsObject["funcs"] as JArray;
+                            if (funcsArray != null)
+                            {
+                                var funcNames = new List<string>();
+                                foreach (var funcObj in funcsArray)
+                                {
+                                    var funcName = funcObj?["func"]?.ToString();
+                                    if (!string.IsNullOrEmpty(funcName))
+                                    {
+                                        funcNames.Add(funcName);
+                                    }
+                                }
+                                if (funcNames.Count > 2)
+                                {
+                                    cmdName = $"extra_batch_calls.[{string.Join(",", funcNames.Take(2))}...]";
+                                }
+                                else
+                                {
+                                    cmdName = $"extra_batch_calls.[{string.Join(",", funcNames)}]";
+                                }
+                            }
+                            else
+                            {
+                                cmdName = "extra_batch_calls.[*]";
+                            }
+                            argsString = paramsObject.ToString();
                         }
                         else
                         {
                             // 其他命令类型: 使用默认方式
                             cmdName = command.type;
+                            // 修正为标准JSON格式
+                            argsString = JsonConvert.SerializeObject(new { func = cmdName, args = paramsObject }, Formatting.Indented);
                         }
 
                         recordObject.addRecord(
                             cmdName,
-                            paramsObject.ToString(),
+                            argsString,
                             re,
                             "", // 成功时error为空
                             duration,
@@ -699,9 +730,10 @@ namespace UnityMcp
             catch (Exception ex)
             {
                 // Log the detailed error in Unity for debugging
-                LogError(
-                    $"[UnityMcp] 执行命令时发生错误 '{command?.type ?? "Unknown"}': {ex.Message}\n{ex.StackTrace}"
-                );
+                Debug.LogException(new Exception(
+                    $"[UnityMcp] 执行命令时发生错误 '{command?.type ?? "Unknown"}': {ex.Message}\n{ex.StackTrace}",
+                    ex
+                ));
 
                 // Standard error response format
                 var response = new
@@ -798,6 +830,13 @@ namespace UnityMcp
             {
                 Log($"[UnityMcp] 从缓存中获取到工具: {toolName} ({tool.GetType().Name})");
                 return tool;
+            }
+
+            if (methodsCall.GetToolMethod(toolName) != null)
+            {
+                Log($"[UnityMcp] 从methodsCall中获取到工具: {toolName}");
+                methodsCall.SetToolName(toolName);
+                return methodsCall;
             }
 
             LogError($"[UnityMcp] 未找到工具: {toolName}，可用工具: [{string.Join(", ", mcpToolInstanceCache.Keys)}]");

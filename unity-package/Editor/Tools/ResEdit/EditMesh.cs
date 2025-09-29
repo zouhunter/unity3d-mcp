@@ -1198,7 +1198,7 @@ namespace UnityMcp.Tools
         // --- Data Serialization ---
 
         /// <summary>
-        /// Creates a serializable representation of a mesh asset.
+        /// 创建mesh资产的紧凑YAML表示 - 避免返回大量顶点数据
         /// </summary>
         private object GetMeshData(string path)
         {
@@ -1206,39 +1206,33 @@ namespace UnityMcp.Tools
                 return null;
 
             string guid = AssetDatabase.AssetPathToGUID(path);
-            Type assetType = AssetDatabase.GetMainAssetTypeAtPath(path);
             Mesh mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
 
             if (mesh == null)
                 return null;
 
-            // Convert mesh data to serializable format to avoid Unity object reference issues
-            var vertices = mesh.vertices?.Select(v => new float[] { v.x, v.y, v.z }).ToArray();
-            var normals = mesh.normals?.Select(n => new float[] { n.x, n.y, n.z }).ToArray();
-            var uv = mesh.uv?.Select(u => new float[] { u.x, u.y }).ToArray();
-            var tangents = mesh.tangents?.Select(t => new float[] { t.x, t.y, t.z, t.w }).ToArray();
+            // 计算边界框
+            var bounds = mesh.bounds;
+            var boundsMin = new float[] { bounds.min.x, bounds.min.y, bounds.min.z };
+            var boundsMax = new float[] { bounds.max.x, bounds.max.y, bounds.max.z };
 
-            return new
-            {
-                path = path,
-                guid = guid,
-                assetType = assetType?.FullName ?? "Unknown",
-                name = Path.GetFileNameWithoutExtension(path),
-                fileName = Path.GetFileName(path),
-                vertexCount = mesh.vertexCount,
-                triangleCount = mesh.triangles.Length / 3,
-                // Detailed mesh data
-                vertices = JArray.FromObject(vertices),
-                triangles = JArray.FromObject(mesh.triangles),
-                normals = JArray.FromObject(normals),
-                uv = JArray.FromObject(uv),
-                tangents = JArray.FromObject(tangents),
-                // Boolean flags for quick checking
-                hasNormals = mesh.normals != null && mesh.normals.Length > 0,
-                hasUVs = mesh.uv != null && mesh.uv.Length > 0,
-                hasTangents = mesh.tangents != null && mesh.tangents.Length > 0,
-                lastWriteTimeUtc = File.GetLastWriteTimeUtc(Path.Combine(Directory.GetCurrentDirectory(), path)).ToString("o") // ISO 8601
-            };
+            // 使用YAML格式大幅减少token使用量
+            var yaml = $@"name: {Path.GetFileNameWithoutExtension(path)}
+path: {path}
+guid: {guid}
+vertices: {mesh.vertexCount}
+triangles: {mesh.triangles.Length / 3}
+submeshes: {mesh.subMeshCount}
+hasNormals: {(mesh.normals != null && mesh.normals.Length > 0).ToString().ToLower()}
+hasUVs: {(mesh.uv != null && mesh.uv.Length > 0).ToString().ToLower()}
+hasTangents: {(mesh.tangents != null && mesh.tangents.Length > 0).ToString().ToLower()}
+hasColors: {(mesh.colors != null && mesh.colors.Length > 0).ToString().ToLower()}
+boundsMin: [{boundsMin[0]:F2}, {boundsMin[1]:F2}, {boundsMin[2]:F2}]
+boundsMax: [{boundsMax[0]:F2}, {boundsMax[1]:F2}, {boundsMax[2]:F2}]
+readable: {mesh.isReadable.ToString().ToLower()}
+lastModified: {File.GetLastWriteTimeUtc(Path.Combine(Directory.GetCurrentDirectory(), path)):yyyy-MM-dd}";
+
+            return new { yaml = yaml };
         }
     }
 }

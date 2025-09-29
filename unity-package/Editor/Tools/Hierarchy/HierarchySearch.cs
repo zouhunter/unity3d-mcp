@@ -30,7 +30,7 @@ namespace UnityMcp.Tools
                 new MethodKey("search_type", "Search method: by_name, by_id, by_tag, by_layer, by_component, by_query, etc.", false),
                 new MethodKey("query", "Search criteria can be ID, name or path (supports wildcard *)", false),
                 new MethodKey("select_many", "Whether to find all matching items", true),
-                new MethodKey("root_only", "Whether to search only root objects (excluding child objects)", true),
+                new MethodKey("include_hierarchy", "Whether to include complete hierarchy data for all children", true),
                 new MethodKey("include_inactive", "Whether to search inactive objects", true),
                 new MethodKey("use_regex", "Whether to use regular expressions", true)
             };
@@ -47,7 +47,24 @@ namespace UnityMcp.Tools
                     .Leaf("by_layer", HandleSearchByLayer)
                     .Leaf("by_component", HandleSearchByComponent)
                     .Leaf("by_query", HandleSearchByquery)
+                .DefaultLeaf(HandleDefaultSearch) // 添加默认处理函数
                 .Build();
+        }
+
+        /// <summary>
+        /// 默认搜索处理函数 - 当没有指定search_type时使用按名称搜索
+        /// </summary>
+        private object HandleDefaultSearch(JObject args)
+        {
+            string query = args["query"]?.ToString();
+            
+            // 如果有query参数，默认使用按名称搜索
+            if (!string.IsNullOrEmpty(query))
+            {
+                return HandleSearchByName(args);
+            }
+            
+            return Response.Error("Either 'search_type' must be specified or 'query' must be provided for default name search.");
         }
 
         // --- State Tree Action Handlers ---
@@ -64,7 +81,7 @@ namespace UnityMcp.Tools
             }
 
             bool findAll = args["select_many"]?.ToObject<bool>() ?? false;
-            bool rootOnly = args["root_only"]?.ToObject<bool>() ?? false;
+            bool includeHierarchy = args["include_hierarchy"]?.ToObject<bool>() ?? false;
             bool searchInInactive = args["include_inactive"]?.ToObject<bool>() ?? false;
 
             List<GameObject> foundObjects = new List<GameObject>();
@@ -81,14 +98,40 @@ namespace UnityMcp.Tools
                 // 从当前场景搜索所有GameObject
                 GameObject[] allObjects = GetAllGameObjectsInActiveScene(searchInInactive);
 
+                // 检查是否包含通配符
+                bool hasWildcards = query.Contains('*');
+                Regex regex = null;
+                
+                if (hasWildcards)
+                {
+                    // 将通配符转换为正则表达式
+                    string regexPattern = ConvertWildcardToRegex(query);
+                    try
+                    {
+                        regex = new Regex(regexPattern, RegexOptions.IgnoreCase);
+                    }
+                    catch (ArgumentException)
+                    {
+                        // 如果正则表达式无效，回退到普通搜索
+                        hasWildcards = false;
+                    }
+                }
+
                 foreach (GameObject go in allObjects)
                 {
-                    bool nameMatches = go.name.Contains(query, StringComparison.OrdinalIgnoreCase);
+                    bool nameMatches;
+                    
+                    if (hasWildcards && regex != null)
+                    {
+                        nameMatches = regex.IsMatch(go.name);
+                    }
+                    else
+                    {
+                        nameMatches = go.name.Contains(query, StringComparison.OrdinalIgnoreCase);
+                    }
 
                     if (nameMatches)
                     {
-                        if (rootOnly && go.transform.parent != null)
-                            continue;
                         if (foundObjects.Contains(go))
                             continue;
                         foundObjects.Add(go);
@@ -96,7 +139,7 @@ namespace UnityMcp.Tools
                 }
             }
 
-            return CreateSearchResult(foundObjects, "name");
+            return CreateHierarchySearchResult(foundObjects, "name", includeHierarchy);
         }
 
         /// <summary>
@@ -244,7 +287,7 @@ namespace UnityMcp.Tools
         {
             string searchTerm = args["query"]?.ToString();
             bool findAll = args["select_many"]?.ToObject<bool>() ?? false;
-            bool rootOnly = args["root_only"]?.ToObject<bool>() ?? false;
+            bool includeHierarchy = args["include_hierarchy"]?.ToObject<bool>() ?? false;
             bool searchInInactive = args["include_inactive"]?.ToObject<bool>() ?? false;
             bool useRegex = args["use_regex"]?.ToObject<bool>() ?? false;
 
@@ -320,9 +363,6 @@ namespace UnityMcp.Tools
 
                 foreach (GameObject go in sceneObjects)
                 {
-                    // 检查是否仅搜索根对象
-                    if (rootOnly && go.transform.parent != null) continue;
-
                     if (go.GetComponent(queryType) != null)
                     {
                         if (uniqueObjects.Add(go))
@@ -340,9 +380,6 @@ namespace UnityMcp.Tools
 
             foreach (GameObject go in allObjects)
             {
-                // 检查是否仅搜索根对象
-                if (rootOnly && go.transform.parent != null) continue;
-
                 bool matches = false;
 
                 // 1. 检查名称匹配
@@ -440,8 +477,8 @@ namespace UnityMcp.Tools
                     }
                 }
 
-                // 5. 检查子对象名称匹配（默认启用，除非设置了root_only）
-                if (!matches && !rootOnly)
+                // 5. 检查子对象名称匹配（默认启用）
+                if (!matches)
                 {
                     Transform[] children = go.GetComponentsInChildren<Transform>();
                     foreach (Transform child in children)
@@ -474,7 +511,7 @@ namespace UnityMcp.Tools
                 }
             }
 
-            return CreateSearchResult(foundObjects, "term");
+            return CreateHierarchySearchResult(foundObjects, "term", includeHierarchy);
         }
 
         // --- Helper Methods ---
@@ -553,6 +590,85 @@ namespace UnityMcp.Tools
             };
 
             return response;
+        }
+
+        /// <summary>
+        /// 创建包含完整层级信息的搜索结果
+        /// </summary>
+        private object CreateHierarchySearchResult(List<GameObject> foundObjects, string searchType, bool includeHierarchy)
+        {
+            // 构建结果数据 - 使用JObject确保正确序列化
+            var results = new List<JObject>();
+            
+            if (includeHierarchy)
+            {
+                // 获取完整的层级数据
+                foreach (var go in foundObjects)
+                {
+                    var hierarchyData = GetCompleteHierarchyData(go);
+                    results.Add(JObject.FromObject(hierarchyData));
+                }
+            }
+            else
+            {
+                // 使用标准的GameObject数据
+                foreach (var go in foundObjects)
+                {
+                    results.Add(JObject.FromObject(GameObjectUtils.GetGameObjectData(go)));
+                }
+            }
+
+            // 构建消息
+            string message;
+            if (results.Count == 0)
+            {
+                message = $"No GameObjects found using search method: {searchType}.";
+            }
+            else
+            {
+                string hierarchyInfo = includeHierarchy ? " with complete hierarchy" : "";
+                message = $"Found {results.Count} GameObjects using {searchType}{hierarchyInfo}.";
+            }
+
+            // 构建响应对象，确保正确序列化
+            var response = new JObject
+            {
+                ["success"] = true,
+                ["message"] = message,
+                ["data"] = JToken.FromObject(results),
+                ["exec_time_ms"] = 1.00,
+                ["mode"] = "Async mode"
+            };
+
+            return response;
+        }
+
+        /// <summary>
+        /// 获取GameObject的完整层级数据（包含所有子对象的完整信息）
+        /// </summary>
+        private object GetCompleteHierarchyData(GameObject go)
+        {
+            if (go == null)
+                return null;
+
+            // 获取当前对象的基本YAML数据
+            var baseYaml = GameObjectUtils.GetGameObjectDataYaml(go);
+            
+            // 递归获取所有子对象的完整数据
+            var childrenData = new List<object>();
+            foreach (Transform child in go.transform)
+            {
+                if (child != null && child.gameObject != null)
+                {
+                    childrenData.Add(GetCompleteHierarchyData(child.gameObject));
+                }
+            }
+
+            return new
+            {
+                yaml = baseYaml,
+                children = childrenData.Count > 0 ? childrenData : null
+            };
         }
 
         /// <summary>

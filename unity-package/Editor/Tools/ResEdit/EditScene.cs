@@ -451,11 +451,30 @@ namespace UnityMcp.Tools
                 }
 
                 GameObject[] rootObjects = activeScene.GetRootGameObjects();
-                var hierarchy = rootObjects.Select(go => GetGameObjectDataRecursive(go)).ToList();
+                
+                // 创建简化的场景摘要，大幅减少token使用量
+                var totalObjects = 0;
+                var rootSummary = new List<string>();
+                
+                foreach (var rootObj in rootObjects)
+                {
+                    var childCount = CountAllChildren(rootObj.transform);
+                    totalObjects += childCount + 1; // +1 for the root object itself
+                    rootSummary.Add($"{rootObj.name}({childCount})");
+                }
+                
+                var sceneYaml = $@"scene: {activeScene.name}
+path: {activeScene.path}
+rootObjects: {rootObjects.Length}
+totalObjects: {totalObjects}
+isDirty: {activeScene.isDirty.ToString().ToLower()}
+isLoaded: {activeScene.isLoaded.ToString().ToLower()}
+hierarchy: |
+{string.Join("\n", rootSummary.Select(s => $"  - {s}"))}";
 
                 return Response.Success(
                     $"Retrieved hierarchy for scene '{activeScene.name}'.",
-                    hierarchy
+                    new { yaml = sceneYaml }
                 );
             }
             catch (Exception e)
@@ -467,54 +486,42 @@ namespace UnityMcp.Tools
         /// <summary>
         /// Recursively builds a data representation of a GameObject and its children.
         /// </summary>
+        /// <summary>
+        /// 获取GameObject的简化层级数据 - 使用YAML格式，避免深度递归
+        /// </summary>
         private object GetGameObjectDataRecursive(GameObject go)
         {
             if (go == null)
                 return null;
 
-            var childrenData = new List<object>();
+            // 使用YAML格式减少token使用量
+            var yamlData = GameObjectUtils.GetGameObjectDataYaml(go);
+            
+            // 对于深层级结构，只返回直接子对象的名称，不递归获取完整数据
+            var childrenNames = new List<string>();
             foreach (Transform child in go.transform)
             {
-                childrenData.Add(GetGameObjectDataRecursive(child.gameObject));
+                childrenNames.Add($"{child.gameObject.name}({child.childCount})");
             }
-
-            var gameObjectData = new Dictionary<string, object>
+            
+            return new 
             {
-                { "name", go.name },
-                { "activeSelf", go.activeSelf },
-                { "activeInHierarchy", go.activeInHierarchy },
-                { "tag", go.tag },
-                { "layer", go.layer },
-                { "isStatic", go.isStatic },
-                { "instanceID", go.GetInstanceID() }, // Useful unique identifier
-                {
-                    "transform",
-                    new
-                    {
-                        position = new
-                        {
-                            x = go.transform.localPosition.x,
-                            y = go.transform.localPosition.y,
-                            z = go.transform.localPosition.z,
-                        },
-                        rotation = new
-                        {
-                            x = go.transform.localRotation.eulerAngles.x,
-                            y = go.transform.localRotation.eulerAngles.y,
-                            z = go.transform.localRotation.eulerAngles.z,
-                        }, // Euler for simplicity
-                        scale = new
-                        {
-                            x = go.transform.localScale.x,
-                            y = go.transform.localScale.y,
-                            z = go.transform.localScale.z,
-                        },
-                    }
-                },
-                { "children", childrenData },
+                yaml = yamlData,
+                childrenSummary = childrenNames.Count > 0 ? string.Join(", ", childrenNames) : null
             };
+        }
 
-            return gameObjectData;
+        /// <summary>
+        /// 递归计算所有子对象的数量
+        /// </summary>
+        private int CountAllChildren(Transform parent)
+        {
+            int count = 0;
+            foreach (Transform child in parent)
+            {
+                count += 1 + CountAllChildren(child);
+            }
+            return count;
         }
 
 

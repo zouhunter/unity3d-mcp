@@ -600,7 +600,7 @@ namespace UnityMcp.Tools
         }
 
         /// <summary>
-        /// 获取材质数据
+        /// 获取材质数据 - 使用简化的YAML格式
         /// </summary>
         private object GetMaterialData(string path)
         {
@@ -613,61 +613,49 @@ namespace UnityMcp.Tools
             if (material == null)
                 return null;
 
-            // 获取材质属性信息
-            List<object> properties = new List<object>();
+            // 获取关键属性，避免返回所有详细属性
+            string mainTexture = null;
+            string color = null;
+            string metallic = null;
+            string smoothness = null;
+            
             Shader shader = material.shader;
             if (shader != null)
             {
-                int propertyCount = ShaderUtil.GetPropertyCount(shader);
-                for (int i = 0; i < propertyCount; i++)
+                // 尝试获取常见的Standard shader属性
+                if (material.HasProperty("_MainTex"))
                 {
-                    string propertyName = ShaderUtil.GetPropertyName(shader, i);
-                    ShaderUtil.ShaderPropertyType propertyType = ShaderUtil.GetPropertyType(shader, i);
-
-                    object propertyValue = null;
-                    switch (propertyType)
-                    {
-                        case ShaderUtil.ShaderPropertyType.Color:
-                            Color color = material.GetColor(propertyName);
-                            propertyValue = new float[] { color.r, color.g, color.b, color.a };
-                            break;
-                        case ShaderUtil.ShaderPropertyType.Vector:
-                            Vector4 vector = material.GetVector(propertyName);
-                            propertyValue = new float[] { vector.x, vector.y, vector.z, vector.w };
-                            break;
-                        case ShaderUtil.ShaderPropertyType.Float:
-                        case ShaderUtil.ShaderPropertyType.Range:
-                            propertyValue = material.GetFloat(propertyName);
-                            break;
-                            // 注意：ShaderPropertyType.Texture 在某些Unity版本中可能不可用
-                            // case ShaderUtil.ShaderPropertyType.Texture:
-                            //     Texture tex = material.GetTexture(propertyName);
-                            //     propertyValue = tex != null ? AssetDatabase.GetAssetPath(tex) : null;
-                            //     break;
-                    }
-
-                    properties.Add(new
-                    {
-                        name = propertyName,
-                        type = propertyType.ToString(),
-                        value = propertyValue
-                    });
+                    Texture tex = material.GetTexture("_MainTex");
+                    mainTexture = tex != null ? Path.GetFileName(AssetDatabase.GetAssetPath(tex)) : "none";
                 }
+                
+                if (material.HasProperty("_Color"))
+                {
+                    Color c = material.GetColor("_Color");
+                    color = $"[{c.r:F2}, {c.g:F2}, {c.b:F2}, {c.a:F2}]";
+                }
+                
+                if (material.HasProperty("_Metallic"))
+                    metallic = material.GetFloat("_Metallic").ToString("F2");
+                    
+                if (material.HasProperty("_Glossiness"))
+                    smoothness = material.GetFloat("_Glossiness").ToString("F2");
             }
 
-            return new
-            {
-                path = path,
-                guid = guid,
-                name = Path.GetFileNameWithoutExtension(path),
-                fileName = Path.GetFileName(path),
-                shader = material.shader != null ? material.shader.name : null,
-                shaderPath = material.shader != null ? AssetDatabase.GetAssetPath(material.shader) : null,
-                renderQueue = material.renderQueue,
-                shaderKeywords = material.shaderKeywords,
-                properties = properties,
-                lastWriteTimeUtc = File.GetLastWriteTimeUtc(Path.Combine(Directory.GetCurrentDirectory(), path)).ToString("o")
-            };
+            // 使用YAML格式大幅减少token使用量
+            var yaml = $@"name: {Path.GetFileNameWithoutExtension(path)}
+path: {path}
+guid: {guid}
+shader: {material.shader?.name ?? "None"}
+renderQueue: {material.renderQueue}
+keywords: {material.shaderKeywords?.Length ?? 0}
+mainTexture: {mainTexture ?? "none"}
+color: {color ?? "[1.0, 1.0, 1.0, 1.0]"}
+metallic: {metallic ?? "0.0"}
+smoothness: {smoothness ?? "0.5"}
+lastModified: {File.GetLastWriteTimeUtc(Path.Combine(Directory.GetCurrentDirectory(), path)):yyyy-MM-dd}";
+
+            return new { yaml = yaml };
         }
     }
 }

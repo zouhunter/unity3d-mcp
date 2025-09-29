@@ -446,34 +446,69 @@ namespace UnityMcp.Tools
         {
             if (go == null)
                 return null;
-            return new
+            
+            // 使用YAML格式的紧凑表示
+            var yamlData = GetGameObjectDataYaml(go);
+            return new { yaml = yamlData };
+        }
+
+        /// <summary>
+        /// 创建GameObject的YAML格式数据表示（节省token）
+        /// </summary>
+        public static string GetGameObjectDataYaml(GameObject go)
+        {
+            if (go == null)
+                return "null";
+                
+            var components = go.GetComponents<Component>()
+                .Where(c => c != null)
+                .Select(c => c.GetType().Name)
+                .ToArray();
+                
+            var yaml = $@"name: {go.name}
+id: {go.GetInstanceID()}
+tag: {go.tag}
+layer: {go.layer}
+pos: [{go.transform.position.x:F1}, {go.transform.position.y:F1}, {go.transform.position.z:F1}]
+localPos: [{go.transform.localPosition.x:F1}, {go.transform.localPosition.y:F1}, {go.transform.localPosition.z:F1}]
+rot: [{go.transform.eulerAngles.x:F1}, {go.transform.eulerAngles.y:F1}, {go.transform.eulerAngles.z:F1}]
+scale: [{go.transform.localScale.x:F1}, {go.transform.localScale.y:F1}, {go.transform.localScale.z:F1}]
+active: {go.activeSelf.ToString().ToLower()}
+activeInHierarchy: {go.activeInHierarchy.ToString().ToLower()}
+static: {go.isStatic.ToString().ToLower()}
+components: [{string.Join(", ", components)}]
+path: {GetHierarchyPath(go)}
+scene: {go.scene.name}";
+
+            // 添加父对象信息
+            if (go.transform.parent != null)
             {
-                name = go.name,
-                instance_id = go.GetInstanceID(),
-                tag = go.tag,
-                layer = go.layer,
-                active_self = go.activeSelf,
-                active_in_hierarchy = go.activeInHierarchy,
-                is_static = go.isStatic,
-                scene_path = go.scene.path,
-                path = GetHierarchyPath(go),
-                transform = new
+                yaml += $"\nparent: {go.transform.parent.gameObject.name}";
+                yaml += $"\nparentId: {go.transform.parent.gameObject.GetInstanceID()}";
+            }
+
+            // 如果有子对象，添加子对象信息
+            if (go.transform.childCount > 0)
+            {
+                var children = new List<string>();
+                var childIds = new List<int>();
+                for (int i = 0; i < go.transform.childCount; i++)
                 {
-                    position = $"({go.transform.position.x},{go.transform.position.y},{go.transform.position.z})",
-                    local_position = $"({go.transform.localPosition.x},{go.transform.localPosition.y},{go.transform.localPosition.z})",
-                    rotation = $"({go.transform.rotation.eulerAngles.x},{go.transform.rotation.eulerAngles.y},{go.transform.rotation.eulerAngles.z})",
-                    local_rotation = $"({go.transform.localRotation.eulerAngles.x},{go.transform.localRotation.eulerAngles.y},{go.transform.localRotation.eulerAngles.z})",
-                    scale = $"({go.transform.localScale.x},{go.transform.localScale.y},{go.transform.localScale.z})",
-                    forward = $"({go.transform.forward.x},{go.transform.forward.y},{go.transform.forward.z})",
-                    up = $"({go.transform.up.x},{go.transform.up.y},{go.transform.up.z})",
-                    right = $"({go.transform.right.x},{go.transform.right.y},{go.transform.right.z})",
-                },
-                parent_instance_id = go.transform.parent?.gameObject.GetInstanceID() ?? 0,
-                component_types = JToken.FromObject(go.GetComponents<Component>()
-                    .Select(c => c?.GetType()?.FullName + ":" + c?.GetInstanceID())
-                    .ToList()),
-                children = JToken.FromObject(CreateChildIdMap(go)),
-            };
+                    var child = go.transform.GetChild(i);
+                    if (child != null && child.gameObject != null)
+                    {
+                        children.Add(child.gameObject.name);
+                        childIds.Add(child.gameObject.GetInstanceID());
+                    }
+                }
+                if (children.Count > 0)
+                {
+                    yaml += $"\nchildren: [{string.Join(", ", children)}]";
+                    yaml += $"\nchildrenIds: [{string.Join(", ", childIds)}]";
+                }
+            }
+
+            return yaml;
         }
 
         /// <summary>

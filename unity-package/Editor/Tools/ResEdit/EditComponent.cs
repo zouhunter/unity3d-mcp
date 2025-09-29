@@ -1043,32 +1043,15 @@ namespace UnityMcp.Tools
         }
 
         /// <summary>
-        /// 获取GameObject的数据表示
+        /// 获取GameObject的数据表示 - 使用优化的YAML格式
         /// </summary>
-        private Dictionary<string, object> GetGameObjectData(GameObject go)
+        private object GetGameObjectData(GameObject go)
         {
             if (go == null) return null;
-
-            var data = new Dictionary<string, object>
-            {
-                { "name", go.name },
-                { "instanceID", go.GetInstanceID() },
-                { "active", go.activeSelf },
-                { "tag", go.tag },
-                { "layer", go.layer },
-                { "position", new { x = go.transform.position.x, y = go.transform.position.y, z = go.transform.position.z } },
-                { "rotation", new { x = go.transform.rotation.x, y = go.transform.rotation.y, z = go.transform.rotation.z, w = go.transform.rotation.w } },
-                { "scale", new { x = go.transform.localScale.x, y = go.transform.localScale.y, z = go.transform.localScale.z } },
-                { "parent", go.transform.parent?.name },
-                { "childCount", go.transform.childCount }
-            };
-
-            // 添加组件信息
-            Component[] components = go.GetComponents<Component>();
-            var componentNames = components.Where(c => c != null).Select(c => c.GetType().Name).ToArray();
-            data["components"] = componentNames;
-
-            return data;
+            
+            // 使用统一的YAML格式，大幅减少token使用量
+            var yamlData = GameObjectUtils.GetGameObjectDataYaml(go);
+            return new { yaml = yamlData };
         }
 
 

@@ -7,9 +7,8 @@
 4. [使用方法](#使用方法)
 5. [创新点](#创新点)
 6. [技术特性](#技术特性)
-7. [部署指南](#部署指南)
-8. [API参考](#api参考)
-9. [故障排除](#故障排除)
+7. [API参考](#api参考)
+8. [故障排除](#故障排除)
 
 ---
 
@@ -50,7 +49,11 @@ Unity3d MCP (Model Context Protocol) 是一个创新的AI-Unity集成系统，�
 
 *图1：Unity3d MCP系统整体架构图，展示了从AI客户端到Unity编辑器的完整数据流和组件关系*
 
-详细架构图请参考：[doc/architecture.md](doc/architecture.md)
+#### 数据流图
+
+![Unity3d MCP 数据流图](doc/data_flow_graph.png)
+
+*图2：Unity3d MCP数据流图，详细展示了从AI指令到Unity执行的完整数据流转过程*
 
 ### 核心设计原则
 
@@ -139,31 +142,90 @@ def register_all_tools(mcp):
 #### 核心文件结构
 ```
 unity-package/
-├── Runtime/                    # 运行时核心
-│   ├── StateTree.cs           # 状态树引擎
-│   ├── StateTreeContext.cs    # 执行上下文
-│   └── CoroutineRunner.cs     # 协程运行器
-├── Editor/                     # 编辑器扩展
+├── Runtime/                    # 运行时核心（精简）
+│   └── StateTreeContext.cs    # 执行上下文
+├── Editor/                     # 编辑器扩展（完整实现）
 │   ├── Connection/            # 连接管理
 │   │   └── McpConnect.cs     # TCP连接核心
-│   ├── Executer/              # 执行器
+│   ├── Executer/              # 执行器（核心执行层）
 │   │   ├── SingleCall.cs     # 单次调用
 │   │   ├── BatchCall.cs      # 批量调用
-│   │   └── StateMethodBase.cs # 状态方法基类
+│   │   ├── ToolsCall.cs      # 工具调用
+│   │   ├── CoroutineRunner.cs # 协程运行器
+│   │   ├── McpTool.cs        # MCP工具基类
+│   │   ├── StateMethodBase.cs # 状态方法基类
+│   │   ├── DualStateMethodBase.cs # 双状态方法基类
+│   │   ├── IToolMethod.cs    # 工具方法接口
+│   │   ├── MethodKey.cs      # 方法键定义
+│   │   └── ToolNameAttribute.cs # 工具名称属性
+│   ├── StateTree/             # 状态树引擎
+│   │   ├── StateTree.cs      # 状态树核心
+│   │   ├── StateTreeBuilder.cs # 状态树构建器
+│   │   └── StateTreeContext.cs # 执行上下文
+│   ├── Selector/              # 选择器系统
+│   │   ├── HierarchySelector.cs # 层级选择器
+│   │   ├── ProjectSelector.cs   # 项目选择器
+│   │   ├── ObjectSelector.cs    # 对象选择器
+│   │   └── IObjectSelector.cs   # 选择器接口
+│   ├── Model/                 # 数据模型
+│   │   ├── Command.cs        # 命令模型
+│   │   ├── Response.cs       # 响应模型
+│   │   ├── McpSettings.cs    # MCP设置
+│   │   ├── McpExecuteRecordObject.cs # 执行记录
+│   │   └── UIDefineRuleObject.cs # UI规则定义
+│   ├── GUI/                   # 编辑器GUI
+│   │   ├── McpConnectGUI.cs  # 连接GUI
+│   │   ├── McpDebugWindow.cs # 调试窗口
+│   │   ├── UIDefineRuleObjectDrawer.cs # UI规则绘制器
+│   │   └── UIDefineRuleObjectEditor.cs # UI规则编辑器
+│   ├── Provider/              # 设置提供者
+│   │   ├── McpSettingsProvider.cs # MCP设置提供者
+│   │   ├── McpUISettingsProvider.cs # UI设置提供者
+│   │   └── FigmaSettingsProvider.cs # Figma设置提供者
 │   ├── Tools/                 # 工具实现
 │   │   ├── Hierarchy/        # 层级管理
+│   │   │   ├── HierarchyCreate.cs
+│   │   │   ├── HierarchySearch.cs
+│   │   │   └── HierarchyApply.cs
+│   │   ├── Projet/           # 项目管理
+│   │   │   ├── ProjectSearch.cs
+│   │   │   └── ProjectOperate.cs
 │   │   ├── ResEdit/          # 资源编辑
+│   │   │   ├── EditGameObject.cs
+│   │   │   ├── EditComponent.cs
+│   │   │   ├── EditMaterial.cs
+│   │   │   └── ... (更多编辑工具)
+│   │   ├── Console/          # 控制台工具
+│   │   │   ├── ConsoleRead.cs
+│   │   │   └── ConsoleWrite.cs
+│   │   ├── RunCode/          # 代码运行
+│   │   │   ├── CodeRunner.cs
+│   │   │   └── PythonRunner.cs
 │   │   ├── UI/               # UI工具
-│   │   └── ...
-│   └── Model/                 # 数据模型
-│       ├── Command.cs        # 命令模型
-│       └── Response.cs       # 响应模型
+│   │   │   ├── UGUILayout.cs
+│   │   │   ├── UIRuleManage.cs
+│   │   │   ├── FigmaManage.cs
+│   │   │   └── FigmaDataSimplifier.cs
+│   │   ├── GameWindow/       # 游戏窗口
+│   │   ├── Setting/          # 设置工具
+│   │   ├── GamePlay.cs       # 游戏玩法
+│   │   ├── ManageEditor.cs   # 编辑器管理
+│   │   ├── ManagePackage.cs  # 包管理
+│   │   ├── ObjectDelete.cs   # 对象删除
+│   │   └── RequestHttp.cs    # HTTP请求
+│   ├── Utils/                # 工具类库
+│   │   ├── ConsoleUtils.cs   # 控制台工具
+│   │   ├── GameObjectUtils.cs # GameObject工具
+│   │   ├── UGUIUtil.cs       # UGUI工具
+│   │   ├── MenuUtils.cs      # 菜单工具
+│   │   └── CursorChatIntegration.cs # Cursor集成
+│   └── UnityMcp.Editors.asmdef # 程序集定义
 └── package.json              # 包配置
 ```
 
 #### 关键组件解析
 
-**1. 状态树引擎 (StateTree.cs)**
+**1. 状态树引擎 (Editor/StateTree/StateTree.cs)**
 ```csharp
 public class StateTree
 {
@@ -179,8 +241,10 @@ public class StateTree
     }
 }
 ```
+- **位置变化**：从 Runtime 移动到 Editor/StateTree
+- **配套工具**：新增 StateTreeBuilder 构建器，简化状态树构建流程
 
-**2. TCP连接管理 (McpConnect.cs)**
+**2. TCP连接管理 (Editor/Connection/McpConnect.cs)**
 ```csharp
 public static partial class McpConnect
 {
@@ -203,7 +267,7 @@ public static partial class McpConnect
 }
 ```
 
-**3. 门面工具 (SingleCall.cs / BatchCall.cs)**
+**3. 门面工具 (Editor/Executer/SingleCall.cs / BatchCall.cs)**
 ```csharp
 public class SingleCall : McpTool
 {
@@ -218,15 +282,86 @@ public class SingleCall : McpTool
 }
 ```
 
+**4. 协程运行器 (Editor/Executer/CoroutineRunner.cs)**
+```csharp
+public class CoroutineRunner : MonoBehaviour
+{
+    // 支持在编辑器模式下运行协程
+    // 用于异步操作（如HTTP请求、文件下载等）
+}
+```
+- **位置变化**：从 Runtime 移动到 Editor/Executer
+- **功能增强**：支持编辑器模式下的协程执行
+
+**5. 选择器系统 (Editor/Selector/)**
+```csharp
+// 统一的对象选择接口
+public interface IObjectSelector
+{
+    Object[] SelectObjects(string[] paths);
+}
+
+// 层级选择器：用于选择场景中的GameObject
+public class HierarchySelector : IObjectSelector { }
+
+// 项目选择器：用于选择项目资源
+public class ProjectSelector : IObjectSelector { }
+```
+- **新增模块**：提供统一的对象选择机制
+- **应用场景**：支持灵活的对象查询和批量操作
+
+**6. 工具方法基类 (Editor/Executer/)**
+- **StateMethodBase**：单状态树工具基类
+- **DualStateMethodBase**：双状态树工具基类（支持更复杂的路由）
+- **IToolMethod**：工具方法接口，定义工具标准
+- **ToolNameAttribute**：工具名称属性，用于自动注册
+
+**7. GUI系统 (Editor/GUI/)**
+- **McpConnectGUI**：连接状态显示和控制
+- **McpDebugWindow**：调试窗口，查看执行历史和日志
+- **UI规则编辑器**：可视化UI规则定义工具
+
 ### 3. 工具生态架构
 
 #### 工具分类体系
-1. **层级管理工具**：`hierarchy_create`, `hierarchy_search`, `hierarchy_apply`
-2. **资源编辑工具**：`edit_gameobject`, `edit_component`, `edit_material`
-3. **项目管理工具**：`project_search`, `project_operate`
-4. **UI开发工具**：`ugui_layout`, `ui_rule_manage`
-5. **网络工具**：`request_http`, `figma_manage`
-6. **编辑器工具**：`manage_editor`, `gameplay`, `console_write`
+1. **层级管理工具** (Tools/Hierarchy/)
+   - `hierarchy_create`：创建GameObject
+   - `hierarchy_search`：搜索和查询GameObject
+   - `hierarchy_apply`：应用预制体
+
+2. **资源编辑工具** (Tools/ResEdit/)
+   - `edit_gameobject`：编辑GameObject属性
+   - `edit_component`：编辑组件属性
+   - `edit_material`：编辑材质
+   - `edit_texture`：编辑纹理
+   - 等多个编辑工具
+
+3. **项目管理工具** (Tools/Projet/)
+   - `project_search`：搜索项目资源
+   - `project_operate`：项目操作
+
+4. **UI开发工具** (Tools/UI/)
+   - `ugui_layout`：UGUI布局
+   - `ui_rule_manage`：UI规则管理
+   - `figma_manage`：Figma资源管理
+   - `figma_data_simplifier`：Figma数据简化
+
+5. **控制台工具** (Tools/Console/)
+   - `console_read`：读取控制台日志
+   - `console_write`：写入控制台日志
+
+6. **代码运行工具** (Tools/RunCode/)
+   - `code_runner`：运行C#代码
+   - `python_runner`：运行Python脚本
+
+7. **编辑器工具** (Tools/)
+   - `manage_editor`：编辑器管理
+   - `manage_package`：包管理
+   - `gameplay`：游戏玩法控制
+   - `object_delete`：对象删除
+
+8. **网络工具** (Tools/)
+   - `request_http`：HTTP请求
 
 #### 工具实现模式
 ```csharp
@@ -377,6 +512,416 @@ python server.py
 }
 ```
 
+### 6. 扩展性应用场景
+
+#### 场景1：AI图片生成与自动应用
+通过 `python_runner` 集成AI图像生成库，自动创建游戏素材：
+
+```python
+# Python脚本示例：AI生成游戏纹理
+"""
+用途：使用Stable Diffusion批量生成游戏纹理
+提示词：帮我生成10张fantasy风格的地面纹理
+"""
+from diffusers import StableDiffusionPipeline
+import torch
+
+def generate_textures(prompt, count=10, save_path="Assets/Textures/Generated"):
+    # 加载模型
+    pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-1")
+    pipe = pipe.to("cuda")
+    
+    # 批量生成
+    for i in range(count):
+        image = pipe(f"{prompt}, texture, seamless, 4k, #{i}").images[0]
+        image.save(f"{save_path}/texture_{i:03d}.png")
+        
+    return f"生成了{count}张纹理到{save_path}"
+
+# 然后通过code_runner自动应用到Material
+"""
+C#代码：自动创建Material并应用生成的纹理
+"""
+string[] texturePaths = Directory.GetFiles("Assets/Textures/Generated", "*.png");
+foreach(var path in texturePaths)
+{
+    AssetDatabase.ImportAsset(path);
+    Texture2D texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+    
+    Material mat = new Material(Shader.Find("Standard"));
+    mat.mainTexture = texture;
+    AssetDatabase.CreateAsset(mat, path.Replace(".png", ".mat"));
+}
+AssetDatabase.Refresh();
+```
+
+**应用价值**：
+- 快速原型制作，无需等待美术资源
+- 根据游戏风格批量生成一致性素材
+- 实验不同艺术风格，提高创意迭代速度
+
+#### 场景2：批量爬取游戏资源
+通过 `python_runner` 从开源资源站批量下载并整理资源：
+
+```python
+# Python脚本示例：批量爬取Poly Haven资源
+"""
+用途：从Poly Haven批量下载高质量PBR材质
+提示词：帮我下载所有metal类别的PBR材质到项目中
+"""
+import requests
+import os
+from concurrent.futures import ThreadPoolExecutor
+
+def download_polyhaven_assets(category, asset_type="textures", resolution="2k"):
+    # 获取资源列表
+    api_url = f"https://api.polyhaven.com/assets?t={asset_type}&c={category}"
+    assets = requests.get(api_url).json()
+    
+    save_dir = f"Assets/Materials/{category}"
+    os.makedirs(save_dir, exist_ok=True)
+    
+    def download_asset(asset_id):
+        # 获取下载链接
+        files_url = f"https://api.polyhaven.com/files/{asset_id}"
+        files = requests.get(files_url).json()
+        
+        # 下载PBR贴图（Diffuse, Normal, Roughness等）
+        for map_type in ["Diffuse", "Normal", "Rough", "Displacement"]:
+            if map_type in files[resolution]:
+                url = files[resolution][map_type]["url"]
+                filename = f"{save_dir}/{asset_id}_{map_type}.jpg"
+                
+                response = requests.get(url)
+                with open(filename, 'wb') as f:
+                    f.write(response.content)
+        
+        return asset_id
+    
+    # 并发下载
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        results = list(executor.map(download_asset, assets.keys()))
+    
+    return f"下载了{len(results)}个{category}材质到{save_dir}"
+
+# 配合code_runner自动创建PBR材质
+"""
+C#代码：根据下载的贴图自动创建PBR Material
+"""
+string materialDir = "Assets/Materials/metal";
+var assetGroups = Directory.GetFiles(materialDir, "*_Diffuse.jpg")
+    .Select(path => Path.GetFileNameWithoutExtension(path).Replace("_Diffuse", ""));
+
+foreach(var assetName in assetGroups)
+{
+    Material mat = new Material(Shader.Find("Standard"));
+    
+    // 设置PBR贴图
+    mat.mainTexture = LoadTexture($"{materialDir}/{assetName}_Diffuse.jpg");
+    mat.SetTexture("_BumpMap", LoadTexture($"{materialDir}/{assetName}_Normal.jpg"));
+    mat.SetTexture("_MetallicGlossMap", LoadTexture($"{materialDir}/{assetName}_Rough.jpg"));
+    
+    AssetDatabase.CreateAsset(mat, $"{materialDir}/{assetName}.mat");
+}
+```
+
+**应用价值**：
+- 快速充实资源库，节省采购成本
+- 自动化资源导入和配置流程
+- 支持定制化资源筛选和分类
+
+#### 场景3：项目架构图自动生成
+通过 `python_runner` 分析Unity项目，生成可视化架构图：
+
+```python
+# Python脚本示例：生成项目架构图
+"""
+用途：分析Unity项目结构，生成交互式架构图
+提示词：帮我生成当前Unity项目的架构图，包括脚本依赖关系
+"""
+import os
+import re
+from graphviz import Digraph
+import json
+
+def generate_project_architecture(project_path="Assets/Scripts"):
+    # 解析C#脚本，提取类和依赖关系
+    classes = {}
+    dependencies = []
+    
+    for root, dirs, files in os.walk(project_path):
+        for file in files:
+            if file.endswith('.cs'):
+                filepath = os.path.join(root, file)
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    
+                    # 提取类名
+                    class_match = re.search(r'class\s+(\w+)', content)
+                    if class_match:
+                        class_name = class_match.group(1)
+                        classes[class_name] = {
+                            'file': filepath,
+                            'namespace': re.search(r'namespace\s+([\w.]+)', content),
+                            'inherits': re.search(r':\s*(\w+)', content)
+                        }
+                        
+                        # 提取依赖
+                        using_matches = re.findall(r'using\s+([\w.]+);', content)
+                        for using in using_matches:
+                            if using in classes:
+                                dependencies.append((class_name, using))
+    
+    # 生成GraphViz图
+    dot = Digraph(comment='Unity Project Architecture')
+    dot.attr(rankdir='TB', size='20,20')
+    
+    # 按命名空间分组
+    namespaces = {}
+    for class_name, info in classes.items():
+        ns = info['namespace'].group(1) if info['namespace'] else 'Global'
+        if ns not in namespaces:
+            namespaces[ns] = []
+        namespaces[ns].append(class_name)
+    
+    # 添加节点和子图
+    for ns, class_list in namespaces.items():
+        with dot.subgraph(name=f'cluster_{ns}') as c:
+            c.attr(label=ns, style='filled', color='lightgrey')
+            for class_name in class_list:
+                c.node(class_name, shape='box')
+    
+    # 添加依赖边
+    for src, dst in dependencies:
+        dot.edge(src, dst)
+    
+    # 保存图
+    output_path = 'doc/unity_architecture'
+    dot.render(output_path, format='png', cleanup=True)
+    
+    # 生成JSON报告
+    report = {
+        'total_classes': len(classes),
+        'namespaces': {ns: len(cls) for ns, cls in namespaces.items()},
+        'dependencies_count': len(dependencies)
+    }
+    
+    with open(f'{output_path}.json', 'w') as f:
+        json.dump(report, f, indent=2)
+    
+    return f"架构图已生成: {output_path}.png"
+```
+
+**应用价值**：
+- 快速了解项目结构，新成员快速上手
+- 识别循环依赖和架构问题
+- 文档自动化，保持与代码同步
+
+#### 场景4：性能分析与优化建议
+通过 `code_runner` 分析场景性能瓶颈：
+
+```csharp
+// C#代码：场景性能分析工具
+using System.Linq;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEditor;
+
+public class PerformanceAnalyzer
+{
+    public static string AnalyzeCurrentScene()
+    {
+        var report = new System.Text.StringBuilder();
+        report.AppendLine("=== 场景性能分析报告 ===\n");
+        
+        // 统计GameObject数量
+        var allObjects = Object.FindObjectsOfType<GameObject>();
+        report.AppendLine($"总GameObject数量: {allObjects.Length}");
+        
+        // 检查Draw Call问题
+        var renderers = Object.FindObjectsOfType<Renderer>();
+        var materials = renderers.SelectMany(r => r.sharedMaterials).Distinct().ToList();
+        report.AppendLine($"Renderer数量: {renderers.Length}");
+        report.AppendLine($"不同材质数量: {materials.Count}");
+        
+        // 检查大型Mesh
+        var meshFilters = Object.FindObjectsOfType<MeshFilter>();
+        var largeMeshes = meshFilters
+            .Where(mf => mf.sharedMesh != null && mf.sharedMesh.vertexCount > 10000)
+            .Select(mf => new { mf.gameObject.name, mf.sharedMesh.vertexCount })
+            .OrderByDescending(m => m.vertexCount)
+            .ToList();
+        
+        if (largeMeshes.Any())
+        {
+            report.AppendLine("\n⚠️ 高多边形模型:");
+            foreach (var mesh in largeMeshes)
+                report.AppendLine($"  - {mesh.name}: {mesh.vertexCount:N0} 顶点");
+        }
+        
+        // 检查缺失脚本
+        var missingScripts = allObjects
+            .Where(go => go.GetComponents<Component>().Any(c => c == null))
+            .ToList();
+        
+        if (missingScripts.Any())
+        {
+            report.AppendLine($"\n⚠️ 发现{missingScripts.Count}个对象包含缺失脚本");
+        }
+        
+        // 检查灯光设置
+        var lights = Object.FindObjectsOfType<Light>();
+        var realtimeLights = lights.Where(l => l.type != LightType.Directional && l.lightmapBakeType == LightmapBakeType.Realtime).ToList();
+        
+        if (realtimeLights.Count > 4)
+        {
+            report.AppendLine($"\n⚠️ 实时光源过多({realtimeLights.Count}个)，建议烘焙");
+        }
+        
+        // 优化建议
+        report.AppendLine("\n=== 优化建议 ===");
+        if (materials.Count > 50)
+            report.AppendLine("• 考虑合并材质球以减少Draw Call");
+        if (largeMeshes.Count > 10)
+            report.AppendLine("• 对高多边形模型启用LOD系统");
+        if (realtimeLights.Count > 4)
+            report.AppendLine("• 将静态光源改为Baked模式");
+        
+        return report.ToString();
+    }
+}
+
+// 调用示例
+Debug.Log(PerformanceAnalyzer.AnalyzeCurrentScene());
+```
+
+**应用价值**：
+- 自动发现性能瓶颈
+- 提供可执行的优化建议
+- 定期性能审计，防止性能退化
+
+#### 场景5：自动化测试数据生成
+通过 `python_runner` 生成测试用游戏数据：
+
+```python
+# Python脚本示例：生成游戏测试数据
+"""
+用途：批量生成游戏配置数据，用于压力测试
+提示词：帮我生成1000个随机的敌人配置数据
+"""
+import random
+import json
+import faker
+
+fake = faker.Faker('zh_CN')
+
+def generate_game_data(data_type, count=1000):
+    if data_type == "enemies":
+        enemies = []
+        for i in range(count):
+            enemy = {
+                "id": f"enemy_{i:04d}",
+                "name": fake.name(),
+                "level": random.randint(1, 100),
+                "health": random.randint(100, 10000),
+                "attack": random.randint(10, 500),
+                "defense": random.randint(5, 300),
+                "speed": round(random.uniform(1.0, 10.0), 2),
+                "skills": random.sample([
+                    "火球术", "冰冻", "闪电链", "治疗", "护盾", 
+                    "狂暴", "隐身", "召唤", "毒雾", "眩晕"
+                ], k=random.randint(2, 5)),
+                "drop_items": [
+                    {"item_id": f"item_{random.randint(1,100)}", 
+                     "drop_rate": round(random.uniform(0.01, 0.5), 3)}
+                    for _ in range(random.randint(1, 5))
+                ]
+            }
+            enemies.append(enemy)
+        
+        # 保存为JSON
+        output_path = "Assets/Resources/Data/Enemies.json"
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(enemies, f, ensure_ascii=False, indent=2)
+        
+        return f"生成了{count}个敌人配置到{output_path}"
+    
+    elif data_type == "items":
+        # 类似的物品数据生成...
+        pass
+    
+    elif data_type == "quests":
+        # 任务数据生成...
+        pass
+
+# 然后用code_runner加载并验证数据
+"""
+C#代码：验证生成的游戏数据
+"""
+string json = File.ReadAllText("Assets/Resources/Data/Enemies.json");
+var enemies = JsonUtility.FromJson<EnemyData[]>(json);
+
+Debug.Log($"成功加载{enemies.Length}个敌人配置");
+Debug.Log($"平均等级: {enemies.Average(e => e.level):F1}");
+Debug.Log($"最强敌人: {enemies.OrderByDescending(e => e.attack).First().name}");
+```
+
+**应用价值**：
+- 快速生成大量测试数据
+- 压力测试和性能测试
+- 验证系统承载能力
+
+#### 场景6：自动化本地化翻译
+通过 `python_runner` 集成翻译API，批量翻译游戏文本：
+
+```python
+# Python脚本示例：批量翻译游戏文本
+"""
+用途：使用AI批量翻译游戏本地化文本
+提示词：把所有UI文本翻译成英文、日文、韩文
+"""
+from openai import OpenAI
+import json
+
+def batch_translate_localization(source_file, target_langs=["en", "ja", "ko"]):
+    client = OpenAI()
+    
+    # 读取源语言文本
+    with open(source_file, 'r', encoding='utf-8') as f:
+        source_texts = json.load(f)
+    
+    translations = {lang: {} for lang in target_langs}
+    
+    # 批量翻译
+    for key, text in source_texts.items():
+        for lang in target_langs:
+            prompt = f"Translate this game UI text to {lang}, keep game terminology: {text}"
+            response = client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": prompt}]
+            )
+            translations[lang][key] = response.choices[0].message.content
+    
+    # 保存翻译结果
+    for lang, texts in translations.items():
+        output_path = f"Assets/Localization/{lang}/ui_texts.json"
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(texts, f, ensure_ascii=False, indent=2)
+    
+    return f"翻译完成，生成了{len(target_langs)}个语言版本"
+```
+
+**应用价值**：
+- 快速实现多语言支持
+- 保持术语一致性
+- 降低本地化成本
+
+---
+
+通过这些扩展场景，`python_runner` 和 `code_runner` 成为强大的自动化工具，覆盖从资源生成、数据采集、性能分析到质量保证的完整开发流程。
+
 ---
 
 ## 创新点
@@ -472,87 +1017,6 @@ IEnumerator DownloadFileAsync(string url, string savePath, ...)
 - **实时反馈**：即时执行结果反馈
 - **调试支持**：详细的日志和错误信息
 - **文档完善**：完整的API文档和示例
-
----
-
-## 部署指南
-
-### 1. 开发环境部署
-
-#### 步骤1：克隆项目
-```bash
-git clone <repository-url>
-cd unity-mcp
-```
-
-#### 步骤2：配置Python环境
-```bash
-cd server
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# 或
-.venv\Scripts\activate     # Windows
-
-pip install -r requirements.txt
-```
-
-#### 步骤3：导入Unity Package
-1. 打开Unity编辑器
-2. 选择 `Window > Package Manager`
-3. 点击 `+ > Add package from disk`
-4. 选择 `unity-package/package.json`
-
-#### 步骤4：配置MCP客户端
-参考[使用方法](#使用方法)中的配置部分
-
-### 2. 生产环境部署
-
-#### Docker部署
-```dockerfile
-FROM python:3.9-slim
-WORKDIR /app
-COPY server/ .
-RUN pip install -r requirements.txt
-EXPOSE 6400-6405
-CMD ["python", "server.py"]
-```
-
-#### 系统服务部署
-```bash
-# 创建systemd服务文件
-sudo nano /etc/systemd/system/unity-mcp.service
-
-[Unit]
-Description=Unity3d MCP Server
-After=network.target
-
-[Service]
-Type=simple
-User=unity
-WorkingDirectory=/opt/unity-mcp/server
-ExecStart=/opt/unity-mcp/server/.venv/bin/python server.py
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### 3. 监控和维护
-
-#### 日志监控
-```bash
-# 查看服务器日志
-tail -f server.log
-
-# 查看Unity控制台
-# 在Unity编辑器中查看Console窗口
-```
-
-#### 性能监控
-- 连接数监控
-- 响应时间统计
-- 错误率统计
-- 资源使用情况
 
 ---
 
@@ -757,13 +1221,19 @@ Unity3d MCP系统是一个创新的AI-Unity集成解决方案，通过MCP协议�
 1. 更多Unity工具支持
 2. 可视化工具开发
 3. 性能优化和监控
-4. 云端部署支持
-5. 多平台兼容性
+4. 多平台兼容性
+5. 增强的调试和监控功能
+
+### 架构优化历程
+- **Runtime精简**：将状态树和协程运行器移至Editor，优化运行时性能
+- **模块化重组**：新增Selector、GUI、Provider等专业模块，提升代码组织性
+- **工具分类优化**：按功能领域划分工具目录，提高可维护性
+- **基类体系完善**：引入DualStateMethodBase、IToolMethod等，增强扩展性
 
 通过Unity3d MCP系统，开发者可以享受AI驱动的Unity开发体验，提高开发效率，降低学习成本，实现更智能的游戏开发工作流。
 
 ---
 
-*文档版本：v1.0*  
+*文档版本：v2.0*  
 *最后更新：2025年09月*  
 *维护团队：Unity3d MCP Development Team*

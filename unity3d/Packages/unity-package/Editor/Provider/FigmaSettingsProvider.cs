@@ -18,19 +18,19 @@ namespace UnityMcp.Tools
         private static bool helpInfoFoldout = false;
 
         /// <summary>
-        /// Figma访问令牌
+        /// Figma访问令牌（保存在EditorPrefs中，不会被提交到版本控制）
         /// </summary>
         public string figma_access_token
         {
             get
             {
-                if (string.IsNullOrEmpty(_figma_access_token))
-                    _figma_access_token = "";
-                return _figma_access_token;
+                return EditorPrefs.GetString("UnityMcp.Figma.AccessToken", "");
             }
-            set { _figma_access_token = value; }
+            set
+            {
+                EditorPrefs.SetString("UnityMcp.Figma.AccessToken", value);
+            }
         }
-        [SerializeField] private string _figma_access_token;
 
         /// <summary>
         /// 默认下载路径
@@ -132,9 +132,16 @@ namespace UnityMcp.Tools
             {
                 EditorGUI.indentLevel++;
 
+                EditorGUILayout.BeginHorizontal();
                 settings.figmaSettings.figma_access_token = EditorGUILayout.PasswordField(
                     "Figma访问令牌",
                     settings.figmaSettings.figma_access_token);
+                EditorGUILayout.LabelField("💾", GUILayout.Width(20));
+                EditorGUILayout.EndHorizontal();
+
+                EditorGUILayout.HelpBox(
+                    "访问令牌保存在本地编辑器设置中，不会被提交到版本控制。",
+                    MessageType.Info);
 
                 EditorGUI.indentLevel--;
             }
@@ -216,7 +223,8 @@ namespace UnityMcp.Tools
                 EditorGUILayout.LabelField("API设置", EditorStyles.boldLabel);
                 EditorGUILayout.HelpBox(
                     "• 访问令牌：在Figma中生成个人访问令牌用于API访问\n" +
-                    "• 获取方式：登录Figma → Settings → Personal access tokens → Generate new token",
+                    "• 获取方式：登录Figma → Settings → Personal access tokens → Generate new token\n" +
+                    "• 安全性：访问令牌保存在本地EditorPrefs中，不会被提交到Git",
                     MessageType.Info);
 
                 EditorGUILayout.Space(5);

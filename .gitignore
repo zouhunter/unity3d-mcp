@@ -5,3 +5,18 @@
 /unity-demo/Packages/unity-mcp
 /unity-demo/Assets/Pics
 /unity-demo/Assets/FigmaCache
+
+# API Keys and sensitive information
+**/test_api_key.py
+**/*secret*.json
+**/*token*.txt
+.env
+.env.local
+.env.*.local
+
+# Editor settings with secrets
+.cursor/mcp.json
+
+# Temporary cleanup files
+clean_secrets*.ps1
+SECRET_CLEANUP_GUIDE.md

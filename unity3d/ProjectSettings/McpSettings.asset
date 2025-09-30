@@ -114,7 +114,6 @@ MonoBehaviour:
       - "\u6027\u80FD\u4F18\u5316\u4F18\u5148"
       - "\u7075\u6D3B\u7684\u6E32\u67D3\u7BA1\u7EBF"
   figmaSettings:
-    _figma_access_token: figd_MDWK9P_2FirU4qbzw1DwsXZMNoWJ_S3CPTwzRXrQ
     _default_download_path: Assets/UI/Figma
     _figma_assets_path: Assets/FigmaCache
     auto_download_images: 1

@@ -1,0 +1,8 @@
+# Claude API Demo 依赖包
+# 安装方法: pip install -r requirements_claude.txt
+
+# Anthropic Claude API 客户端
+anthropic>=0.18.0
+
+# 确保 httpx 版本兼容
+httpx>=0.27.0

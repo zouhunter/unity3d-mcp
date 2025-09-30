@@ -20,3 +20,5 @@
 # Temporary cleanup files
 clean_secrets*.ps1
 SECRET_CLEANUP_GUIDE.md
+/.cursor
+/.vscode

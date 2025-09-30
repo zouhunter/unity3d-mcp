@@ -423,7 +423,7 @@ pip install -r requirements.txt
       "command": "uv",
       "args": [
         "--directory",
-        "D:/unity-mcp/server",
+        "path/to/server",
         "run",
         "server.py"
       ]
@@ -440,7 +440,7 @@ pip install -r requirements.txt
       "command": "uv",
       "args": [
         "--directory",
-        "D:/unity-mcp/server",
+        "path/to/server",
         "run",
         "server.py"
       ]
@@ -448,6 +448,44 @@ pip install -r requirements.txt
   }
 }
 ```
+
+#### Unity编辑器配置
+
+在Unity编辑器中，可以通过以下窗口进行MCP配置和调试：
+
+**1. MCP设置窗口** (`Edit → Project Settings → MCP`)
+
+![MCP设置窗口](doc/mcp_settings.png)
+
+*图：MCP设置窗口 - 配置MCP连接开关、查看已注册的工具列表、管理工具分类等*
+
+MCP设置窗口提供以下功能：
+- **连接开关**：启用/禁用MCP服务器连接
+- **工具列表**：查看所有已注册的MCP工具及其分类
+- **端口配置**：配置TCP监听端口范围（默认6400-6405）
+- **日志级别**：设置调试日志的详细程度
+- **UI设置**：配置UI类型（UGUI、UIToolkit等）和构建流程
+- **Figma设置**：配置Figma访问令牌和下载选项
+
+**2. MCP调试窗口** (`Window → MCP → Debug Window`)
+
+![MCP调试窗口](doc/mcp_debug.png)
+
+*图：MCP调试窗口 - 记录和查看所有MCP调用历史，支持重新执行历史命令*
+
+MCP调试窗口提供以下功能：
+- **调用记录**：实时记录所有MCP工具调用及其参数
+- **执行结果**：显示每次调用的成功/失败状态和返回数据
+- **时间戳**：记录每次调用的准确时间
+- **重新触发**：点击历史记录可以重新执行相同的命令
+- **过滤搜索**：按工具名称、状态、时间等条件过滤记录
+- **导出日志**：将调用记录导出为JSON格式，便于分析和调试
+
+通过这两个窗口，开发者可以：
+- 快速配置和管理MCP连接
+- 实时监控AI与Unity的交互过程
+- 调试和重现问题
+- 学习和理解MCP工具的使用方式
 
 ### 3. 启动流程
 
